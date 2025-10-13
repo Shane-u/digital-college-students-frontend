@@ -1,0 +1,408 @@
+/* 科技感蓝色系配色方案 */
+:root {
+  /* 主色调 - 蓝色系 */
+  --primary-blue: #2563EB;
+  --primary-blue-hover: #1D4ED8;
+  --primary-blue-light: #3B82F6;
+  
+  /* 辅助色 */
+  --white: #FFFFFF;
+  --light-gray: #F8FAFC;
+  --medium-gray: #E2E8F0;
+  --dark-gray: #64748B;
+  
+  /* 强调色 */
+  --success-green: #10B981;
+  --error-red: #EF4444;
+  --warning-orange: #F59E0B;
+  
+  /* 文字颜色 */
+  --text-primary: #1E293B;
+  --text-secondary: #475569;
+  --text-light: #94A3B8;
+  
+  /* 边框和阴影 */
+  --border-radius: 8px;
+  --border-radius-lg: 12px;
+  --box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --box-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --box-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', sans-serif;
+  background: #ffffff;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* 通用按钮样式 */
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-primary {
+  background: var(--primary-blue);
+  color: var(--white);
+}
+
+.btn-primary:hover {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--box-shadow-lg);
+}
+
+.btn-secondary {
+  background: var(--white);
+  color: var(--primary-blue);
+  border: 2px solid var(--primary-blue);
+}
+
+.btn-secondary:hover {
+  background: var(--primary-blue);
+  color: var(--white);
+  transform: translateY(-1px);
+  box-shadow: var(--box-shadow-lg);
+}
+
+.btn-link {
+  background: transparent;
+  color: var(--primary-blue);
+  text-decoration: none;
+}
+
+.btn-link:hover {
+  color: var(--primary-blue-hover);
+  text-decoration: underline;
+}
+
+/* 输入框样式 */
+.form-input {
+  width: 100%;
+  padding: 16px 20px;
+  border: 2px solid transparent;
+  border-radius: var(--border-radius);
+  background: var(--light-gray);
+  font-size: 16px;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--primary-blue);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.form-input.error {
+  border-color: var(--error-red);
+  background: #FEF2F2;
+}
+
+/* 错误提示样式 */
+.error-message {
+  color: var(--error-red);
+  font-size: 12px;
+  margin-top: 4px;
+  margin-bottom: 0;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.error-message::before {
+  content: '⚠';
+  font-size: 10px;
+}
+
+/* 表单组容器 */
+.form-group {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+/* 输入框聚焦时的错误状态 */
+.form-input.error:focus {
+  border-color: var(--error-red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* select元素错误状态 */
+select.form-input.error {
+  border-color: var(--error-red);
+  background: #FEF2F2;
+}
+
+select.form-input.error:focus {
+  border-color: var(--error-red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* 卡片样式 */
+.card {
+  background: var(--white);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 40px;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: var(--box-shadow-hover);
+  transform: translateY(-4px);
+}
+
+/* 动画效果 */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.6s ease-out;
+}
+
+.slide-in-right {
+  animation: slideInRight 0.6s ease-out;
+}
+
+.fade-in {
+  animation: fadeIn 0.8s ease-out;
+}
+
+/* 滑动容器样式 */
+.slide-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide.active {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.slide.prev {
+  transform: translateX(-100%);
+  opacity: 0;
+}
+
+/* 登录方式切换 */
+.login-methods {
+  display: flex;
+  background: var(--light-gray);
+  border-radius: var(--border-radius);
+  padding: 6px;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.login-method {
+  flex: 1;
+  padding: 14px 20px;
+  text-align: center;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  position: relative;
+  z-index: 2;
+}
+
+.login-method.active {
+  background: var(--white);
+  color: var(--primary-blue);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 验证码组件 */
+.captcha-container {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.captcha-input {
+  flex: 1;
+}
+
+.captcha-image {
+  width: 120px;
+  height: 48px;
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  background: var(--light-gray);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-light);
+  transition: all 0.3s ease;
+}
+
+.captcha-image:hover {
+  border-color: var(--primary-blue);
+}
+
+/* 密码强度指示器 */
+.password-strength {
+  margin-top: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+.strength-bar {
+  height: 4px;
+  flex: 1;
+  border-radius: 2px;
+  background: var(--medium-gray);
+  transition: all 0.3s ease;
+}
+
+.strength-bar.active {
+  background: var(--error-red);
+}
+
+.strength-bar.medium {
+  background: var(--warning-orange);
+}
+
+.strength-bar.strong {
+  background: var(--success-green);
+}
+
+/* 步骤指示器 */
+.step-indicator {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.step {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--medium-gray);
+  margin: 0 4px;
+  transition: all 0.3s ease;
+}
+
+.step.active {
+  background: var(--primary-blue);
+  transform: scale(1.2);
+}
+
+/* 搜索框 */
+.search-container {
+  position: relative;
+}
+
+.search-input {
+  padding-left: 40px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-light);
+  font-size: 16px;
+}
+
+/* 搜索框错误状态 */
+.search-input.error {
+  border-color: var(--error-red);
+  background: #FEF2F2;
+}
+
+.search-input.error:focus {
+  border-color: var(--error-red);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+/* 选择列表 */
+.selection-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--medium-gray);
+  border-radius: var(--border-radius);
+  background: var(--white);
+  margin-top: 8px;
+}
+
+.selection-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--light-gray);
+  transition: background 0.2s ease;
+}
+
+.selection-item:hover {
+  background: var(--light-gray);
+}
+
+.selection-item:last-child {
+  border-bottom: none;
+}
+
