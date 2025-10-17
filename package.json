@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "数字化大学生前端项目",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -13,11 +13,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.2.3",
+    "less": "^4.4.2",
+    "sass": "^1.93.2",
     "vite": "^4.4.5"
   }
 }
-
-
-
-
-

@@ -112,6 +112,7 @@
       const handleMouseMove = (e) => {
         mouse.x = e.clientX
         mouse.y = e.clientY
+        console.log("鼠标移动");
       }
   
       // 鼠标离开事件
@@ -126,15 +127,15 @@
         animate()
         window.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseleave', handleMouseLeave)
-  
-        onUnmounted(() => {
-          if (animationId) {
-            cancelAnimationFrame(animationId)
-          }
-          window.removeEventListener('mousemove', handleMouseMove)
-          window.removeEventListener('mouseleave', handleMouseLeave)
-          window.removeEventListener('resize', resizeCanvas)
-        })
+      })
+
+      onUnmounted(() => {
+        if (animationId) {
+          cancelAnimationFrame(animationId)
+        }
+        window.removeEventListener('mousemove', handleMouseMove)
+        window.removeEventListener('mouseleave', handleMouseLeave)
+        window.removeEventListener('resize', initCanvas().resizeCanvas)
       })
   
       return {
