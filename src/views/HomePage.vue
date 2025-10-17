@@ -62,36 +62,30 @@
       </div>
     </section>
 
-    <div id="competition"
-      class="section competition"
-      :style="{ backgroundImage: `url(${background})` }">
-      <!-- Competition Section -->
-    <section>
+   <div id="competition" class="section competition" 
+   :style="{ backgroundImage: `url(${background})` }">
+     <!-- Competition Section -->
+     <section >
       <div class="section-inner">
         <div class="section-title-wrap">
           <div class="cube-small"><Competition class="title-icon" /></div>
           <h2 class="section-title">竞赛活动</h2>
         </div>
-        <div class="cards">
-          <div class="card">
-            <div class="card-emoji">🏆</div>
-            <h3>程序设计大赛</h3>
-            <p>年度最大的编程竞赛，展示你的算法与创造力</p>
+        
+        <!-- 左右分栏布局 -->
+        <div class="competition-layout">
+          <!-- 左侧：竞赛咨询 -->
+          <div class="competition-left " >
+            <CompetitionBorder>
+              <CompetitionConsultation />
+            </CompetitionBorder>
           </div>
-          <div class="card">
-            <div class="card-emoji">📊</div>
-            <h3>数据科学挑战</h3>
-            <p>用数据讲述故事，解决现实世界的问题</p>
-          </div>
-          <div class="card">
-            <div class="card-emoji">🎨</div>
-            <h3>数字艺术展</h3>
-            <p>展示你的数字艺术作品，赢得专业评审的认可</p>
-          </div>
+          
+          <!-- 右侧：视频展示 -->
+          <!-- <div class="competition-right">
+            <VideoCarousel />
+          </div> -->
         </div>
-      </div>
-      <div>
-
       </div>
     </section>
 
@@ -125,7 +119,7 @@
         </div>
       </div>
     </section>
-    </div>
+   </div>
   </div>
 </template>
 
@@ -138,7 +132,9 @@ import pic2 from "../assets/pic_lb2.png";
 import pic3 from "../assets/pic_lb3.png";
 import pic4 from "../assets/pic_lb4.png";
 import background from "../assets/background.png";
-import Competition from "../components/competition.vue";
+import Competition from "../components/Competition.vue";
+import CompetitionBorder from "../components/Competition_border.vue";
+import CompetitionConsultation from "../components/CompetitionConsultation.vue";
 
 export default {
   name: "HomePage",
@@ -146,6 +142,9 @@ export default {
     MouseFollower,
     Competition,
     Astronaut,
+    CompetitionBorder,
+    CompetitionConsultation,
+    background,
   },
   setup() {
   const isNavTransparent = ref(true);
@@ -564,43 +563,49 @@ export default {
 
 /* 竞赛板块样式 */
 .competition {
-  background-size: cover;
+  background: #f8fafc;
+  min-height: 600px;
+  object-fit: cover;
   background-position: center;
+  background-repeat: no-repeat;
 }
 
-.cards {
+/* 竞赛板块左右分栏布局 */
+.competition-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 24px;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 30px;
 }
 
-.card {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
-  padding: 28px 22px;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
-  transition: transform 0.25s ease;
+.competition-left {
+  display: flex;
+  flex-direction: column;
 }
 
-.card:hover {
-  transform: translateY(-4px);
+.competition-right {
+  display: flex;
+  flex-direction: column;
 }
 
-.card-emoji {
-  font-size: 28px;
-  margin-bottom: 10px;
+/* 响应式设计 */
+@media (max-width: 1024px) {
+  .competition-layout {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  
+  .competition-left,
+  .competition-right {
+    width: 100%;
+  }
 }
 
-.card h3 {
-  margin: 8px 0 6px;
-  color: #0b2a4a;
-  font-size: 18px;
-}
-
-.card p {
-  color: #475569;
-  line-height: 1.6;
+@media (max-width: 768px) {
+  .competition-layout {
+    gap: 20px;
+    margin-top: 20px;
+  }
 }
 
 /* 职业规划板块样式 */

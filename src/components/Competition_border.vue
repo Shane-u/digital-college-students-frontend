@@ -1,10 +1,10 @@
 <style scoped>
   .card {
     width: 460px;
-    height: 254px;
+    /* height: 60px; */
     border-radius: 20px;
     padding: 5px;
-    box-shadow: rgba(151, 65, 252, 0.2) 0 15px 30px -5px;
+    box-shadow: rgba(184, 127, 248, 0.2) 0 15px 30px -5px;
     background-image: linear-gradient(144deg,#AF40FF, #5B42F3 50%,#00DDEB);
   }
 
@@ -19,6 +19,7 @@
 <template>
   <div class="card">
   <div class="card__content">
+    <slot />
   </div></div>
 </template>
 
