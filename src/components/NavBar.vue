@@ -84,9 +84,9 @@ export default {
 .navbar-transparent {
   background: linear-gradient(
     to bottom,
-    rgba(30, 132, 248, 0.55),
-    rgba(81, 163, 251, 0.28),
-    rgba(134, 187, 248, 0)
+    rgba(6, 115, 240, 0.55),
+    rgba(60, 150, 247, 0.28),
+    rgba(114, 177, 249, 0)
   );
   box-shadow: none;
 }
@@ -119,9 +119,10 @@ export default {
 
 .brand-text {
   color: #ffffff;
-  font-weight: 700;
+  font-weight: bold;
   font-size: 50px;
   letter-spacing: 1px;
+  font-family:'Courier New', Courier, monospace;
 }
 
 .nav-link {
