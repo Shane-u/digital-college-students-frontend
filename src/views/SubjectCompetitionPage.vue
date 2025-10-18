@@ -8,7 +8,7 @@
       <div class="breadcrumb">
         <router-link to="/home">首页</router-link>
         <span>&gt;&gt;</span>
-        <a>竞赛活动</a>
+        <span class="current-page">竞赛活动</span>
         <span>&gt;&gt;</span>
         <span class="current-page">学科专业竞赛</span>
       </div>
@@ -25,14 +25,15 @@
           教育部榜单竞赛
         </router-link>
         <div class="sidebar-dropdown">
-          <router-link 
-            to="/competition/subject" 
+          <div 
             class="sidebar-item" 
-            :class="{ 'active': $route.path === '/competition/subject' }">
+            :class="{ 'active': $route.path === '/competition/subject' }"
+            @click="toggleSubmenu">
             学科专业竞赛
-          </router-link>
-          <div class="sidebar-submenu" :class="{ 'open': $route.path === '/competition/subject' }">
-            <div class="subject-list" @click.stop>
+            <span class="dropdown-arrow" :class="{ 'up': isSubmenuOpen }"></span>
+          </div>
+          <div class="sidebar-submenu" :class="{ 'open': isSubmenuOpen }">
+            <div class="subject-list">
               <a 
                 v-for="(subject, index) in subjects" 
                 :key="index"
@@ -97,16 +98,27 @@ export default {
   },
   setup() {
     const isNavTransparent = ref(false);
+    const isSubmenuOpen = ref(false);
     
     // 监听页面滚动，控制导航栏透明度
     const handleScroll = () => {
       isNavTransparent.value = window.scrollY < 50;
     };
     
+    // 切换子菜单的展开/收起状态
+    const toggleSubmenu = () => {
+      isSubmenuOpen.value = !isSubmenuOpen.value;
+    };
+    
     onMounted(() => {
       window.addEventListener('scroll', handleScroll);
       // 初始状态
       handleScroll();
+      
+      // 如果当前路径是学科竞赛页面，初始展开子菜单
+      if (window.location.pathname === '/competition/subject') {
+        isSubmenuOpen.value = true;
+      }
     });
     
     onUnmounted(() => {
@@ -181,6 +193,7 @@ export default {
     
     return {
       isNavTransparent,
+      isSubmenuOpen,
       subjects,
       selectedSubject,
       currentPage,
@@ -188,7 +201,8 @@ export default {
       competitions,
       displayedCompetitions,
       selectSubject,
-      handlePageChange
+      handlePageChange,
+      toggleSubmenu
     };
   }
 };
@@ -204,7 +218,7 @@ export default {
 }
 
 /* 导航栏样式与HomePage相同 */
-.navbar {
+/* .navbar {
   position: fixed;
   top: 0;
   left: 0;
@@ -219,7 +233,7 @@ export default {
 .navbar-transparent {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
   box-shadow: none;
-}
+} */
 
 .nav-inner {
   display: grid;
@@ -321,7 +335,7 @@ export default {
 /* 面包屑导航 */
 .breadcrumb-container {
   max-width: 1200px;
-  margin: 20px auto 0;
+  margin: 64px auto 0 20px;
   padding: 0 20px;
 }
 
@@ -362,6 +376,7 @@ export default {
   padding: 20px;
   display: flex;
   gap: 30px;
+  width: 1200px;
 }
 
 /* 侧边栏 */
@@ -397,6 +412,27 @@ export default {
   position: relative;
 }
 
+.sidebar-item {
+  position: relative; /* 为箭头图标提供定位上下文 */
+}
+
+.dropdown-arrow {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 10px solid #171616; /* 向下的箭头 */
+  transition: transform 0.3s;
+}
+
+.dropdown-arrow.up {
+  transform: translateY(-50%) rotate(180deg); /* 向上的箭头 */
+}
+
 .sidebar-submenu {
   max-height: 0;
   overflow: hidden;
@@ -404,12 +440,10 @@ export default {
 }
 
 .sidebar-submenu.open {
-  max-height: 500px; /* 根据实际内容调整高度 */
+  max-height: 1000px; /* 足够大以显示所有内容 */
 }
 
 .subject-list {
-  max-height: 300px;
-  overflow-y: auto;
   border-top: 1px solid #f0f0f0;
   background-color: #f9f9f9;
 }

@@ -8,7 +8,7 @@
       <div class="breadcrumb">
         <router-link to="/home">首页</router-link>
         <span>&gt;&gt;</span>
-        <a>竞赛活动</a>
+        <span class="current-page">竞赛活动</span>
         <span>&gt;&gt;</span>
         <span class="current-page">教育部榜单竞赛</span>
       </div>
@@ -132,7 +132,7 @@ export default {
 }
 
 /* 导航栏样式与HomePage相同 */
-.navbar {
+/* .navbar {
   position: fixed;
   top: 0;
   left: 0;
@@ -147,7 +147,7 @@ export default {
 .navbar-transparent {
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%);
   box-shadow: none;
-}
+} */
 
 .nav-inner {
   display: grid;
