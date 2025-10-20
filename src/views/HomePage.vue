@@ -86,48 +86,7 @@
             <h2 class="section-title">职业规划</h2>
           </div>
           
-          <div class="career-showcase">
-            <!-- 右侧大图和介绍 -->
-            <div class="career-featured">
-              <div class="career-featured-content">
-                <h3 class="featured-name">{{ activeCareer.name }}</h3>
-                <p class="featured-desc">{{ activeCareer.description }}</p>
-              </div>
-              <router-link :to="activeCareer.link" class="career-featured-circle">
-                <img :src="knowledgePic" alt="知识图" class="career-featured-image" />
-              </router-link>
-            </div>
-            
-            <!-- 左下角小图阵列 -->
-            <div class="career-path">
-              <router-link 
-                v-for="(career, index) in displayedCareers" 
-                :key="`${career.id}-${currentCarouselIndex}`"
-                :to="career.link" 
-                :style="getPositionStyle(index)" 
-                :class="['career-circle-small', {'career-circle-active': index === 0}]"
-                @click.prevent="setActiveCareer(career.id)"
-              >
-                <img :src="career.image" :alt="career.title" class="career-image" />
-              </router-link>
-            </div>
-          </div>
-          
-          <!-- 导航按钮 -->
-          <div class="career-nav">
-            <button class="career-nav-btn prev" @click="prevCareerSlide" aria-label="Previous">&lt;</button>
-            <div class="career-dots">
-              <button 
-                v-for="page in totalPages" 
-                :key="page"
-                @click="goToCareerPage(page - 1)"
-                :class="{ 'active': currentCareerPage === page - 1 }"
-                class="career-dot-btn"
-                :aria-label="`Go to page ${page}`"
-              ></button>
-            </div>
-            <button class="career-nav-btn next" @click="nextCareerSlide" aria-label="Next">&gt;</button>
-          </div>
+          <CareerPlanning />
         </div>
       </section>
     </div>
@@ -139,7 +98,7 @@
 
 <script>
 import Footer from '../components/Footer.vue';
-import { ref, onMounted, onUnmounted, computed, onBeforeMount } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import MouseFollower from "../components/MouseFollower.vue";
 import Shalou from "../components/Shalou.vue";
 import pic1 from "../assets/pic_lb1.png";
@@ -147,12 +106,12 @@ import pic2 from "../assets/pic_lb2.png";
 import pic3 from "../assets/pic_lb3.png";
 import pic4 from "../assets/pic_lb4.png";
 import background from "../assets/background.png";
-import knowledgePic from "../assets/knowledge_pic.png";
 import Competition from "../components/Competition.vue";
 import CompetitionBorder from "../components/Competition_border.vue";
 import CompetitionConsultation from "../components/CompetitionConsultation.vue";
 import VideoCarousel from "../components/VideoCarousel.vue";
 import NavBar from "../components/NavBar.vue";
+import CareerPlanning from "../components/CareerPlanning.vue";
 
 export default {
   name: "HomePage",
@@ -165,6 +124,7 @@ export default {
     VideoCarousel,
     NavBar,
     Footer,
+    CareerPlanning,
   },
   setup() {
     const isNavTransparent = ref(true);
@@ -180,114 +140,6 @@ export default {
 
     const slides = [pic4, pic2, pic3, pic1];
     
-    // 职业规划轮播图数据 - 增加到10个
-    const careers = ref([
-      { id: 1, title: "职业名称1", name: "SimoneBaldi", description: "科研，让生活更美好", image: pic1, link: "/career/1" },
-      { id: 2, title: "职业名称2", name: "数据科学家", description: "通过数据分析解决实际问题", image: pic2, link: "/career/2" },
-      { id: 3, title: "职业名称3", name: "人工智能专家", description: "探索AI技术的前沿与应用", image: pic3, link: "/career/3" },
-      { id: 4, title: "职业名称4", name: "软件工程师", description: "构建未来的数字世界", image: pic4, link: "/career/4" },
-      { id: 5, title: "职业名称5", name: "网络安全专家", description: "保护数字世界的安全防线", image: pic1, link: "/career/5" },
-      { id: 6, title: "职业名称6", name: "云计算架构师", description: "设计高效可扩展的云服务", image: pic2, link: "/career/6" },
-      { id: 7, title: "职业名称7", name: "区块链开发者", description: "构建去中心化的未来", image: pic3, link: "/career/7" },
-      { id: 8, title: "职业名称8", name: "量子计算研究员", description: "探索计算的下一个前沿", image: pic4, link: "/career/8" },
-      { id: 9, title: "职业名称9", name: "生物信息学家", description: "连接生物学与信息技术", image: pic1, link: "/career/9" },
-      { id: 10, title: "职业名称10", name: "机器学习工程师", description: "让机器更智能，更懂人类", image: pic2, link: "/career/10" }
-    ]);
-    
-    // 职业轮播相关变量
-    const activeCareerIndex = ref(0); // 当前激活的职业索引
-    const currentCareerPage = ref(0); // 当前页面
-    const careersPerPage = 5; // 每页显示5个职业
-    const currentCarouselIndex = ref(0); // 当前轮播位置索引
-    let careerTimer = null;
-    
-    // 计算当前显示的职业（轮播模式）
-    const displayedCareers = computed(() => {
-      const result = [];
-      for (let i = 0; i < careersPerPage; i++) {
-        const index = (currentCarouselIndex.value + i) % careers.value.length;
-        result.push(careers.value[index]);
-      }
-      return result;
-    });
-    
-    // 计算总页数
-    const totalPages = computed(() => {
-      return Math.ceil(careers.value.length / careersPerPage);
-    });
-    
-    // 计算当前活跃的职业
-    const activeCareer = computed(() => {
-      return careers.value[activeCareerIndex.value] || careers.value[0];
-    });
-    
-    // 设置当前活跃的职业
-    const setActiveCareer = (id) => {
-      const index = careers.value.findIndex(career => career.id === id);
-      if (index !== -1) {
-        activeCareerIndex.value = index;
-      }
-    };
-    
-    // 职业轮播导航方法
-    const nextCareerSlide = () => {
-      currentCarouselIndex.value = (currentCarouselIndex.value + 1) % careers.value.length;
-      // 设置第一个显示的职业为激活状态
-      activeCareerIndex.value = currentCarouselIndex.value;
-    };
-    
-    const prevCareerSlide = () => {
-      currentCarouselIndex.value = currentCarouselIndex.value === 0 
-        ? careers.value.length - 1 
-        : currentCarouselIndex.value - 1;
-      // 设置第一个显示的职业为激活状态
-      activeCareerIndex.value = currentCarouselIndex.value;
-    };
-    
-    const goToCareerPage = (pageIndex) => {
-      currentCareerPage.value = pageIndex;
-      // 设置当前页的第一个职业为激活状态
-      activeCareerIndex.value = currentCareerPage.value * careersPerPage;
-    };
-    
-    // 获取每个小圆圈的位置样式
-    const getPositionStyle = (index) => {
-      // 创建一条从左上到右下的曲线路径，并增大间距
-      const positions = [
-        { top: '5%', left: '0%' },
-        { top: '30%', left: '15%' },
-        { top: '50%', left: '30%' },
-        { top: '75%', left: '50%' },
-        { top: '95%', left: '70%' }
-      ];
-      
-      const pos = positions[index] || positions[0];
-      
-      return {
-        top: pos.top,
-        left: pos.left
-      };
-    };
-    
-    // 判断某个职业是否为激活状态（在轮播中第一个位置）
-    const isActiveCareer = (career) => {
-      return career.id === activeCareer.id;
-    };
-    
-    // 启动职业轮播自动播放
-    const startCareerAutoSlide = () => {
-      stopCareerAutoSlide();
-      careerTimer = setInterval(() => {
-        nextCareerSlide();
-      }, 6000);
-    };
-    
-    const stopCareerAutoSlide = () => {
-      if (careerTimer) {
-        clearInterval(careerTimer);
-        careerTimer = null;
-      }
-    };
 
     const displaySlides = computed(() => {
       return slides.length > 0 ? [...slides, slides[0]] : [];
@@ -379,8 +231,6 @@ export default {
 
       // 启动轮播
       startAutoSlide();
-      // 启动职业轮播
-      startCareerAutoSlide();
 
       // 监听竞赛活动区域可见性，每次进入视口都触发动画
       const competitionObserver = new IntersectionObserver(
@@ -403,7 +253,6 @@ export default {
       // 清理函数
       onUnmounted(() => {
         stopAutoSlide();
-        stopCareerAutoSlide();
         if (observer && heroRef.value) observer.unobserve(heroRef.value);
         if (competitionObserver && competitionSection) {
           competitionObserver.unobserve(competitionSection);
@@ -437,20 +286,6 @@ export default {
       background,
       leftCompetition,
       rightCompetition,
-      // 职业轮播相关
-      careers,
-      activeCareer,
-      displayedCareers,
-      totalPages,
-      currentCareerPage,
-      currentCarouselIndex,
-      nextCareerSlide,
-      prevCareerSlide,
-      goToCareerPage,
-      getPositionStyle,
-      setActiveCareer,
-      isActiveCareer,
-      knowledgePic
     };
   },
 };
@@ -675,7 +510,7 @@ export default {
 .section-inner {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 20px;
+  /* padding: 0 20px; */
 }
 
 .section-title-wrap {
@@ -754,187 +589,6 @@ export default {
   transform: translateY(2px);
 }
 
-/* 职业展示样式 */
-.career-showcase {
-  position: relative;
-  width: 100%;
-  height: 500px;
-  margin-top: 20px;
-  margin-bottom: 40px;
-}
-
-/* 右侧特色职业 */
-.career-featured {
-  position: absolute;
-  right: 0;
-  top: -40px; /* 往上移动40px */
-  width: 50%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding-top: 20px;
-}
-
-.career-featured-content {
-  padding: 20px;
-}
-
-.featured-name {
-  font-size: 28px;
-  font-weight: 700;
-  color: #0b2a4a;
-  margin-bottom: 15px;
-}
-
-.featured-desc {
-  font-size: 18px;
-  color: #475569;
-  max-width: 80%;
-}
-
-.career-featured-circle {
-  position: relative;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  overflow: hidden;
-  margin: 0 auto;
-  border: 6px solid #054d22;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-  text-decoration: none;
-  margin-top: 20px;
-}
-
-.career-featured-circle:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 6px solid #f0c53e;
-  box-sizing: border-box;
-  transform: scale(1.08);
-}
-
-.career-featured-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* 左上到右下的职业路径 */
-.career-path {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none; /* 保证点击事件可以穿透到圆圈 */
-}
-
-.career-circle-small {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 3px solid #054d22;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-  text-decoration: none;
-  cursor: pointer;
-  pointer-events: auto; /* 确保圆圈可以点击 */
-}
-
-.career-circle-small:before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 3px solid #f0c53e;
-  box-sizing: border-box;
-  transform: scale(1.08);
-}
-
-.career-circle-small:hover {
-  transform: scale(1.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-}
-
-.career-circle-active {
-  transform: scale(1.5);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
-  z-index: 10;
-}
-
-.career-circle-active:hover {
-  transform: scale(1.6);
-}
-
-.career-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* 导航按钮样式 */
-.career-nav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 30px;
-  gap: 20px;
-}
-
-.career-nav-btn {
-  background: rgba(255, 255, 255, 0.7);
-  border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: #0b2a4a;
-  cursor: pointer;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.career-nav-btn:hover {
-  background: rgba(255, 255, 255, 0.9);
-  transform: scale(1.1);
-}
-
-.career-dots {
-  display: flex;
-  gap: 10px;
-}
-
-.career-dot-btn {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: none;
-  background-color: rgba(255, 255, 255, 0.5);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  padding: 0;
-}
-
-.career-dot-btn.active {
-  background-color: #3b82f6;
-  transform: scale(1.2);
-}
-
 /* 响应式设计 */
 @media (max-width: 1024px) {
   .competition-layout {
@@ -949,41 +603,6 @@ export default {
 }
 
 @media (max-width: 768px) {
-  .career-showcase {
-    height: 700px;
-  }
-  
-  .career-featured {
-    width: 100%;
-    height: 320px; /* 减少高度 */
-    position: relative;
-    right: auto;
-    top: -20px; /* 调整移动距离 */
-  }
-  
-  .career-featured-circle {
-    width: 200px;
-    height: 200px;
-  }
-  
-  .career-path {
-    width: 100%;
-    height: 380px; /* 增加高度 */
-    top: 320px;
-    left: 0;
-  }
-  
-  /* 移动端重新定位圆圈 */
-  .career-circle-small:nth-child(1) { top: 0%; left: 5%; }
-  .career-circle-small:nth-child(2) { top: 20%; left: 25%; }
-  .career-circle-small:nth-child(3) { top: 40%; left: 45%; }
-  .career-circle-small:nth-child(4) { top: 60%; left: 65%; }
-  .career-circle-small:nth-child(5) { top: 80%; left: 85%; }
-  
-  .career-circle-small {
-    width: 80px;
-    height: 80px;
-  }
   .competition-layout {
     gap: 20px;
   }

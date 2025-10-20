@@ -135,7 +135,7 @@ export default {
 }
 
 .nav-link:hover {
-  color: #cfe4ff;
+  color: #197bfa;
 }
 
 .nav-auth {
