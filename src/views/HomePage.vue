@@ -3,7 +3,7 @@
     <MouseFollower />
 
     <!-- 使用共享导航组件 -->
-    <NavBar :transparent="isNavTransparent" />
+    <NavBar :transparent="isNavTransparent" :userInfo="userInfo" />
 
     <!-- 轮播图容器 -->
     <div class="hero-slides">
@@ -99,6 +99,7 @@
 <script>
 import Footer from '../components/Footer.vue';
 import { ref, onMounted, onUnmounted, computed } from "vue";
+import { useRouter } from "vue-router";
 import MouseFollower from "../components/MouseFollower.vue";
 import Shalou from "../components/Shalou.vue";
 import pic1 from "../assets/pic_lb1.png";
@@ -127,12 +128,16 @@ export default {
     CareerPlanning,
   },
   setup() {
+    const router = useRouter();
     const isNavTransparent = ref(true);
     const heroRef = ref(null);
     const currentIndex = ref(0);
     const withTransition = ref(true);
     const pendingTargetIndex = ref(null);
     let slideTimer = null;
+
+    // 用户信息
+    const userInfo = ref(null);
 
     // 左右元素的引用
     const leftCompetition = ref(null);
@@ -219,6 +224,24 @@ export default {
     };
 
     onMounted(() => {
+      // 检查登录状态
+      const storedUserInfo = localStorage.getItem('userInfo');
+      if (!storedUserInfo) {
+        // 未登录，跳转到登录页
+        router.push('/login');
+        return;
+      }
+      
+      try {
+        userInfo.value = JSON.parse(storedUserInfo);
+        console.log('用户信息:', userInfo.value);
+      } catch (error) {
+        console.error('解析用户信息失败:', error);
+        localStorage.removeItem('userInfo');
+        router.push('/login');
+        return;
+      }
+
       // 导航栏透明度监听
       const observer = new IntersectionObserver(
         (entries) => {
@@ -286,6 +309,7 @@ export default {
       background,
       leftCompetition,
       rightCompetition,
+      userInfo,
     };
   },
 };
@@ -303,123 +327,7 @@ export default {
   background-repeat: no-repeat;
 }
 
-/* 导航栏下拉菜单样式 */
-.nav-dropdown {
-  position: relative;
-  display: inline-block;
-}
 
-.dropdown-menu {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  min-width: 150px;
-  background-color: white;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  border-radius: 4px;
-  padding: 8px 0;
-}
-
-.dropdown-item {
-  display: block;
-  padding: 10px 20px;
-  color: #333;
-  text-decoration: none;
-  font-size: 14px;
-  text-align: left;
-  transition: background-color 0.2s;
-}
-
-.dropdown-item:hover {
-  background-color: #f0f0f0;
-  color: #3b82f6;
-}
-
-.nav-dropdown:hover .dropdown-menu {
-  display: block;
-}
-
-/* 导航栏样式 */
-.navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
-  background: linear-gradient(
-    to bottom,
-    rgba(30, 132, 248, 0.55),
-    rgba(81, 163, 251, 0.28),
-    rgba(134, 187, 248, 0)
-  );
-  box-shadow: none;
-  transition: background 0.5s ease, box-shadow 0.4s ease;
-}
-
-.navbar-transparent {
-  background: linear-gradient(
-    to bottom,
-    rgba(30, 132, 248, 0.55),
-    rgba(81, 163, 251, 0.28),
-    rgba(134, 187, 248, 0)
-  );
-  box-shadow: none;
-}
-
-.nav-inner {
-  padding: 14px 20px;
-  display: flex;
-  align-items: center;
-}
-
-.nav-left {
-  width: 25%;
-  display: flex;
-  align-items: center;
-}
-
-.nav-center {
-  width: 50%;
-  display: flex;
-  justify-content: center;
-  gap: 36px;
-}
-
-.nav-right {
-  width: 25%;
-  display: flex;
-  justify-content: flex-end;
-  padding-right: 20px;
-}
-
-.brand-text {
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 50px;
-  letter-spacing: 1px;
-}
-
-.nav-link {
-  color: #ffffff;
-  text-decoration: none;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  transition: color 0.2s ease;
-  font-size: 20px;
-}
-
-.nav-link:hover {
-  color: #cfe4ff;
-}
-
-.nav-auth {
-  color: #ffffff;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 20px;
-}
 
 /* 轮播图样式（全屏显示） */
 .hero-slides {

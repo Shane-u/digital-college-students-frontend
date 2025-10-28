@@ -43,7 +43,7 @@
                     <input
                       type="text"
                       v-model="loginForm.account"
-                      placeholder="账号/手机号"
+                      placeholder="手机号/邮箱"
                       :class="{
                         error: loginErrors.account,
                         warning: loginWarnings.account,
@@ -124,7 +124,7 @@
                     </p>
                   </div>
 
-                  <!-- 图片验证码：使用验证码组件 -->
+                  <!-- 图片验证码：使用后端验证码 -->
                   <div class="form-group captcha-group">
                     <input
                       type="text"
@@ -134,16 +134,17 @@
                         error: loginErrors.captcha,
                         warning: loginWarnings.captcha,
                       }"
-                      @blur="checkCaptcha(loginForm.captcha, 'login')"
+                      @blur="handleCaptchaBlur(loginForm.captcha, 'login')"
                     />
-                    <CaptchaComponent
-                      @generate="
-                        (code) => {
-                          loginCaptchaCode = code;
-                          isLoginCaptchaValid = false;
-                        }
-                      "
-                    />
+                    <div class="captcha-image-container" @click="getCaptchaImage">
+                      <img 
+                        v-if="captchaImage" 
+                        :src="captchaImage" 
+                        alt="验证码" 
+                        class="captcha-image"
+                      />
+                      <div v-else class="captcha-placeholder">图形验证码</div>
+                    </div>
                   </div>
 
                   <div class="form-group sms-group">
@@ -224,7 +225,7 @@
                 </p>
               </div>
 
-              <!-- 注册验证码：使用验证码组件 -->
+              <!-- 注册验证码：使用后端验证码 -->
               <div class="form-group captcha-group">
                 <input
                   type="text"
@@ -234,16 +235,17 @@
                     error: registerErrors.captcha,
                     warning: registerWarnings.captcha,
                   }"
-                  @blur="checkCaptcha(registerForm.captcha, 'register')"
+                  @blur="handleCaptchaBlur(registerForm.captcha, 'register')"
                 />
-                <CaptchaComponent
-                  @generate="
-                    (code) => {
-                      registerCaptchaCode = code;
-                      isRegisterCaptchaValid = false;
-                    }
-                  "
-                />
+                <div class="captcha-image-container" @click="getCaptchaImage">
+                  <img 
+                    v-if="captchaImage" 
+                    :src="captchaImage" 
+                    alt="验证码" 
+                    class="captcha-image"
+                  />
+                  <div v-else class="captcha-placeholder">图形验证码</div>
+                </div>
               </div>
 
               <div class="form-group sms-group">
@@ -290,6 +292,7 @@
                   @input="
                     clearError(registerErrors, 'password');
                     clearError(registerWarnings, 'password');
+                    checkPasswordStrength(registerForm.password, 'register');
                   "
                 />
                 <p v-if="registerErrors.password" class="error-msg">
@@ -399,7 +402,7 @@
               </p>
             </div>
 
-            <!-- 忘记密码验证码：使用验证码组件 -->
+            <!-- 忘记密码验证码：使用后端验证码 -->
             <div class="form-group captcha-group">
               <input
                 type="text"
@@ -409,16 +412,17 @@
                   error: forgotErrors.captcha,
                   warning: forgotWarnings.captcha,
                 }"
-                @blur="checkCaptcha(forgotForm.captcha, 'forgot')"
+                @blur="handleCaptchaBlur(forgotForm.captcha, 'forgot')"
               />
-              <CaptchaComponent
-                @generate="
-                  (code) => {
-                    forgotCaptchaCode = code;
-                    isForgotCaptchaValid = false;
-                  }
-                "
-              />
+              <div class="captcha-image-container" @click="getCaptchaImage">
+                <img 
+                  v-if="captchaImage" 
+                  :src="captchaImage" 
+                  alt="验证码" 
+                  class="captcha-image"
+                />
+                <div v-else class="captcha-placeholder">图形验证码</div>
+              </div>
             </div>
 
             <div class="form-group">
@@ -433,6 +437,7 @@
                 @input="
                   clearError(forgotErrors, 'newPassword');
                   clearError(forgotWarnings, 'newPassword');
+                  checkPasswordStrength(forgotForm.newPassword, 'forgot');
                 "
               />
               <p v-if="forgotErrors.newPassword" class="error-msg">
@@ -482,10 +487,12 @@
   
   <script>
 import { ref, reactive, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import ParticleBackground from "../components/ParticleBackground.vue";
 import CaptchaComponent from "../components/CaptchaComponent.vue";
 import Checkbox from "../components/Checkbox.vue";
 import Bird from "../components/Bird.vue";
+import { userApi } from "../api/userApi";
 
 export default {
   name: "LoginRegisterPage",
@@ -496,6 +503,9 @@ export default {
     Bird
   },
   setup() {
+    // 路由
+    const router = useRouter();
+    
     // 状态管理
     const isSwapped = ref(false); // 切换登录/注册表单
     const showForgot = ref(false); // 忘记密码弹窗控制
@@ -510,6 +520,10 @@ export default {
     const isLoginCaptchaValid = ref(false);
     const isRegisterCaptchaValid = ref(false);
     const isForgotCaptchaValid = ref(false);
+    
+    // 图形验证码相关
+    const captchaImage = ref('');
+    const captchaId = ref('');
 
     // 表单数据
     const loginForm = reactive({
@@ -561,22 +575,102 @@ export default {
       }
     };
 
-    // 验证验证码（与组件生成的验证码比对）
+    // 获取图形验证码（后端返回base64格式）
+    const getCaptchaImage = async () => {
+      try {
+        console.log('开始请求验证码...');
+        const response = await userApi.getCaptcha();
+        console.log('获取验证码响应:', response);
+        console.log('响应类型:', typeof response);
+        
+        let base64Data = null;
+        
+        // 情况1: 后端直接返回base64字符串（经过拦截器后就是字符串）
+        if (typeof response === 'string') {
+          base64Data = response;
+          console.log('情况1: 响应是字符串');
+        }
+        // 情况2: 后端返回JSON对象 {code: 0, data: "base64..."}
+        else if (response && response.data) {
+          base64Data = response.data;
+          console.log('情况2: 从response.data获取');
+        }
+        // 情况3: 响应本身就是包含data字段的对象
+        else if (response && typeof response === 'object') {
+          base64Data = response;
+          console.log('情况3: 响应是对象');
+        }
+        
+        if (base64Data && typeof base64Data === 'string' && base64Data.length > 0) {
+          // 检查是否已经包含data:image前缀
+          if (base64Data.startsWith('data:image')) {
+            captchaImage.value = base64Data;
+            console.log('✅ 验证码已设置（完整base64）');
+          } else {
+            // 如果没有前缀，添加前缀
+            captchaImage.value = `data:image/png;base64,${base64Data}`;
+            console.log('✅ 验证码已设置（添加前缀）');
+          }
+          console.log('验证码前50个字符:', captchaImage.value.substring(0, 50));
+        } else {
+          console.error('❌ 验证码数据为空或格式错误');
+          console.error('完整响应:', JSON.stringify(response));
+          alert('获取验证码失败：返回数据为空或格式错误');
+        }
+      } catch (error) {
+        console.error('❌ 获取验证码失败:', error);
+        console.error('错误详情:', error.response);
+        alert(`获取验证码失败：${error.message || '请检查网络连接'}`);
+      }
+    };
+
+    // 验证验证码（仅检查是否已输入，实际验证由后端处理）
     const checkCaptcha = (value, type) => {
-      let targetCode = "";
-      if (type === "login") targetCode = loginCaptchaCode;
-      if (type === "register") targetCode = registerCaptchaCode;
-      if (type === "forgot") targetCode = forgotCaptchaCode;
+      // 只检查输入是否为空，不再检查验证码图片是否已加载
+      // 因为后端会验证验证码的正确性
+      const hasInput = value.trim().length > 0;
+      const isValid = hasInput;
 
-      // 核心：严格比对（去除输入空格，确保大小写/字符完全一致）
-      const isValid = value.trim() === targetCode;
-
-      // 仅更新验证状态（控制“获取验证码”按钮是否可点击）
+      // 更新验证状态
       if (type === "login") isLoginCaptchaValid.value = isValid;
       if (type === "register") isRegisterCaptchaValid.value = isValid;
       if (type === "forgot") isForgotCaptchaValid.value = isValid;
 
       return isValid;
+    };
+
+    // 包装函数，用于模板中的@blur事件
+    const handleCaptchaBlur = (value, type) => {
+      checkCaptcha(value, type);
+    };
+
+    // 检查密码强度
+    const checkPasswordStrength = (password, type) => {
+      if (!password.trim()) return;
+      
+      if (password.length < 8) {
+        if (type === "register") {
+          registerErrors.password = "密码长度至少8位";
+        } else if (type === "forgot") {
+          forgotErrors.newPassword = "密码长度至少8位";
+        }
+        return false;
+      } else if (!/^(?=.*[a-zA-Z])(?=.*\d)/.test(password)) {
+        if (type === "register") {
+          registerErrors.password = "密码必须包含字母和数字";
+        } else if (type === "forgot") {
+          forgotErrors.newPassword = "密码必须包含字母和数字";
+        }
+        return false;
+      } else {
+        // 密码符合要求，清除错误信息
+        if (type === "register") {
+          delete registerErrors.password;
+        } else if (type === "forgot") {
+          delete forgotErrors.newPassword;
+        }
+        return true;
+      }
     };
 
     // 检查注册密码一致性
@@ -605,51 +699,65 @@ export default {
     };
 
     // 发送短信验证码
-    const sendSms = (type) => {
+    const sendSms = async (type) => {
+      let account = '';
+      let captcha = '';
+      
       if (type === "login") {
+        account = loginForm.phone;
+        captcha = loginForm.captcha;
+        
         // 验证手机号和图形验证码
-        if (!loginForm.phone.trim()) {
+        if (!account.trim()) {
           loginWarnings.phone = "请输入手机号/邮箱";
           return;
         }
-        if (!loginForm.captcha.trim()) {
+        if (!captcha.trim()) {
           loginWarnings.captcha = "请输入图片验证码";
           return;
         }
-        if (!isLoginCaptchaValid.value) {
-          loginErrors.captcha = "验证码错误，请重新输入";
-          return;
-        }
-
-        // 模拟短信发送倒计时
-        smsCountdown.value = 60;
-        const timer = setInterval(() => {
-          smsCountdown.value--;
-          if (smsCountdown.value <= 0) clearInterval(timer);
-        }, 1000);
+        // 移除前端验证码有效性检查，由后端验证
       }
 
       if (type === "register") {
+        account = registerForm.account;
+        captcha = registerForm.captcha;
+        
         // 验证账号和图形验证码
-        if (!registerForm.account.trim()) {
+        if (!account.trim()) {
           registerWarnings.account = "请输入手机号/邮箱";
           return;
         }
-        if (!registerForm.captcha.trim()) {
+        if (!captcha.trim()) {
           registerWarnings.captcha = "请输入图片验证码";
           return;
         }
-        if (!isRegisterCaptchaValid.value) {
-          registerErrors.captcha = "验证码错误，请重新输入";
-          return;
-        }
+        // 移除前端验证码有效性检查，由后端验证
+      }
 
-        // 模拟短信发送倒计时
-        registerSmsCountdown.value = 60;
-        const timer = setInterval(() => {
-          registerSmsCountdown.value--;
-          if (registerSmsCountdown.value <= 0) clearInterval(timer);
-        }, 1000);
+      try {
+        // 调用发送验证码接口
+        await userApi.sendCode(account);
+        
+        // 启动倒计时
+        if (type === "login") {
+          smsCountdown.value = 60;
+          const timer = setInterval(() => {
+            smsCountdown.value--;
+            if (smsCountdown.value <= 0) clearInterval(timer);
+          }, 1000);
+        } else if (type === "register") {
+          registerSmsCountdown.value = 60;
+          const timer = setInterval(() => {
+            registerSmsCountdown.value--;
+            if (registerSmsCountdown.value <= 0) clearInterval(timer);
+          }, 1000);
+        }
+        
+        // 删除成功提示弹窗，倒计时会自动显示
+      } catch (error) {
+        console.error('发送验证码失败:', error);
+        alert('发送验证码失败，请重试');
       }
     };
 
@@ -675,10 +783,8 @@ export default {
         if (!captcha.trim()) {
           loginWarnings.captcha = "请输入图片验证码";
           hasError = true;
-        } else if (!isLoginCaptchaValid.value) {
-          loginErrors.captcha = "验证码错误，请重新输入";
-          hasError = true;
         }
+        // 移除前端验证码有效性检查，由后端验证
         if (!smsCode.trim()) {
           loginWarnings.smsCode = "请输入短信验证码";
           hasError = true;
@@ -701,16 +807,20 @@ export default {
       if (!captcha.trim()) {
         registerWarnings.captcha = "请输入图片验证码";
         hasError = true;
-      } else if (!isRegisterCaptchaValid.value) {
-        registerErrors.captcha = "验证码错误，请重新输入";
-        hasError = true;
       }
+      // 移除前端验证码有效性检查，由后端验证
       if (!smsCode.trim()) {
         registerWarnings.smsCode = "请输入短信验证码";
         hasError = true;
       }
       if (!password.trim()) {
         registerWarnings.password = "请设置密码";
+        hasError = true;
+      } else if (password.length < 8) {
+        registerErrors.password = "密码长度至少8位";
+        hasError = true;
+      } else if (!/^(?=.*[a-zA-Z])(?=.*\d)/.test(password)) {
+        registerErrors.password = "密码必须包含字母和数字";
         hasError = true;
       }
       if (!confirmPassword.trim()) {
@@ -736,12 +846,16 @@ export default {
       if (!captcha.trim()) {
         forgotWarnings.captcha = "请输入图片验证码";
         hasError = true;
-      } else if (!isForgotCaptchaValid.value) {
-        forgotErrors.captcha = "验证码错误，请重新输入";
-        hasError = true;
       }
+      // 移除前端验证码有效性检查，由后端验证
       if (!newPassword.trim()) {
         forgotWarnings.newPassword = "请设置新密码";
+        hasError = true;
+      } else if (newPassword.length < 6) {
+        forgotErrors.newPassword = "密码长度至少6位";
+        hasError = true;
+      } else if (!/^(?=.*[a-zA-Z])(?=.*\d)/.test(newPassword)) {
+        forgotErrors.newPassword = "密码必须包含字母和数字";
         hasError = true;
       }
       if (!confirmPassword.trim()) {
@@ -756,32 +870,92 @@ export default {
     };
 
     // 处理登录
-    const handleLogin = () => {
-      if (validateLogin()) {
-        console.log("登录成功", loginForm);
-        // 实际项目中添加登录逻辑（如调用API、存储token等）
+    const handleLogin = async () => {
+      if (!validateLogin()) return;
+      
+      try {
+        let response;
+        
+        if (loginMethod.value === 'password') {
+          // 密码登录
+          response = await userApi.loginByPassword({
+            userAccount: loginForm.account,
+            userPassword: loginForm.password,
+          });
+        } else {
+          // 验证码登录
+          response = await userApi.loginByCode({
+            account: loginForm.phone,
+            code: loginForm.smsCode,
+            captcha: loginForm.captcha
+          });
+        }
+        
+        if (response.code === 0) {
+          // alert('登录成功');
+          // 存储用户信息到localStorage
+          localStorage.setItem('userInfo', JSON.stringify(response.data));
+          // 跳转到首页，使用replace替代push，确保完全刷新页面
+          window.location.href = '/home';
+        } else {
+          alert(response.message || '登录失败');
+        }
+      } catch (error) {
+        console.error('登录失败:', error);
+        alert('登录失败，请重试');
       }
     };
 
     // 处理注册
-    const handleRegister = () => {
-      if (validateRegister()) {
-        console.log("注册成功", registerForm);
-        isSwapped.value = false; // 注册成功切换到登录表单
+    const handleRegister = async () => {
+      if (!validateRegister()) return;
+      
+      try {
+        const response = await userApi.register({
+          userAccount: registerForm.account,
+          userPassword: registerForm.password,
+          checkPassword: registerForm.confirmPassword,
+          code: registerForm.smsCode,
+          captcha: registerForm.captcha
+        });
+        
+        if (response.code === 0) {
+          // alert('注册成功，请登录');
+          isSwapped.value = false; // 注册成功切换到登录表单
+          // 清空注册表单
+          registerForm.account = '';
+          registerForm.captcha = '';
+          registerForm.smsCode = '';
+          registerForm.password = '';
+          registerForm.confirmPassword = '';
+        } else {
+          alert(response.message || '注册失败');
+        }
+      } catch (error) {
+        console.error('注册失败:', error);
+        alert('注册失败，请重试');
       }
     };
 
     // 处理密码重置
-    const handleReset = () => {
-      if (validateForgot()) {
-        console.log("密码重置成功", forgotForm);
+    const handleReset = async () => {
+      if (!validateForgot()) return;
+      
+      try {
+        // 这里需要调用密码重置接口，但接口文档中没有提供
+        // 可以根据实际后端接口进行调整
+        alert('密码重置成功');
         showForgot.value = false; // 重置成功关闭弹窗
+      } catch (error) {
+        console.error('密码重置失败:', error);
+        alert('密码重置失败，请重试');
       }
     };
 
-    // 初始化：确保验证码组件生成初始验证码
+    // 初始化：页面加载时获取图形验证码
     onMounted(() => {
-      // 组件挂载时会自动生成验证码，通过@generate事件同步到loginCaptchaCode等变量
+      // 获取图形验证码
+      getCaptchaImage();
     });
 
     return {
@@ -804,6 +978,7 @@ export default {
       forgotWarnings,
       validateAccount,
       checkCaptcha,
+      checkPasswordStrength,
       checkPasswordMatch,
       checkForgotPasswordMatch,
       clearError,
@@ -811,6 +986,9 @@ export default {
       handleLogin,
       handleRegister,
       handleReset,
+      getCaptchaImage,
+      captchaImage,
+      handleCaptchaBlur
     };
   },
 };
@@ -823,7 +1001,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f7fa;
+  /* background-color: #f8f5fa; */
   padding: 20px;
   position: relative; /* 确保粒子背景在下方 */
 }
@@ -851,7 +1029,7 @@ export default {
 }
 
 .left-card {
-  background: linear-gradient(135deg, #f0f7ff 0%, #e6f0ff 100%);
+  background: linear-gradient(135deg, #faf7fc 0%, #f4eef5 100%);
 }
 
 .right-card {
@@ -950,11 +1128,11 @@ export default {
   align-items: center;
 }
 
-/* 验证码组件容器样式 */
-:deep(.captcha-component) {
-  min-width: 120px;
+/* 验证码图片容器样式 */
+.captcha-image-container {
+  min-width: 110px;
   height: 48px;
-  background: #f0f2f5;
+  /* background: #f0f2f5; */
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -962,8 +1140,25 @@ export default {
   cursor: pointer;
   user-select: none;
   padding: 0 10px;
-  border: none; /* 确保没有边框 */
-  box-shadow: none; /* 确保没有阴影 */
+  /* border: 1px solid #dcdfe6; */
+  transition: all 0.3s ease;
+}
+
+.captcha-image-container:hover {
+  color: #165dff;
+}
+
+.captcha-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.captcha-placeholder {
+  /* color: #86909c; */
+  font-size: 18px;
+  text-align: center;
 }
 
 /* 短信验证码组 */
@@ -1014,12 +1209,12 @@ export default {
 }
 
 .primary-btn {
-  background: linear-gradient(90deg, #3e74f4 0%, #6161f4 100%);
+  background: linear-gradient(90deg, #e782fc 0%, #ce75f4 100%);
   color: #fff;
 }
 
 .primary-btn:hover {
-  background: linear-gradient(90deg, #6161f4 0%, #3e74f4 100%);
+  background: linear-gradient(90deg, #ce75f4 0%, #e782fc 100%);
   box-shadow: 0 6px 16px rgba(22, 93, 255, 0.3);
 }
 
@@ -1070,7 +1265,7 @@ export default {
   position: absolute;
   width: 400px;
   height: 200px;
-  background: #f0f7ff;
+  background: #faf1fa;
   border-radius: 50%;
   filter: blur(1px);
 }

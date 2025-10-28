@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>验证码接口测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #captchaImage {
+            max-width: 100%;
+            margin: 20px 0;
+            border: 1px solid #ddd;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>验证码接口测试工具</h1>
+    
+    <div class="test-section">
+        <h2>测试1: 直接请求验证码（Blob格式）</h2>
+        <button onclick="testCaptchaBlob()">测试Blob格式</button>
+        <div id="log1" class="log"></div>
+        <img id="captchaImage1" style="display:none;" />
+    </div>
+
+    <div class="test-section">
+        <h2>测试2: 请求验证码（Base64格式）</h2>
+        <button onclick="testCaptchaBase64()">测试Base64格式</button>
+        <div id="log2" class="log"></div>
+        <img id="captchaImage2" style="display:none;" />
+    </div>
+
+    <div class="test-section">
+        <h2>测试3: 直接在img标签中显示</h2>
+        <button onclick="testCaptchaDirect()">测试直接显示</button>
+        <div id="log3" class="log"></div>
+        <img id="captchaImage3" style="display:none;" />
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const API_BASE = 'http://192.168.147.38:8121/api';
+        
+        function log(id, message) {
+            const logEl = document.getElementById(id);
+            const time = new Date().toLocaleTimeString();
+            logEl.textContent += `[${time}] ${message}\n`;
+        }
+
+        function clearLog(id) {
+            document.getElementById(id).textContent = '';
+        }
+
+        // 测试1: Blob格式
+        async function testCaptchaBlob() {
+            clearLog('log1');
+            const img = document.getElementById('captchaImage1');
+            img.style.display = 'none';
+            
+            try {
+                log('log1', '开始请求验证码（Blob格式）...');
+                log('log1', `请求URL: ${API_BASE}/user/captcha`);
+                
+                const response = await axios.get(`${API_BASE}/user/captcha`, {
+                    responseType: 'blob',
+                    timeout: 10000
+                });
+                
+                log('log1', `响应状态: ${response.status}`);
+                log('log1', `响应类型: ${response.data.type}`);
+                log('log1', `响应大小: ${response.data.size} bytes`);
+                
+                if (response.data && response.data.size > 0) {
+                    const imageUrl = URL.createObjectURL(response.data);
+                    img.src = imageUrl;
+                    img.style.display = 'block';
+                    log('log1', '✅ 验证码加载成功！');
+                    log('log1', `图片URL: ${imageUrl}`);
+                } else {
+                    log('log1', '❌ 响应数据为空');
+                }
+            } catch (error) {
+                log('log1', `❌ 请求失败: ${error.message}`);
+                if (error.response) {
+                    log('log1', `响应状态: ${error.response.status}`);
+                    log('log1', `响应数据: ${JSON.stringify(error.response.data)}`);
+                }
+            }
+        }
+
+        // 测试2: Base64格式
+        async function testCaptchaBase64() {
+            clearLog('log2');
+            const img = document.getElementById('captchaImage2');
+            img.style.display = 'none';
+            
+            try {
+                log('log2', '开始请求验证码（Base64格式）...');
+                log('log2', `请求URL: ${API_BASE}/user/captcha`);
+                
+                const response = await axios.get(`${API_BASE}/user/captcha`, {
+                    responseType: 'arraybuffer',
+                    timeout: 10000
+                });
+                
+                log('log2', `响应状态: ${response.status}`);
+                log('log2', `响应大小: ${response.data.byteLength} bytes`);
+                
+                if (response.data && response.data.byteLength > 0) {
+                    const base64 = btoa(
+                        new Uint8Array(response.data)
+                            .reduce((data, byte) => data + String.fromCharCode(byte), '')
+                    );
+                    const imageUrl = `data:image/png;base64,${base64}`;
+                    img.src = imageUrl;
+                    img.style.display = 'block';
+                    log('log2', '✅ 验证码加载成功！');
+                    log('log2', `Base64长度: ${base64.length}`);
+                } else {
+                    log('log2', '❌ 响应数据为空');
+                }
+            } catch (error) {
+                log('log2', `❌ 请求失败: ${error.message}`);
+                if (error.response) {
+                    log('log2', `响应状态: ${error.response.status}`);
+                    log('log2', `响应数据: ${JSON.stringify(error.response.data)}`);
+                }
+            }
+        }
+
+        // 测试3: 直接显示
+        function testCaptchaDirect() {
+            clearLog('log3');
+            const img = document.getElementById('captchaImage3');
+            
+            log('log3', '尝试直接在img标签中显示验证码...');
+            log('log3', `图片URL: ${API_BASE}/user/captcha?t=${Date.now()}`);
+            
+            img.src = `${API_BASE}/user/captcha?t=${Date.now()}`;
+            img.style.display = 'block';
+            
+            img.onload = () => {
+                log('log3', '✅ 验证码加载成功！');
+            };
+            
+            img.onerror = (error) => {
+                log('log3', '❌ 验证码加载失败');
+                log('log3', `错误: ${error.message || '图片加载错误'}`);
+            };
+        }
+
+        // 页面加载时自动测试
+        window.onload = () => {
+            console.log('验证码测试工具已加载');
+        };
+    </script>
+</body>
+</html>
+
+

@@ -28,9 +28,10 @@
           this.opacity = Math.random() * 0.9 + 0.1 
           this.originalOpacity = this.opacity
           // 使用浅蓝色：R和G为较高随机值，B接近255
-          this.blue = Math.floor(Math.random() * 40 + 210)     // B: 210~250
-          this.red = Math.floor(Math.random() * 30 + 160)      // R: 160~190
-          this.green = Math.floor(Math.random() * 50 + 190)    // G: 190~240
+          // 使用浅紫色：R适中，G低，B高
+          this.red = Math.floor(Math.random() * 15 + 225)    // R: 225~239 更浅
+          this.green = Math.floor(Math.random() * 10 + 225)  // G: 205~214 更高更浅
+          this.blue = Math.floor(Math.random() * 10 + 240)   // B: 240~249 非常高，非常浅
         }
   
         update() {

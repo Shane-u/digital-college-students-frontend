@@ -110,7 +110,7 @@ export default {
   background: linear-gradient(135deg, #3B82F6, #8B5CF6);
   pointer-events: none;
   z-index: 9999;
-  transition: all 0.3s ease;
+  transition: all 0.1s ease;
   opacity: 0;
   box-shadow: 0 0 30px rgba(59, 130, 246, 0.8),
               0 0 60px rgba(139, 92, 246, 0.6),

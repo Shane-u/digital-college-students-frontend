@@ -20,7 +20,18 @@
         <a href="/home#profile" class="nav-link bold">个人主页</a>
       </div>
       <div class="nav-right">
-        <router-link to="/login" class="nav-auth">登录/注册</router-link>
+        <!-- 未登录状态 -->
+        <router-link v-if="!userInfo" to="/login" class="nav-auth">登录/注册</router-link>
+        
+        <!-- 已登录状态 -->
+        <div v-else class="user-info-container">
+          <div class="user-info">
+            <span class="user-account">{{ userInfo.userAccount || '用户' }}</span>
+            <div class="user-dropdown">
+              <a @click="handleLogout" class="dropdown-item logout-btn">退出登录</a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </nav>
@@ -28,6 +39,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 
 export default {
   name: 'NavBar',
@@ -35,14 +47,27 @@ export default {
     transparent: {
       type: Boolean,
       default: true
+    },
+    userInfo: {
+      type: Object,
+      default: null
     }
   },
   setup(props) {
+    const router = useRouter();
     const isNavTransparent = ref(props.transparent);
     
     const handleScroll = () => {
       if (props.transparent) {
         isNavTransparent.value = window.scrollY < 50;
+      }
+    };
+    
+    // 退出登录
+    const handleLogout = () => {
+      if (confirm('确定要退出登录吗？')) {
+        localStorage.removeItem('userInfo');
+        router.push('/login');
       }
     };
     
@@ -57,7 +82,8 @@ export default {
     });
     
     return {
-      isNavTransparent
+      isNavTransparent,
+      handleLogout
     };
   }
 };
@@ -73,15 +99,15 @@ export default {
   z-index: 1000;
   background: linear-gradient(
     to bottom,
-    rgba(30, 132, 248, 0.55),
-    rgba(81, 163, 251, 0.28),
-    rgba(134, 187, 248, 0)
+    rgba(111, 90, 209, 0.55),
+    rgba(186, 168, 231, 0.28),
+    rgba(242, 213, 255,0)
   );
   box-shadow: none;
   transition: background 0.5s ease, box-shadow 0.4s ease;
 }
 
-.navbar-transparent {
+/* .navbar-transparent {
   background: linear-gradient(
     to bottom,
     rgba(6, 115, 240, 0.55),
@@ -89,7 +115,7 @@ export default {
     rgba(114, 177, 249, 0)
   );
   box-shadow: none;
-}
+} */
 
 .nav-inner {
   padding: 14px 20px;
@@ -111,6 +137,7 @@ export default {
 }
 
 .nav-right {
+  border-radius: 6px;
   width: 25%;
   display: flex;
   justify-content: flex-end;
@@ -135,14 +162,82 @@ export default {
 }
 
 .nav-link:hover {
-  color: #197bfa;
+  color: #c249fa;
 }
 
 .nav-auth {
+  border: 1px solid white;
   color: #ffffff;
   text-decoration: none;
   font-weight: 600;
   font-size: 20px;
+  padding: 8px;
+  border-radius: 6px;
+}
+.nav-auth:hover {
+  color: #c249fa;
+  border-color: #c249fa;
+}
+
+
+/* 用户信息样式 */
+.user-info-container {
+  position: relative;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  padding: 5px 10px;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.user-info:hover {
+  /* background-color: rgba(255, 255, 255, 0.1); */
+}
+
+
+.user-account {
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  margin-right: 5px;
+}
+
+.user-account:hover {
+  color: #c249fa;
+  border-color: #c249fa;
+}
+
+.user-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 120px;
+  background-color: white;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  border-radius: 4px;
+  padding: 8px 0;
+}
+
+.user-info:hover .user-dropdown {
+  display: block;
+}
+
+.logout-btn {
+  color: #f56565 !important;
+  font-weight: 500;
+}
+
+.logout-btn:hover {
+  background-color: #fff5f5;
 }
 
 /* 导航栏下拉菜单样式 */
