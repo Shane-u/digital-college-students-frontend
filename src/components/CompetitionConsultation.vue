@@ -24,8 +24,8 @@
                 { 'hovered': hoveredIndex === index },
                 hoveredIndex === index ? 'animate__animated animate__pulse' : ''
               ]"
-            >{{ item.title }}</p>
-            <span class="item-description">{{ item.viewCount }}</span>
+            ><a :href="item.url" target="_blank" class="item-title-link">{{ item.name }}</a></p>
+            <span class="item-description">{{ item.popularity }}</span>
           </div>
         </div>
       </div>
@@ -133,7 +133,7 @@
   
   .consultation-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     padding: 2px 0;
     transition: opacity 0.3s ease;
@@ -185,6 +185,17 @@
     overflow: hidden;
     text-overflow: ellipsis;
     transition: color 0.3s ease, text-decoration 0.3s ease;
+    width: 360px;
+    /* padding-right: 50px; */
+  }
+  .item-title-link {
+    color: #333;
+    text-decoration: none;
+    transition: color 0.3s ease, text-decoration 0.3s ease;
+  }
+  .item-title-link:hover {
+    color: rgb(34, 158, 246);
+    text-decoration: underline;
   }
   
   .item-title.hovered {
@@ -195,8 +206,9 @@
   .item-description {
     font-size: 12px;
     color: #666;
-    margin: 0;
     line-height: 1.4;
+    width: 60px;
+    padding-left: 10px;
   }
   
   /* 响应式设计 */

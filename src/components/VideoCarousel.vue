@@ -111,7 +111,7 @@
   <style scoped>
   .carousel-container {
     position: relative;
-    width: 100%;
+    width: 600px;
     max-width: 1400px;
     margin: 0 auto;
     overflow: hidden;

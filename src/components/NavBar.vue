@@ -97,6 +97,11 @@ export default {
   left: 0;
   width: 100%;
   z-index: 1000;
+  background: rgba(111, 90, 209);
+  transition: background 0.5s ease, box-shadow 0.4s ease;
+}
+
+.navbar-transparent {
   background: linear-gradient(
     to bottom,
     rgba(111, 90, 209, 0.55),
@@ -104,18 +109,7 @@ export default {
     rgba(242, 213, 255,0)
   );
   box-shadow: none;
-  transition: background 0.5s ease, box-shadow 0.4s ease;
 }
-
-/* .navbar-transparent {
-  background: linear-gradient(
-    to bottom,
-    rgba(6, 115, 240, 0.55),
-    rgba(60, 150, 247, 0.28),
-    rgba(114, 177, 249, 0)
-  );
-  box-shadow: none;
-} */
 
 .nav-inner {
   padding: 14px 20px;
@@ -147,7 +141,7 @@ export default {
 .brand-text {
   color: #ffffff;
   font-weight: bold;
-  font-size: 50px;
+  font-size: 40px;
   letter-spacing: 1px;
   font-family:'Courier New', Courier, monospace;
 }

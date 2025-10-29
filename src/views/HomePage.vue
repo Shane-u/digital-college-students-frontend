@@ -36,12 +36,6 @@
     </section>
 
     <div 
-      :style="{ 
-        backgroundImage: `url(${background})`,
-        backgroundRepeat: 'no-repeat',  // 不重复
-        backgroundSize: 'cover',         // 撑满容器
-        backgroundPosition: 'center'     // 居中显示
-      }"
     >
         <!-- Competition Section -->
         <section id="competition" class="section competition">
@@ -58,9 +52,9 @@
                 class="competition-left animate__animated"
                 ref="leftCompetition"
               >
-                <CompetitionBorder>
+                <!-- <CompetitionBorder> -->
                   <CompetitionConsultation />
-                </CompetitionBorder>
+                <!-- </CompetitionBorder> -->
               </div>
 
               <!-- 右侧：视频展示 -->
@@ -108,7 +102,7 @@ import pic3 from "../assets/pic_lb3.png";
 import pic4 from "../assets/pic_lb4.png";
 import background from "../assets/background.png";
 import Competition from "../components/Competition.vue";
-import CompetitionBorder from "../components/Competition_border.vue";
+// import CompetitionBorder from "../components/Competition_border.vue";
 import CompetitionConsultation from "../components/CompetitionConsultation.vue";
 import VideoCarousel from "../components/VideoCarousel.vue";
 import NavBar from "../components/NavBar.vue";
@@ -120,7 +114,7 @@ export default {
     MouseFollower,
     Competition,
     Shalou,
-    CompetitionBorder,
+    // CompetitionBorder,
     CompetitionConsultation,
     VideoCarousel,
     NavBar,

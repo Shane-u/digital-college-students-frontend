@@ -10,7 +10,7 @@
       </div>
       
       <!-- 右侧大图和知识图谱标题 -->
-      <div ref="knowledgeGraphRef" class="knowledge-graph">
+      <!-- <div ref="knowledgeGraphRef" class="knowledge-graph">
         <router-link :to="activeCareer.link" class="knowledge-circle">
           <img :src="knowledgePic" alt="知识图" class="knowledge-image" />
         </router-link>
@@ -20,7 +20,7 @@
           <span>图</span>
           <span>谱</span>
         </div>
-      </div>
+      </div> -->
       
       <!-- 左侧小图阵列 -->
       <div ref="carouselImagesRef" class="career-path">
@@ -279,8 +279,8 @@
   .knowledge-title span {
     font-size: 24px;
     font-weight: 700;
-    color: #054d22;
-    margin: 5px 0;
+    color: black;
+    margin: 10px 0;
     writing-mode: vertical-lr;
     text-orientation: upright;
     letter-spacing: 5px;
@@ -292,7 +292,6 @@
     height: 450px;
     border-radius: 50%;
     overflow: hidden;
-    border: 6px solid #054d22;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
     transition: all 0.3s ease;
     text-decoration: none;
@@ -334,7 +333,6 @@
     height: 140px;
     border-radius: 50%;
     overflow: hidden;
-    border: 3px solid #054d22;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     transition: all 0.5s ease;
     text-decoration: none;
