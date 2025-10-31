@@ -16,7 +16,7 @@
           </div>
         </div>
         <a href="/home#career" class="nav-link bold">职业规划</a>
-        <a href="/home#knowledge" class="nav-link bold">知识图谱</a>
+        <a href="/knowledge-graph" class="nav-link bold">知识图谱</a>
         <a href="/home#profile" class="nav-link bold">个人主页</a>
       </div>
       <div class="nav-right">

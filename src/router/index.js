@@ -3,6 +3,7 @@ import LoginPage from '../views/LoginPage.vue'
 import HomePage from '../views/HomePage.vue'
 import EduCompetitionPage from '../views/EduCompetitionPage.vue'
 import SubjectCompetitionPage from '../views/SubjectCompetitionPage.vue'
+import KnowledgeGraphPage from '../views/KnowledgeGraphPage.vue'
 
 const routes = [
   {
@@ -28,6 +29,11 @@ const routes = [
     path: '/competition/subject',
     name: 'SubjectCompetition',
     component: SubjectCompetitionPage
+  },
+  {
+    path: '/knowledge-graph',
+    name: 'KnowledgeGraph',
+    component: KnowledgeGraphPage
   },
 ]
 

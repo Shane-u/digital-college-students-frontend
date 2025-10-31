@@ -17,31 +17,36 @@
 			height: 100%;
 		}
 		.links line {
-			stroke: rgb(180, 160, 200);
-			stroke-opacity: 0.6;
+			stroke: rgba(212, 175, 55, 0.4);
+			stroke-opacity: 0.5;
+			stroke-width: 1.5px;
 		}
 		.links line.inactive {
-			stroke-opacity: 0.2;
+			stroke-opacity: 0.15;
 		}
 		.nodes circle {
-			stroke: #fff;
+			stroke: rgba(212, 175, 55, 0.6);
 			stroke-width: 2px;
+			filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.3));
 		}
 		.nodes circle:hover {
 			cursor: pointer;
+			filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.6));
+			stroke: rgba(212, 175, 55, 0.9);
 		}
 		.nodes circle.inactive {
-			opacity: 0.3;
+			opacity: 0.2;
 		}
 		.texts text {
 			font-size: 12px;
-			fill: #333;
+			fill: #f4e99b;
 			text-anchor: middle;
 			pointer-events: none;
 			font-weight: 500;
+			text-shadow: 0 0 8px rgba(212, 175, 55, 0.6), 0 0 4px rgba(0, 0, 0, 0.8);
 		}
 		.texts text.inactive {
-			opacity: 0.3;
+			opacity: 0.2;
 		}
 	</style>
 	<script src="https://d3js.org/d3.v4.min.js"></script>
@@ -174,18 +179,30 @@
 				});
 			}
 			
+			// 力导常量：控制节点间距（基准值 + 可调倍数）
+			var BASE_BODY_STRENGTH = -500;
+			var BASE_COLLISION_RADIUS = 40;
+			var BASE_DIST_SCALE = 100;
+			var BODY_STRENGTH = BASE_BODY_STRENGTH;
+			var COLLISION_RADIUS = BASE_COLLISION_RADIUS;
+			var DIST_SCALE = BASE_DIST_SCALE;
+			
 			var simulation = d3.forceSimulation().velocityDecay(0.2)
-				.force("link", d3.forceLink().id(d => d.id).distance(100))
-				.force("charge", d3.forceManyBody().strength(-500))
+				.force("link", d3.forceLink().id(d => d.id).distance(DIST_SCALE))
+				.force("charge", d3.forceManyBody().strength(BODY_STRENGTH))
 				.force("center", d3.forceCenter(width / 2, height / 2))
-				.force("collision", d3.forceCollide(40));
+				.force("collision", d3.forceCollide(COLLISION_RADIUS));
+			
+			// 全局变量，用于存储节点和连线数据
+			var nodes = []
+			var links = []
 			
 			// 使用新的数据加载函数
 			loadGraphData().then(function(graph) {
 				
-				let nodes = []
-				let links = []
 				let nodeSet = []
+				nodes = []
+				links = []
 				
 				for (let item of graph) {
 					for (let segment of item.p.segments) {
@@ -304,10 +321,22 @@
 					dragging = false;
 				}
 				
-				node.on('mouseenter', function() {
+				node.on('mouseenter', function(d) {
 					if (!dragging) {
-						var name = d3.select(this).attr("name");
-						var id = d3.select(this).attr("id");
+						var name = d.properties.name || d.id;
+						var id = d.id;
+						var nodeColor = d3.select(this).attr('fill');
+						
+						// 发送节点选择信息到父窗口
+						if (window.parent) {
+							window.parent.postMessage({
+								type: 'nodeSelected',
+								name: name,
+								color: nodeColor,
+								properties: d.properties || {},
+								id: id
+							}, window.location.origin);
+						}
 						
 						d3.select('.nodes').selectAll('circle').attr('class', function(d) {
 							if (d.properties.name == name) {
@@ -353,6 +382,13 @@
 				});
 				
 				node.on('mouseleave', function() {
+					// 发送节点取消选择信息到父窗口
+					if (window.parent) {
+						window.parent.postMessage({
+							type: 'nodeDeselected'
+						}, window.location.origin);
+					}
+					
 					d3.select('.nodes').selectAll('circle').attr('class', '');
 					d3.select('.links').selectAll('line').attr('class', '');
 					d3.select('.texts').selectAll('text').attr('class', '');
@@ -367,6 +403,153 @@
 					.style("font-size", "16px")
 					.style("fill", "#9575b5")
 					.text("数据加载失败，请检查 Neo4j 连接或数据文件");
+			});
+			
+			// 监听来自父窗口的消息
+			window.addEventListener('message', function(event) {
+				if (event.origin !== window.location.origin) return;
+				
+				var data = event.data;
+				if (!data || !data.type) return;
+				
+				if (data.type === 'modeChange') {
+					// 切换显示模式（节点/文字）
+					if (data.mode === 'node') {
+						d3.selectAll('.texts text').style('display', 'none');
+						d3.selectAll('.nodes circle').style('display', 'block');
+					} else if (data.mode === 'text') {
+						d3.selectAll('.nodes circle').style('display', 'none');
+						d3.selectAll('.texts text').style('display', 'block');
+					}
+				} else if (data.type === 'search') {
+					// 搜索功能（参考原始实现，确保nodes和links已定义）
+					if (!nodes || !links || nodes.length === 0) {
+						console.warn('节点数据未加载，无法搜索');
+						return;
+					}
+					
+					var keyword = data.keyword || '';
+					console.log('搜索关键词:', keyword, '节点数:', nodes.length, '连线数:', links.length);
+					
+					if (keyword === '') {
+						// 如果输入为空，显示所有节点和连线
+						d3.selectAll('.nodes circle').attr('class', '');
+						d3.selectAll('.texts text').attr('class', '');
+						d3.selectAll('.links line').attr('class', '');
+					} else {
+						// 搜索所有节点
+						d3.selectAll('.nodes circle').attr('class', function(d) {
+							// 如果节点名称包含关键词，显示
+							if (d.properties && d.properties.name && d.properties.name.indexOf(keyword) >= 0) {
+								return '';
+							} else {
+								// 优化：与该搜索节点相关联的节点均显示
+								for (var i = 0; i < links.length; i++) {
+									// 处理source和target可能是字符串ID或对象的情况
+									var sourceNode = null;
+									var targetNode = null;
+									
+									if (typeof links[i].source === 'object') {
+										sourceNode = links[i].source;
+									} else {
+										sourceNode = nodes.find(function(n) { return n.id == links[i].source; });
+									}
+									
+									if (typeof links[i].target === 'object') {
+										targetNode = links[i].target;
+									} else {
+										targetNode = nodes.find(function(n) { return n.id == links[i].target; });
+									}
+									
+									// 如果起点包含关键词且终点是当前节点，显示
+									if (sourceNode && sourceNode.properties && sourceNode.properties.name && 
+										sourceNode.properties.name.indexOf(keyword) >= 0 && targetNode && targetNode.id == d.id) {
+										return '';
+									}
+									// 如果终点包含关键词且起点是当前节点，显示
+									if (targetNode && targetNode.properties && targetNode.properties.name && 
+										targetNode.properties.name.indexOf(keyword) >= 0 && sourceNode && sourceNode.id == d.id) {
+										return '';
+									}
+								}
+								return 'inactive'; // 隐藏
+							}
+						});
+						
+						// 搜索文字标签
+						d3.selectAll('.texts text').attr('class', function(d) {
+							if (d.properties && d.properties.name && d.properties.name.indexOf(keyword) >= 0) {
+								return '';
+							} else {
+								// 优化：与该搜索节点相关联的节点均显示
+								for (var i = 0; i < links.length; i++) {
+									var sourceNode = null;
+									var targetNode = null;
+									
+									if (typeof links[i].source === 'object') {
+										sourceNode = links[i].source;
+									} else {
+										sourceNode = nodes.find(function(n) { return n.id == links[i].source; });
+									}
+									
+									if (typeof links[i].target === 'object') {
+										targetNode = links[i].target;
+									} else {
+										targetNode = nodes.find(function(n) { return n.id == links[i].target; });
+									}
+									
+									if (sourceNode && sourceNode.properties && sourceNode.properties.name && 
+										sourceNode.properties.name.indexOf(keyword) >= 0 && targetNode && targetNode.id == d.id) {
+										return '';
+									}
+									if (targetNode && targetNode.properties && targetNode.properties.name && 
+										targetNode.properties.name.indexOf(keyword) >= 0 && sourceNode && sourceNode.id == d.id) {
+										return '';
+									}
+								}
+								return 'inactive';
+							}
+						});
+						
+						// 搜索连线
+						d3.selectAll('.links line').attr('class', function(d) {
+							var linkSource = null;
+							var linkTarget = null;
+							
+							if (typeof d.source === 'object') {
+								linkSource = d.source;
+							} else {
+								linkSource = nodes.find(function(n) { return n.id == d.source; });
+							}
+							
+							if (typeof d.target === 'object') {
+								linkTarget = d.target;
+							} else {
+								linkTarget = nodes.find(function(n) { return n.id == d.target; });
+							}
+							
+							if ((linkSource && linkSource.properties && linkSource.properties.name && linkSource.properties.name.indexOf(keyword) >= 0) ||
+								(linkTarget && linkTarget.properties && linkTarget.properties.name && linkTarget.properties.name.indexOf(keyword) >= 0)) {
+								return '';
+							} else {
+								return 'inactive'; // 隐藏
+							}
+						});
+					}
+				} else if (data.type === 'spacingChange') {
+					// 间距缩放
+					var scale = data.value || 1.0;
+					BODY_STRENGTH = BASE_BODY_STRENGTH * scale;
+					COLLISION_RADIUS = BASE_COLLISION_RADIUS * scale;
+					DIST_SCALE = BASE_DIST_SCALE * scale;
+					
+					if (simulation) {
+						simulation.force("charge").strength(BODY_STRENGTH);
+						simulation.force("collision").radius(COLLISION_RADIUS);
+						simulation.force("link").distance(DIST_SCALE);
+						simulation.alpha(0.4).restart();
+					}
+				}
 			});
 		});
 	</script>

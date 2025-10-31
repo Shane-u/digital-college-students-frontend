@@ -54,19 +54,19 @@ import Star from "./Star.vue";
 
 const skills = ref([
   {
-    name: "代码编程",
+    name: "电路设计",
     icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M14 16L8 24L14 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 16L40 24L34 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 12L20 36" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: "美术绘画",
+    name: "机器人控制",
     icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M8 40C8 40 12 32 24 32C36 32 40 40 40 40" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="18" r="10" stroke="#9575b5" stroke-width="3"/><path d="M24 8V12M16 10L18 13M32 10L30 13" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: "舞蹈律动",
+    name: "文献检索与分析",
     icon: '<svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="10" r="4" fill="#9575b5"/><path d="M24 14C24 14 20 18 16 22C12 26 10 32 10 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14C24 14 28 18 32 22C36 26 38 32 38 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14V28M20 28L28 28" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: "摄影创作",
+    name: "团队协作",
     icon: '<svg viewBox="0 0 48 48" fill="none"><rect x="8" y="14" width="32" height="24" rx="2" stroke="#9575b5" stroke-width="3"/><circle cx="24" cy="26" r="6" stroke="#9575b5" stroke-width="3"/><path d="M18 14L20 10H28L30 14" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="18" r="1.5" fill="#9575b5"/></svg>',
   },
 ]);
@@ -175,7 +175,7 @@ const skills = ref([
   width: 100%;
   min-width: 700px;
   height: 550px;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(0,0,0, 0.95);
   border-radius: 20px;
   padding: 0;
   border: 2px solid rgba(149, 117, 181, 0.3);
