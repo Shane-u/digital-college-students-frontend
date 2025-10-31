@@ -17,6 +17,8 @@
           <img :src="img" alt="轮播图" class="slide-img" />
         </div>
       </div>
+      <!-- 底部渐变遮罩层 -->
+      <div class="hero-bottom-gradient"></div>
     </div>
 
     <!-- Hero内容层（文字、按钮） -->
@@ -30,13 +32,18 @@
           @click="goToSlide(i)"
           :title="`第${i + 1}张`"
         >
-          🦖
+          <img src="../assets/dino.svg" alt="恐龙" class="dino-icon" />
         </button>
       </div>
     </section>
 
-    <div 
-    >
+    <!-- 固定背景容器：包裹竞赛活动以下的所有板块 -->
+    <div class="fixed-background-container">
+      <!-- 固定的背景层 -->
+      <div class="fixed-background"></div>
+      
+      <!-- 内容层 -->
+      <div class="content-over-background">
         <!-- Competition Section -->
         <section id="competition" class="section competition">
           <div class="section-inner">
@@ -72,17 +79,30 @@
           </div>
         </section>
 
-      <!-- Career Section -->
-      <section id="career" class="section career">
-        <div class="section-inner">
-          <div class="section-title-wrap">
-            <Shalou class="title-icon Shalou-near" />
-            <h2 class="section-title">职业规划</h2>
+        <!-- Career Section -->
+        <section id="career" class="section career">
+          <div class="section-inner">
+            <div class="section-title-wrap">
+              <Shalou class="title-icon Shalou-near" />
+              <h2 class="section-title">职业规划</h2>
+              <span class="view-more-container"><a href="" class="view-more">查看更多-></a></span>
+            </div>
+            
+            <CareerPlanning />
+            <Guidaotu class="guidaotu-near" />
           </div>
-          
-          <CareerPlanning />
-        </div>
-      </section>
+        </section>
+
+        <!-- Knowledge Photo Section -->
+        <section id="knowledge" class="section knowledge-section">
+          <KnowledgePhoto />
+        </section>
+
+        <!-- Relax Section -->
+        <section id="relax" class="section relax-section-wrap">
+          <Relax />
+        </section>
+      </div>
     </div>
     
     <!-- Footer -->
@@ -100,26 +120,33 @@ import pic1 from "../assets/pic_lb1.png";
 import pic2 from "../assets/pic_lb2.png";
 import pic3 from "../assets/pic_lb3.png";
 import pic4 from "../assets/pic_lb4.png";
-import background from "../assets/background.png";
+// import background from "../assets/background.png";
 import Competition from "../components/Competition.vue";
 // import CompetitionBorder from "../components/Competition_border.vue";
 import CompetitionConsultation from "../components/CompetitionConsultation.vue";
 import VideoCarousel from "../components/VideoCarousel.vue";
+import Guidaotu from "../components/Guidaotu.vue";
 import NavBar from "../components/NavBar.vue";
 import CareerPlanning from "../components/CareerPlanning.vue";
-
+import KnowledgePhoto from "../components/KnowledgePhoto.vue";
+import Relax from "../components/Relax.vue";
+import Star from "../components/Star.vue";
 export default {
   name: "HomePage",
   components: {
     MouseFollower,
     Competition,
     Shalou,
+    KnowledgePhoto,
+    Relax,
     // CompetitionBorder,
     CompetitionConsultation,
     VideoCarousel,
     NavBar,
+    Guidaotu,
     Footer,
     CareerPlanning,
+    Star,
   },
   setup() {
     const router = useRouter();
@@ -300,7 +327,7 @@ export default {
       displaySlides,
       onTransitionEnd,
       slides,
-      background,
+      // background,
       leftCompetition,
       rightCompetition,
       userInfo,
@@ -330,6 +357,23 @@ export default {
   height: 100vh;
   overflow: hidden;
   z-index: 1;
+}
+
+/* 轮播图底部渐变遮罩层 */
+.hero-bottom-gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 80px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.1),
+    rgba(0, 0, 0, 0)
+  );
+  z-index: 10;
+  pointer-events: none;
 }
 
 .slides-wrapper {
@@ -387,30 +431,90 @@ export default {
 }
 
 .dino-btn {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255,0.5);
   border: none;
   width: 44px;
   height: 44px;
   border-radius: 50%;
   backdrop-filter: blur(6px);
   cursor: pointer;
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: background 0.2s ease;
 }
 
 .dino-btn:hover {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.dino-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* 固定背景容器 */
+.fixed-background-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 固定的背景层 */
+.fixed-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background-image: url('../assets/background/knowledgePhoto.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  z-index: 0;
+}
+
+/* 背景透明化和紫色雾蒙 */
+.fixed-background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.75);
+  z-index: 1;
+}
+
+.fixed-background::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.08);
+  z-index: 2;
+}
+
+/* 内容层 */
+.content-over-background {
+  position: relative;
+  z-index: 5;
 }
 
 /* 通用 section 样式 */
 .section {
-  padding: 60px 0;
+  /* padding: 30px 0; */
   position: relative;
   z-index: 3;
 }
 
 .section-inner {
-  max-width: 1200px;
+  /* max-width: 1200px; */
   margin: 0 auto;
   /* padding: 0 20px; */
 }
@@ -419,7 +523,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 40px;
+  position: relative;
 }
 
 .title-icon {
@@ -439,14 +543,16 @@ export default {
 
 /* 竞赛板块样式 */
 .competition {
-  background: transparent; /* 移除单独背景，使用全局背景 */
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
   min-height: 600px;
+  padding: 30px 0;
 }
 
 /* 竞赛板块左右分栏布局 - 确保顶部对齐 */
 .competition-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto 1fr;
   gap: 40px;
   align-items: start; /* 顶部对齐 */
 }
@@ -466,29 +572,64 @@ export default {
 /* 风采一览文字样式（调整到更高位置） */
 .style-display {
   font-size: 24px; /* 比"竞赛活动"小（32px） */
-  color: #6c5ce7; /* 蓝紫色 */
+  color: #b8a0c8; /* 蓝紫色 */
   font-weight: 600;
   margin: 0 0 20px 0;
   position: absolute;
-  top: -50px; /* 更高的位置 */
-  left: 0;
+  top: -30px; /* 更高的位置 */
+  right: 40px;
+  box-shadow:  7px 7px white,12px 12px 3px #cfc2d8;
 }
 
 /* 视频轮播容器 - 确保与左侧文本框顶部对齐 */
 .video-carousel-wrap {
   opacity: 0; /* 初始隐藏 */
   width: 100%;
+  height: 500px;
+  display: flex;
+  align-items: center;
 }
 
 /* 职业规划板块样式 - 共用全局背景 */
 .career {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 30px 0;
+}
+
+/* 厚积薄发板块样式 */
+.knowledge-section {
   background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* 闲暇时光板块样式 */
+.relax-section-wrap {
+  background: transparent;
+  padding: 0;
+  margin: 0;
 }
 
 .Shalou-near {
-  width: 120px;
-  height: 120px;
+  width: 100px;
+  height: 100px;
   transform: translateY(2px);
+}
+.view-more-container {
+  position: absolute;
+  right: 0;
+}
+.view-more {
+  font-size: 16px;
+  color: #b8a0c8;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+.guidaotu-near{
+  z-index: 10;
 }
 
 /* 响应式设计 */

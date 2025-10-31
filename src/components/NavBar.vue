@@ -97,22 +97,24 @@ export default {
   left: 0;
   width: 100%;
   z-index: 1000;
-  background: rgba(111, 90, 209);
+  background: #BFA8F0;
   transition: background 0.5s ease, box-shadow 0.4s ease;
 }
 
 .navbar-transparent {
   background: linear-gradient(
     to bottom,
-    rgba(111, 90, 209, 0.55),
-    rgba(186, 168, 231, 0.28),
-    rgba(242, 213, 255,0)
+    rgba(0, 0, 0, 0.3),
+    rgba(0, 0, 0, 0.2),
+    rgba(0, 0, 0, 0.1),
+    rgba(0, 0, 0, 0)
   );
-  box-shadow: none;
+  /* box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); */
+  border-top: 5px solid rgba(111, 90, 209);
 }
 
 .nav-inner {
-  padding: 14px 20px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
 }

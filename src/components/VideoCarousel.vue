@@ -1,198 +1,266 @@
 <template>
-    <div class="carousel-container" @mouseenter="stopCarousel" @mouseleave="startCarousel">
-      <div class="carousel-wrapper" :style="{ transform: `translateX(-${currentIndex * 100}%)` }">
-        <div
-          class="carousel-item"
-          v-for="(item, index) in carouselItems"
-          :key="index"
-        >
-          <div class="media-container">
-            <video
-              v-if="item.type === 'video'"
-              :src="item.mediaUrl"
-              class="media"
-              ref="videos"
-              autoplay
-              loop
-              muted
-              playsinline
-            ></video>
-            <img
-              v-else
-              :src="item.mediaUrl"
-              class="media"
-              alt="carousel content"
-              ref="images"
-            />
-          </div>
-          <div class="indicators-container">
-            <div class="indicators">
-              <span
-                v-for="(item, idx) in carouselItems"
-                :key="idx"
-                :class="{ 'active': currentIndex === idx }"
-                @click="goToIndex(idx)"
-              ></span>
-            </div>
-          </div>
-          <a :href="item.textLink" target="_blank" class="text-link">
-            {{ item.text }}
+  <div class="video-carousel">
+    <div class="carousel-container">
+      <div
+        v-for="(item, index) in carouselItems"
+        :key="item.id"
+        class="carousel-item"
+        :class="{ 'is-active': activeIndex === index }"
+        @mouseenter="handleMouseEnter(index)"
+      >
+        <!-- 浅紫色雾蒙层，只在非激活状态显示 -->
+        <div class="overlay" :class="{ 'overlay-hidden': activeIndex === index }"></div>
+        
+        <!-- 图片 -->
+        <img :src="item.image" :alt="item.title" class="carousel-image" />
+        
+        <!-- 文字内容 -->
+        <div class="carousel-text" :class="{ 'text-bottom': activeIndex === index }">
+          <span class="item-number">{{ item.number }}</span>
+          <a :href="item.link" class="item-title" @click.prevent="handleLinkClick(item.link)">
+            {{ item.title }}
           </a>
         </div>
       </div>
     </div>
-  </template>
-  
-  <script>
-  export default {
-    data() {
-      return {
-        carouselItems: [
-          {
-            type: 'video',
-            mediaUrl: 'https://cdn2.pilc.com.cn/video/promo_video.mp4',
-            text: '中国国际大学生创新大赛为青年大学生提供了一个锻炼和展示自己的平台，促进了目标导向与问题导向的科研发展，加速了科学发现与技术创新的融合，激发了青年才俊无限的创新活力。',
-            textLink: 'https://www.pilcchina.org/home',
-          },
-          {
-            type: 'video',
-            mediaUrl: 'https://os.educg.net/media/homeMp4.53c9282e.mp4',
-            text: '自计算机系统能力大赛开始以来大批参赛学生通过竞赛的训练，专业能力持续提升，具备了设计CPU、操作系统、编译系统、数据库管理系统等的初步能力，并在毕业后投身相关领域的学术研究和产业建设。',
-            textLink: 'https://os.educg.net/#/',
-          },
-          {
-            type: 'image',
-            mediaUrl: 'https://obs-2022-04-08.obs.cn-north-1.myhuaweicloud.com/public/picture/2021/12473360.jpg',
-            text: '全国大学生信息安全竞赛是一项公益性大学生科技活动，目的在于宣传信息安全知识；培养大学生的创新精神、团队合作意识；扩大大学生的科学视野，提高大学生的创新设计能力、综合设计能力和信息安全意识。',
-            textLink: 'http://www.ciscn.cn/',
-          },
-        ],
-        currentIndex: 0,
-        carouselTimer: null,
-        videoHeight: 0
-      };
-    },
-    mounted() {
-      this.startCarousel();
-      this.$nextTick(() => {
-        this.setMediaHeight();
-      });
-    },
-    beforeDestroy() {
-      this.stopCarousel();
-    },
-    methods: {
-      startCarousel() {
-        this.carouselTimer = setInterval(() => {
-          this.currentIndex = (this.currentIndex + 1) % this.carouselItems.length;
-        }, 3000);
-      },
-      stopCarousel() {
-        clearInterval(this.carouselTimer);
-      },
-      goToIndex(index) {
-        this.currentIndex = index;
-      },
-      setMediaHeight() {
-        const firstVideo = this.$refs.videos?.[0];
-        if (firstVideo) {
-          firstVideo.addEventListener('loadedmetadata', () => {
-            this.videoHeight = firstVideo.offsetHeight;
-            this.$refs.images?.forEach(img => {
-              img.style.height = `${this.videoHeight}px`;
-            });
-          });
-        }
-      }
-    }
-  };
-  </script>
-  
-  <style scoped>
-  .carousel-container {
-    position: relative;
-    width: 600px;
-    max-width: 1400px;
-    margin: 0 auto;
-    overflow: hidden;
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue';
+
+// 默认激活第一张（索引0）
+const activeIndex = ref(0);
+
+// 轮播数据
+const carouselItems = ref([
+  {
+    id: 1,
+    number: '01.',
+    title: '校地合作',
+    image: 'https://raicom-caia1caim2.oss-cn-hangzhou.aliyuncs.com/36d1cbca37e74736ba6c19061d626fc8.webp',
+    link: '#/cooperation/campus'
+  },
+  {
+    id: 2,
+    number: '02.',
+    title: '校企合作',
+    image: '/pic_lb2.png',
+    link: '#/cooperation/enterprise'
+  },
+  {
+    id: 3,
+    number: '03.',
+    title: '国际合作',
+    image: '/pic_lb3.png',
+    link: '#/cooperation/international'
+  }
+]);
+
+// 鼠标进入时切换激活项
+const handleMouseEnter = (index) => {
+  activeIndex.value = index;
+};
+
+// 链接点击处理
+const handleLinkClick = (link) => {
+  console.log('点击链接:', link);
+  // 这里可以添加路由跳转或其他逻辑
+};
+</script>
+
+<style scoped>
+.video-carousel {
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+}
+
+.carousel-container {
+  display: flex;
+  gap: 12px;
+  height: 100%;
+  align-items: stretch;
+}
+
+.carousel-item {
+  position: relative;
+  /* border-radius: 12px; */
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 200px;
+  height: 450px;
+  transition: all 1s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 激活状态：第一张或鼠标悬停的图片 */
+.carousel-item.is-active {
+  width: 450px;
+  box-shadow: 0 8px 24px rgba(149, 117, 181, 0.3);
+}
+
+/* 图片 */
+.carousel-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.carousel-item:hover .carousel-image {
+  transform: scale(1.05);
+}
+
+/* 浅紫色雾蒙层 */
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.45);
+  backdrop-filter: blur(2px);
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.overlay-hidden {
+  opacity: 0;
+}
+
+/* 文字内容 */
+.carousel-text {
+  position: absolute;
+  left: 30px;
+  top: 30px;
+  z-index: 2;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translateY(0);
+  transition: transform 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* 激活状态时文字在左下角 - 通过transform实现滑动 */
+.carousel-text.text-bottom {
+  transform: translateY(360px);
+}
+
+.item-number {
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.item-title {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: white;
+  text-decoration: none;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  display: inline-block;
+  position: relative;
+}
+
+.item-title::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: white;
+  transition: width 0.3s ease;
+}
+
+.item-title:hover {
+  color: #f5d9a8;
+  transform: translateX(5px);
+}
+
+.item-title:hover::after {
+  width: 100%;
+}
+
+/* 响应式调整 */
+@media (max-width: 1400px) {
+  .carousel-item {
+    width: 180px;
+    height: 400px;
   }
   
-  .carousel-wrapper {
-    display: flex;
-    transition: transform 0.6s ease-in-out;
+  .carousel-item.is-active {
+    width: 480px;
+  }
+  
+  .carousel-text.text-bottom {
+    transform: translateY(310px);
+  }
+  
+  .item-number {
+    font-size: 28px;
+  }
+  
+  .item-title {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .carousel-item {
+    width: 150px;
+    height: 350px;
+  }
+  
+  .carousel-item.is-active {
+    width: 400px;
+  }
+  
+  .carousel-text {
+    left: 20px;
+    top: 20px;
+  }
+  
+  .carousel-text.text-bottom {
+    transform: translateY(270px);
+  }
+  
+  .item-number {
+    font-size: 24px;
+  }
+  
+  .item-title {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 992px) {
+  .carousel-container {
+    flex-direction: column;
+    gap: 10px;
   }
   
   .carousel-item {
     width: 100%;
-    flex-shrink: 0;
-    padding: 0 10px;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
+    height: 200px;
   }
   
-  .media-container {
+  .carousel-item.is-active {
     width: 100%;
-    overflow: hidden;
-    border-radius: 6px;
+    height: 300px;
   }
   
-  .media {
-    width: 100%;
-    display: block;
-    object-fit: cover;
-    transition: transform 0.4s ease;
+  .carousel-text.text-bottom {
+    transform: translateY(130px);
   }
-  
-  .media-container:hover .media {
-    transform: scale(1.03);
-  }
-  
-  .indicators-container {
-    display: flex;
-    justify-content: center;
-    margin: 10px 0;
-  }
-  
-  .indicators {
-    display: flex;
-    gap: 8px;
-  }
-  
-  .indicators span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid #ccc;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-  
-  .indicators span.active {
-    background-color: #007bff;
-    border-color: #007bff;
-  }
-  
-  .text-link {
-    display: block;
-    color: #333;
-    text-decoration: none;
-    font-size: 15px;
-    line-height: 1.6;
-    padding: 0 10px;
-    transition: color 0.3s;
-  }
-  
-  .text-link:hover {
-    color: #2c7ad6;
-    text-decoration: underline;
-  }
-  
-  video::-webkit-media-controls {
-    display: none !important;
-  }
-  video {
-    -webkit-appearance: none;
-    appearance: none;
-  }
-  </style>
+}
+</style>
+

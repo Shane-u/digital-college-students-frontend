@@ -2,7 +2,7 @@
   .button {
     cursor: pointer;
     border: none;
-    background: #2aabee;
+    background: #BFA8F0;
     color: #fff;
     width: 100px;
     height: 100px;
@@ -35,7 +35,7 @@
     height: 40px;
     overflow: hidden;
     background: #212121;
-    color: #2aabee;
+    color: #BFA8F0;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -48,7 +48,7 @@
   }
 
   .button:hover {
-    background: #6fc7d6;
+    background: #D3C6F9;
     transform: scale(1.05);
   }
 

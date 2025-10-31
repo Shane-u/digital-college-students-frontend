@@ -35,6 +35,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', sans-serif;
   background: #ffffff;

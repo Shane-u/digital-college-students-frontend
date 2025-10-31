@@ -93,7 +93,7 @@
   
   <style scoped>
   .consultation-container {
-    width: 100%;
+    width: 400px;
     height: 100%;
     padding: 20px;
     background: white;
@@ -177,10 +177,10 @@
   }
   
   .item-title {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 500;
     color: #333;
-    line-height: 1.4;
+    line-height: 2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -206,7 +206,7 @@
   .item-description {
     font-size: 12px;
     color: #666;
-    line-height: 1.4;
+    line-height: 2;
     width: 60px;
     padding-left: 10px;
   }
