@@ -34,7 +34,14 @@
 			opacity: 0.3;
 		}
 		.texts text {
-			display: none;
+			font-size: 12px;
+			fill: #333;
+			text-anchor: middle;
+			pointer-events: none;
+			font-weight: 500;
+		}
+		.texts text.inactive {
+			opacity: 0.3;
 		}
 	</style>
 	<script src="https://d3js.org/d3.v4.min.js"></script>
@@ -87,22 +94,25 @@
 				return (h >>> 0) / 4294967295;
 			}
 			
+			// 生成五颜六色的节点颜色
 			function getNodeColor(d) {
-				var base;
-				for (var i = 0; i < labels.length; i++) {
-					if (d.label === labels[i]) { base = colors[i]; break; }
-				}
-				if (!base) base = '#9575b5';
-				var c = d3.color(base);
-				if (!c) return base;
+				// 使用节点ID生成唯一的色调
 				var t = hashToUnit(d.id || d.properties && d.properties.name || Math.random());
-				var k = (t - 0.5) * 1.6;
-				if (k > 0) {
-					c = c.brighter(k);
-				} else if (k < 0) {
-					c = c.darker(-k);
+				var hue = Math.floor(t * 360); // 0-360度的色相
+				
+				// 根据label类型稍微调整基色，但保持五颜六色
+				for (var i = 0; i < labels.length; i++) {
+					if (d.label === labels[i]) { 
+						hue = (hue + i * 30) % 360; // 每个类型偏移30度
+						break; 
+					}
 				}
-				return c.toString();
+				
+				// 使用HSL生成鲜艳的颜色（高饱和度、中等亮度）
+				var saturation = 70 + (hashToUnit(d.id || Math.random()) * 20); // 70-90%
+				var lightness = 50 + (hashToUnit(d.properties && d.properties.name || Math.random()) * 20); // 50-70%
+				
+				return d3.hsl(hue, saturation / 100, lightness / 100).toString();
 			}
 			
 			// 加载数据函数：优先使用 Neo4j，失败时回退到本地 JSON
@@ -220,7 +230,8 @@
 						return size;
 					})
 					.attr("fill", d => getNodeColor(d))
-					.attr("stroke", "none")
+					.attr("stroke", "#fff")
+					.attr("stroke-width", 2)
 					.attr("name", d => d.properties.name)
 					.attr("id", d => d.id)
 					.call(d3.drag()
@@ -230,6 +241,23 @@
 					);
 				
 				node.append("title").text(d => d.properties.name)
+				
+				// 添加文字标签显示在节点下方
+				var text = svg.append("g").attr("class", "texts").selectAll("text")
+					.data(nodes)
+					.enter()
+					.append("text")
+					.text(d => d.properties.name || d.id)
+					.attr("font-size", d => {
+						let size = 12;
+						if (d.label === 'Skill') size = 14;
+						return size + "px";
+					})
+					.attr("fill", "#333")
+					.attr("text-anchor", "middle")
+					.attr("dy", "0.35em") // 垂直居中对齐
+					.style("pointer-events", "none")
+					.style("font-weight", "500")
 				
 				simulation.nodes(nodes).on("tick", ticked);
 				simulation.force("link").links(links);
@@ -244,6 +272,15 @@
 					node
 						.attr("cx", d => d.x)
 						.attr("cy", d => d.y);
+					
+					// 更新文字标签位置，显示在节点下方
+					text
+						.attr("x", d => d.x)
+						.attr("y", d => {
+							let radius = 15;
+							if (d.label === 'Skill') radius = 20;
+							return d.y + radius + 18; // 节点中心Y + 半径 + 间距
+						});
 				}
 				
 				var dragging = false;
@@ -295,12 +332,30 @@
 								return 'inactive';
 							}
 						});
+						
+						// 同时高亮文字标签
+						d3.select('.texts').selectAll('text').attr('class', function(d) {
+							if (d.properties.name == name) {
+								return '';
+							} else {
+								for (var i = 0; i < links.length; i++) {
+									if (links[i]['source'].properties.name == name && links[i]['target'].id == d.id) {
+										return '';
+									}
+									if (links[i]['target'].properties.name == name && links[i]['source'].id == d.id) {
+										return '';
+									}
+								}
+								return "inactive";
+							}
+						});
 					}
 				});
 				
 				node.on('mouseleave', function() {
 					d3.select('.nodes').selectAll('circle').attr('class', '');
 					d3.select('.links').selectAll('line').attr('class', '');
+					d3.select('.texts').selectAll('text').attr('class', '');
 				});
 			}).catch(function(error) {
 				console.error('Failed to load graph data:', error);
