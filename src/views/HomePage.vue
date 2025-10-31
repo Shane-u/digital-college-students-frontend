@@ -37,13 +37,8 @@
       </div>
     </section>
 
-    <!-- 固定背景容器：包裹竞赛活动以下的所有板块 -->
-    <div class="fixed-background-container">
-      <!-- 固定的背景层 -->
-      <div class="fixed-background"></div>
-      
-      <!-- 内容层 -->
-      <div class="content-over-background">
+    <div 
+    >
         <!-- Competition Section -->
         <section id="competition" class="section competition">
           <div class="section-inner">
@@ -79,30 +74,29 @@
           </div>
         </section>
 
-        <!-- Career Section -->
-        <section id="career" class="section career">
-          <div class="section-inner">
-            <div class="section-title-wrap">
-              <Shalou class="title-icon Shalou-near" />
-              <h2 class="section-title">职业规划</h2>
-              <span class="view-more-container"><a href="" class="view-more">查看更多-></a></span>
-            </div>
-            
-            <CareerPlanning />
-            <Guidaotu class="guidaotu-near" />
+      <!-- Career Section -->
+      <section id="career" class="section career">
+        <div class="section-inner">
+          <div class="section-title-wrap">
+            <Shalou class="title-icon Shalou-near" />
+            <h2 class="section-title">职业规划</h2>
+            <span class="view-more-container"><a href="" class="view-more">查看更多-></a></span>
           </div>
-        </section>
+          
+          <CareerPlanning />
+          <Guidaotu class="guidaotu-near" />
+        </div>
+      </section>
 
-        <!-- Knowledge Photo Section -->
-        <section id="knowledge" class="section knowledge-section">
-          <KnowledgePhoto />
-        </section>
+      <!-- Knowledge Photo Section -->
+      <section id="knowledge" class="section knowledge-section">
+        <KnowledgePhoto />
+      </section>
 
-        <!-- Relax Section -->
-        <section id="relax" class="section relax-section-wrap">
-          <Relax />
-        </section>
-      </div>
+      <!-- Relax Section -->
+      <section id="relax" class="section relax-section-wrap">
+        <Relax />
+      </section>
     </div>
     
     <!-- Footer -->
@@ -455,57 +449,6 @@ export default {
   pointer-events: none;
 }
 
-/* 固定背景容器 */
-.fixed-background-container {
-  position: relative;
-  width: 100%;
-  min-height: 100vh;
-}
-
-/* 固定的背景层 */
-.fixed-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100vh;
-  background-image: url('../assets/background/knowledgePhoto.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  z-index: 0;
-}
-
-/* 背景透明化和紫色雾蒙 */
-.fixed-background::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.75);
-  z-index: 1;
-}
-
-.fixed-background::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(149, 117, 181, 0.08);
-  z-index: 2;
-}
-
-/* 内容层 */
-.content-over-background {
-  position: relative;
-  z-index: 5;
-}
-
 /* 通用 section 样式 */
 .section {
   /* padding: 30px 0; */
@@ -543,8 +486,7 @@ export default {
 
 /* 竞赛板块样式 */
 .competition {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
+  background: transparent; /* 移除单独背景，使用全局背景 */
   min-height: 600px;
   padding: 30px 0;
 }
@@ -592,9 +534,8 @@ export default {
 
 /* 职业规划板块样式 - 共用全局背景 */
 .career {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(10px);
-  padding: 30px 0;
+  background: transparent;
+  /* padding: 30px 0; */
 }
 
 /* 厚积薄发板块样式 */

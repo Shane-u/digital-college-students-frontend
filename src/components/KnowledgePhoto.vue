@@ -8,64 +8,40 @@
         <a href="#" class="view-more">查看更多-></a>
       </span>
     </div>
-    
-    <div class="knowledge-content">
-      <!-- 左侧：知识图谱 -->
-      <div class="knowledge-left">
-        <div class="knowledge-graph">
-          <!-- 模拟知识图谱 -->
-          <svg viewBox="0 0 400 400" class="graph-svg">
-            <!-- 中心节点 -->
-            <circle cx="200" cy="200" r="40" fill="#9575b5" opacity="0.8"/>
-            <text x="200" y="210" text-anchor="middle" fill="white" font-size="16" font-weight="bold">知识</text>
-            
-            <!-- 周围节点 -->
-            <circle cx="100" cy="100" r="30" fill="#b8a0c8" opacity="0.7"/>
-            <text x="100" y="107" text-anchor="middle" fill="white" font-size="14">编程</text>
-            <line x1="200" y1="200" x2="100" y2="100" stroke="#d4b8e0" stroke-width="2"/>
-            
-            <circle cx="300" cy="100" r="30" fill="#b8a0c8" opacity="0.7"/>
-            <text x="300" y="107" text-anchor="middle" fill="white" font-size="14">绘画</text>
-            <line x1="200" y1="200" x2="300" y2="100" stroke="#d4b8e0" stroke-width="2"/>
-            
-            <circle cx="100" cy="300" r="30" fill="#b8a0c8" opacity="0.7"/>
-            <text x="100" y="307" text-anchor="middle" fill="white" font-size="14">跳舞</text>
-            <line x1="200" y1="200" x2="100" y2="300" stroke="#d4b8e0" stroke-width="2"/>
-            
-            <circle cx="300" cy="300" r="30" fill="#b8a0c8" opacity="0.7"/>
-            <text x="300" y="307" text-anchor="middle" fill="white" font-size="14">摄影</text>
-            <line x1="200" y1="200" x2="300" y2="300" stroke="#d4b8e0" stroke-width="2"/>
-            
-            <!-- 外围节点 -->
-            <circle cx="50" cy="200" r="25" fill="#e5d4f0" opacity="0.6"/>
-            <text x="50" y="207" text-anchor="middle" fill="#666" font-size="12">算法</text>
-            <line x1="100" y1="100" x2="50" y2="200" stroke="#e5d4f0" stroke-width="1.5"/>
-            
-            <circle cx="350" cy="200" r="25" fill="#e5d4f0" opacity="0.6"/>
-            <text x="350" y="207" text-anchor="middle" fill="#666" font-size="12">色彩</text>
-            <line x1="300" y1="100" x2="350" y2="200" stroke="#e5d4f0" stroke-width="1.5"/>
-            
-            <circle cx="200" cy="50" r="25" fill="#e5d4f0" opacity="0.6"/>
-            <text x="200" y="57" text-anchor="middle" fill="#666" font-size="12">创作</text>
-            <line x1="200" y1="200" x2="200" y2="50" stroke="#e5d4f0" stroke-width="1.5"/>
-            
-            <circle cx="200" cy="350" r="25" fill="#e5d4f0" opacity="0.6"/>
-            <text x="200" y="357" text-anchor="middle" fill="#666" font-size="12">技能</text>
-            <line x1="200" y1="200" x2="200" y2="350" stroke="#e5d4f0" stroke-width="1.5"/>
-          </svg>
-        </div>
-      </div>
 
-      <!-- 右侧：技能展示 -->
+    <div class="knowledge-content">
+      <!-- 左侧：技能展示 -->
       <div class="knowledge-right">
+        <!-- 顶部横线和标题 -->
+        <div class="right-header">
+          <div class="header-line">
+            <span class="header-text"
+              >更多技能干货在这！点击右侧开启图谱之旅▶</span
+            >
+          </div>
+        </div>
+        <!-- 技能网格 -->
         <div class="skills-grid">
           <div class="skill-item" v-for="(skill, index) in skills" :key="index">
             <div class="skill-icon">
-              <svg v-html="skill.icon" width="48" height="48"></svg>
+              <svg v-html="skill.icon" width="40" height="40"></svg>
             </div>
             <h3 class="skill-name">{{ skill.name }}</h3>
-            <p class="skill-desc">{{ skill.description }}</p>
           </div>
+        </div>
+      </div>
+
+      <!-- 右侧：知识图谱 -->
+      <div class="knowledge-left">
+        <div class="knowledge-graph">
+          <!-- 交互式知识图谱 -->
+          <iframe
+            src="/knowledge-graph/index.html"
+            class="graph-iframe"
+            frameborder="0"
+            scrolling="no"
+            title="知识图谱"
+          ></iframe>
         </div>
       </div>
     </div>
@@ -73,30 +49,26 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import Star from './Star.vue';
+import { ref } from "vue";
+import Star from "./Star.vue";
 
 const skills = ref([
   {
-    name: '编程',
-    description: '掌握多种编程语言，培养逻辑思维与创新能力',
-    icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M14 16L8 24L14 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 16L40 24L34 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 12L20 36" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>'
+    name: "代码编程",
+    icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M14 16L8 24L14 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M34 16L40 24L34 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 12L20 36" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: '绘画',
-    description: '提升审美素养，用色彩与线条表达内心世界',
-    icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M8 40C8 40 12 32 24 32C36 32 40 40 40 40" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="18" r="10" stroke="#9575b5" stroke-width="3"/><path d="M24 8V12M16 10L18 13M32 10L30 13" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>'
+    name: "美术绘画",
+    icon: '<svg viewBox="0 0 48 48" fill="none"><path d="M8 40C8 40 12 32 24 32C36 32 40 40 40 40" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="18" r="10" stroke="#9575b5" stroke-width="3"/><path d="M24 8V12M16 10L18 13M32 10L30 13" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: '跳舞',
-    description: '释放身心活力，在韵律中展现自我风采',
-    icon: '<svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="10" r="4" fill="#9575b5"/><path d="M24 14C24 14 20 18 16 22C12 26 10 32 10 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14C24 14 28 18 32 22C36 26 38 32 38 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14V28M20 28L28 28" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>'
+    name: "舞蹈律动",
+    icon: '<svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="10" r="4" fill="#9575b5"/><path d="M24 14C24 14 20 18 16 22C12 26 10 32 10 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14C24 14 28 18 32 22C36 26 38 32 38 32" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><path d="M24 14V28M20 28L28 28" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/></svg>',
   },
   {
-    name: '摄影',
-    description: '捕捉美好瞬间，用镜头记录精彩人生',
-    icon: '<svg viewBox="0 0 48 48" fill="none"><rect x="8" y="14" width="32" height="24" rx="2" stroke="#9575b5" stroke-width="3"/><circle cx="24" cy="26" r="6" stroke="#9575b5" stroke-width="3"/><path d="M18 14L20 10H28L30 14" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="18" r="1.5" fill="#9575b5"/></svg>'
-  }
+    name: "摄影创作",
+    icon: '<svg viewBox="0 0 48 48" fill="none"><rect x="8" y="14" width="32" height="24" rx="2" stroke="#9575b5" stroke-width="3"/><circle cx="24" cy="26" r="6" stroke="#9575b5" stroke-width="3"/><path d="M18 14L20 10H28L30 14" stroke="#9575b5" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="18" r="1.5" fill="#9575b5"/></svg>',
+  },
 ]);
 </script>
 
@@ -105,8 +77,11 @@ const skills = ref([
   width: 100%;
   min-height: 600px;
   position: relative;
-  background: transparent;
-  padding: 30px 40px 60px;
+  background-image: url("../assets/background/knowledgePhoto.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  padding: 30px 40px 60px 0;
 }
 
 /* 标题样式 */
@@ -117,7 +92,7 @@ const skills = ref([
   align-items: center;
   gap: 12px;
   max-width: 1400px;
-  margin: 0 auto 40px;
+  /* margin: 0 auto 40px; */
 }
 
 .title-icon {
@@ -153,91 +128,146 @@ const skills = ref([
   background: rgba(184, 160, 200, 0.1);
 }
 
+/* 背景透明化和紫色雾蒙 */
+.knowledge-photo::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.knowledge-photo::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.08);
+  z-index: 2;
+}
+
 .knowledge-content {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
-  max-width: 1400px;
+  grid-template-columns: 480px 1fr;
+  max-width: 1500px;
   margin: 0 auto;
+  padding: 0 40px;
   align-items: center;
+  justify-items: stretch;
 }
 
-/* 左侧知识图谱 */
+/* 右侧知识图谱 */
 .knowledge-left {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 20px;
 }
 
 .knowledge-graph {
   width: 100%;
-  max-width: 500px;
-  aspect-ratio: 1;
-  background: rgba(255, 255, 255, 0.9);
+  min-width: 700px;
+  height: 550px;
+  background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
-  padding: 30px;
-  box-shadow: 0 10px 40px rgba(149, 117, 181, 0.2);
+  padding: 0;
   border: 2px solid rgba(149, 117, 181, 0.3);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(149, 117, 181, 0.15);
 }
 
-.graph-svg {
+.graph-iframe {
   width: 100%;
   height: 100%;
+  border: none;
+  display: block;
+  background: transparent;
 }
 
-/* 右侧技能展示 */
+/* 左侧技能展示 */
 .knowledge-right {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  padding-top: 20px;
 }
 
+/* 顶部横线和标题 */
+.right-header {
+  margin-bottom: 40px;
+  position: relative;
+}
+
+.header-line {
+  width: 100%;
+  height: 2px;
+  background: #c4b5ce;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.header-text {
+  position: absolute;
+  left: 0px;
+  top: -30px;
+  font-size: 20px;
+  color: #2c3e50;
+  font-weight: 500;
+  background: transparent;
+  padding-right: 10px;
+}
+
+/* 技能网格 */
 .skills-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 30px;
+  gap: 30px 40px;
   width: 100%;
+  margin-top: 40px;
 }
 
 .skill-item {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  padding: 30px 24px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 10px 0;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(149, 117, 181, 0.15);
-  border: 1px solid rgba(149, 117, 181, 0.2);
+  cursor: pointer;
 }
 
 .skill-item:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 8px 25px rgba(149, 117, 181, 0.25);
-  border-color: rgba(149, 117, 181, 0.4);
+  transform: translateX(5px);
+}
+
+.skill-item:hover .skill-icon {
+  transform: scale(1.1);
 }
 
 .skill-icon {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto 16px;
+  width: 50px;
+  height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(213, 184, 224, 0.2);
-  border-radius: 50%;
+  flex-shrink: 0;
+  transition: transform 0.3s ease;
 }
 
 .skill-name {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   color: #2c3e50;
-  margin: 0 0 12px 0;
-}
-
-.skill-desc {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
   margin: 0;
 }
 
@@ -247,7 +277,7 @@ const skills = ref([
     grid-template-columns: 1fr;
     gap: 40px;
   }
-  
+
   .knowledge-graph {
     max-width: 400px;
   }
@@ -257,14 +287,18 @@ const skills = ref([
   .knowledge-photo {
     padding: 40px 20px;
   }
-  
+
   .skills-grid {
     grid-template-columns: 1fr;
     gap: 20px;
   }
-  
-  .skill-item {
-    padding: 24px 20px;
+
+  .header-text {
+    font-size: 14px;
+  }
+
+  .skill-name {
+    font-size: 18px;
   }
 }
 </style>

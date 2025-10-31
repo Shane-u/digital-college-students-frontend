@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>知识图谱</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: transparent;
+			overflow: hidden;
+		}
+		svg {
+			width: 100%;
+			height: 100%;
+		}
+		.links line {
+			stroke: rgb(180, 160, 200);
+			stroke-opacity: 0.6;
+		}
+		.links line.inactive {
+			stroke-opacity: 0.2;
+		}
+		.nodes circle {
+			stroke: #fff;
+			stroke-width: 2px;
+		}
+		.nodes circle:hover {
+			cursor: pointer;
+		}
+		.nodes circle.inactive {
+			opacity: 0.3;
+		}
+		.texts text {
+			display: none;
+		}
+	</style>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/neo4j-driver"></script>
+</head>
+<body>
+	<svg id="svg1"></svg>
+	
+	<script type="text/javascript">
+		document.addEventListener('DOMContentLoaded', function() {
+			// Neo4j 配置
+			const NEO4J_CONFIG = {
+				url: "bolt://192.168.31.231:7687",
+				user: "neo4j",
+				password: "12345678"
+			};
+			
+			const labels = ['Enterprise', 'Type', 'Region', 'Country', 'Skill', 'Technology', 'Tool', 'Concept', 'Genre', 'Equipment', 'Technique', 'Application', 'Framework']
+			const colors = ['#55ffff', '#aaaaff', '#4e88af', '#ca635f', '#9575b5', '#b8a0c8', '#d5b8e0', '#ca635f', '#4e88af', '#55ffff', '#aaaaff', '#e5d4f0', '#c4b5ce']
+			
+			var svg = d3.select("#svg1"),
+				width = window.innerWidth,
+				height = window.innerHeight;
+			
+			svg.attr("width", width).attr("height", height);
+			
+			window.addEventListener('resize', function() {
+				width = window.innerWidth;
+				height = window.innerHeight;
+				svg.attr("width", width).attr("height", height);
+				if (simulation) {
+					simulation.force("center", d3.forceCenter(width / 2, height / 2));
+					simulation.alpha(0.2).restart();
+				}
+			});
+			
+			function identityToString(id) {
+				if (id == null) return '';
+				if (typeof id === 'object' && typeof id.toString === 'function') return id.toString();
+				return String(id);
+			}
+			
+			function hashToUnit(val) {
+				var str = String(val);
+				var h = 0;
+				for (var i = 0; i < str.length; i++) {
+					h = ((h << 5) - h) + str.charCodeAt(i);
+					h |= 0;
+				}
+				return (h >>> 0) / 4294967295;
+			}
+			
+			function getNodeColor(d) {
+				var base;
+				for (var i = 0; i < labels.length; i++) {
+					if (d.label === labels[i]) { base = colors[i]; break; }
+				}
+				if (!base) base = '#9575b5';
+				var c = d3.color(base);
+				if (!c) return base;
+				var t = hashToUnit(d.id || d.properties && d.properties.name || Math.random());
+				var k = (t - 0.5) * 1.6;
+				if (k > 0) {
+					c = c.brighter(k);
+				} else if (k < 0) {
+					c = c.darker(-k);
+				}
+				return c.toString();
+			}
+			
+			// 加载数据函数：优先使用 Neo4j，失败时回退到本地 JSON
+			function loadGraphData() {
+				// 优先尝试使用 Neo4j 实时数据
+				if (window.neo4j && NEO4J_CONFIG && NEO4J_CONFIG.url) {
+					let driver;
+					try {
+						driver = neo4j.driver(
+							NEO4J_CONFIG.url,
+							neo4j.auth.basic(NEO4J_CONFIG.user, NEO4J_CONFIG.password),
+							{ disableLosslessIntegers: false }
+						);
+						const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+						// 返回路径，保持与现有代码期望的 p.segments 结构一致
+						const cypher = 'MATCH p=()-[r]->() RETURN p LIMIT 200';
+						return session.run(cypher).then(result => {
+							const data = result.records.map(rec => ({ p: rec.get('p') }));
+							session.close();
+							driver.close();
+							console.log('Neo4j data loaded successfully:', data.length, 'paths');
+							return data;
+						}).catch(err => {
+							console.error('Neo4j query failed, fallback to local JSON:', err);
+							if (session) {
+								session.close().catch(() => {});
+							}
+							if (driver) {
+								driver.close().catch(() => {});
+							}
+							// 回退到本地 JSON
+							return new Promise((resolve, reject) => {
+								d3.json('data/records.json', function(error, data) { 
+									if (error) reject(error); 
+									else resolve(data); 
+								});
+							});
+						});
+					} catch (e) {
+						console.error('Neo4j driver init failed, fallback to local JSON:', e);
+						if (driver) {
+							driver.close().catch(() => {});
+						}
+						// 回退到本地 JSON
+						return new Promise((resolve, reject) => {
+							d3.json('data/records.json', function(error, data) { 
+								if (error) reject(error); 
+								else resolve(data); 
+							});
+						});
+					}
+				}
+				// 如果没有 Neo4j 配置，直接使用本地 JSON
+				return new Promise((resolve, reject) => {
+					d3.json('data/records.json', function(error, data) { 
+						if (error) reject(error); 
+						else resolve(data); 
+					});
+				});
+			}
+			
+			var simulation = d3.forceSimulation().velocityDecay(0.2)
+				.force("link", d3.forceLink().id(d => d.id).distance(100))
+				.force("charge", d3.forceManyBody().strength(-500))
+				.force("center", d3.forceCenter(width / 2, height / 2))
+				.force("collision", d3.forceCollide(40));
+			
+			// 使用新的数据加载函数
+			loadGraphData().then(function(graph) {
+				
+				let nodes = []
+				let links = []
+				let nodeSet = []
+				
+				for (let item of graph) {
+					for (let segment of item.p.segments) {
+						var startId = identityToString(segment.start.identity);
+						var endId = identityToString(segment.end.identity);
+						var relStart = identityToString(segment.relationship.start);
+						var relEnd = identityToString(segment.relationship.end);
+						
+						if (nodeSet.indexOf(startId) == -1) {
+							nodeSet.push(startId)
+							nodes.push({
+								id: startId,
+								label: segment.start.labels[0],
+								properties: segment.start.properties
+							})
+						}
+						if (nodeSet.indexOf(endId) == -1) {
+							nodeSet.push(endId)
+							nodes.push({
+								id: endId,
+								label: segment.end.labels[0],
+								properties: segment.end.properties
+							})
+						}
+						links.push({
+							source: relStart,
+							target: relEnd,
+							type: segment.relationship.type,
+							properties: segment.relationship.properties
+						})
+					}
+				}
+				
+				var link = svg.append("g").attr("class", "links").selectAll("line").data(links).enter()
+					.append("line").attr("stroke-width", 2);
+				
+				var node = svg.append("g").attr("class", "nodes").selectAll("circle").data(nodes).enter()
+					.append("circle")
+					.attr("r", d => {
+						let size = 15;
+						if (d.label === 'Skill') size = 20;
+						return size;
+					})
+					.attr("fill", d => getNodeColor(d))
+					.attr("stroke", "none")
+					.attr("name", d => d.properties.name)
+					.attr("id", d => d.id)
+					.call(d3.drag()
+						.on("start", dragstarted)
+						.on("drag", dragged)
+						.on("end", dragended)
+					);
+				
+				node.append("title").text(d => d.properties.name)
+				
+				simulation.nodes(nodes).on("tick", ticked);
+				simulation.force("link").links(links);
+				
+				function ticked() {
+					link
+						.attr("x1", d => d.source.x)
+						.attr("y1", d => d.source.y)
+						.attr("x2", d => d.target.x)
+						.attr("y2", d => d.target.y);
+					
+					node
+						.attr("cx", d => d.x)
+						.attr("cy", d => d.y);
+				}
+				
+				var dragging = false;
+				
+				function dragstarted(d) {
+					if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+					d.fx = d.x;
+					d.fy = d.y;
+					dragging = true;
+				}
+				
+				function dragged(d) {
+					d.fx = d3.event.x;
+					d.fy = d3.event.y;
+				}
+				
+				function dragended(d) {
+					if (!d3.event.active) simulation.alphaTarget(0);
+					d.fx = null;
+					d.fy = null;
+					dragging = false;
+				}
+				
+				node.on('mouseenter', function() {
+					if (!dragging) {
+						var name = d3.select(this).attr("name");
+						var id = d3.select(this).attr("id");
+						
+						d3.select('.nodes').selectAll('circle').attr('class', function(d) {
+							if (d.properties.name == name) {
+								return '';
+							} else {
+								for (var i = 0; i < links.length; i++) {
+									if (links[i]['source'].properties.name == name && links[i]['target'].id == d.id) {
+										return '';
+									}
+									if (links[i]['target'].properties.name == name && links[i]['source'].id == d.id) {
+										return '';
+									}
+								}
+								return "inactive";
+							}
+						});
+						
+						d3.select(".links").selectAll('line').attr('class', function(d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								return '';
+							} else {
+								return 'inactive';
+							}
+						});
+					}
+				});
+				
+				node.on('mouseleave', function() {
+					d3.select('.nodes').selectAll('circle').attr('class', '');
+					d3.select('.links').selectAll('line').attr('class', '');
+				});
+			}).catch(function(error) {
+				console.error('Failed to load graph data:', error);
+				// 在页面上显示错误信息（可选）
+				svg.append("text")
+					.attr("x", width / 2)
+					.attr("y", height / 2)
+					.attr("text-anchor", "middle")
+					.style("font-size", "16px")
+					.style("fill", "#9575b5")
+					.text("数据加载失败，请检查 Neo4j 连接或数据文件");
+			});
+		});
+	</script>
+</body>
+</html>

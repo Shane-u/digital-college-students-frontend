@@ -1,64 +1,70 @@
 <style scoped>
-  .preloader {
+  .loader {
     position: relative;
-    /* width: 400px;
-    height: 400px; */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    filter: drop-shadow(0 0 2px #fff);
+    width: 120px;
+    height: 90px;
+    /* margin: 0 auto; */
   }
 
-  .crack {
+  .loader:before {
+    content: "";
     position: absolute;
-    width: 60px;
-    aspect-ratio: 1;
-    background-color: #f39677;
-    clip-path: polygon(
-      50% 0%,
-      61% 35%,
-      98% 35%,
-      68% 57%,
-      79% 91%,
-      50% 70%,
-      21% 91%,
-      32% 57%,
-      2% 35%,
-      39% 35%
-    );
-    animation: rotate 6s infinite;
+    bottom: 30px;
+    left: 50px;
+    height: 30px;
+    width: 30px;
+    border-radius: 50%;
+    background: rgba(221,177,195);
+    animation: loading-bounce 0.5s ease-in-out infinite alternate;
   }
 
-  .crack2 {
-    width: 70px;
-    animation-delay: 1s;
-  }
-  .crack3 {
-    width: 80px;
-    animation-delay: 1.5s;
-  }
-  .crack4 {
-    width: 90px;
-    animation-delay: 2s;
-  }
-  .crack5 {
-    width: 100px;
-    animation-delay: 2.5s;
+  .loader:after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 7px;
+    width: 45px;
+    border-radius: 4px;
+    box-shadow: 0 5px 0 #f2f2f2, -35px 50px 0 #f2f2f2, -70px 95px 0 #f2f2f2;
+    animation: loading-step 1s ease-in-out infinite;
   }
 
-  @keyframes rotate {
-    to {
-      rotate: 360deg;
+  @keyframes loading-bounce {
+    0% {
+      transform: scale(1, 0.7);
+    }
+
+    40% {
+      transform: scale(0.8, 1.2);
+    }
+
+    60% {
+      transform: scale(1, 1);
+    }
+
+    100% {
+      bottom: 140px;
+    }
+  }
+
+  @keyframes loading-step {
+    0% {
+      box-shadow: 0 10px 0 rgba(0, 0, 0, 0),
+              0 10px 0 #f2f2f2,
+              -35px 50px 0 #f2f2f2,
+              -70px 90px 0 #f2f2f2;
+    }
+
+    100% {
+      box-shadow: 0 10px 0 #f2f2f2,
+              -35px 50px 0 #f2f2f2,
+              -70px 90px 0 #f2f2f2,
+              -70px 90px 0 rgba(0, 0, 0, 0);
     }
   }
 </style>
 
 <template>
-  <div class="preloader">
-    <div class="crack crack1"></div>
-    <div class="crack crack2"></div>
-    <div class="crack crack3"></div>
-    <div class="crack crack4"></div>
-    <div class="crack crack5"></div>
-  </div>
+  <div class="loader"></div>
 </template>

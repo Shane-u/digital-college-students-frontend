@@ -1,0 +1,272 @@
+[
+  {
+    "p": {
+      "segments": [
+        {
+          "start": {
+            "identity": "1",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "代码编程"
+            }
+          },
+          "end": {
+            "identity": "2",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "Python"
+            }
+          },
+          "relationship": {
+            "start": "1",
+            "end": "2",
+            "type": "USES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "1",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "代码编程"
+            }
+          },
+          "end": {
+            "identity": "3",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "JavaScript"
+            }
+          },
+          "relationship": {
+            "start": "1",
+            "end": "3",
+            "type": "USES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "1",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "代码编程"
+            }
+          },
+          "end": {
+            "identity": "4",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "Java"
+            }
+          },
+          "relationship": {
+            "start": "1",
+            "end": "4",
+            "type": "USES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "5",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "美术绘画"
+            }
+          },
+          "end": {
+            "identity": "6",
+            "labels": ["Tool"],
+            "properties": {
+              "name": "Photoshop"
+            }
+          },
+          "relationship": {
+            "start": "5",
+            "end": "6",
+            "type": "USES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "5",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "美术绘画"
+            }
+          },
+          "end": {
+            "identity": "7",
+            "labels": ["Concept"],
+            "properties": {
+              "name": "色彩理论"
+            }
+          },
+          "relationship": {
+            "start": "5",
+            "end": "7",
+            "type": "REQUIRES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "8",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "舞蹈律动"
+            }
+          },
+          "end": {
+            "identity": "9",
+            "labels": ["Genre"],
+            "properties": {
+              "name": "现代舞"
+            }
+          },
+          "relationship": {
+            "start": "8",
+            "end": "9",
+            "type": "INCLUDES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "8",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "舞蹈律动"
+            }
+          },
+          "end": {
+            "identity": "10",
+            "labels": ["Genre"],
+            "properties": {
+              "name": "街舞"
+            }
+          },
+          "relationship": {
+            "start": "8",
+            "end": "10",
+            "type": "INCLUDES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "11",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "摄影创作"
+            }
+          },
+          "end": {
+            "identity": "12",
+            "labels": ["Equipment"],
+            "properties": {
+              "name": "相机"
+            }
+          },
+          "relationship": {
+            "start": "11",
+            "end": "12",
+            "type": "REQUIRES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "11",
+            "labels": ["Skill"],
+            "properties": {
+              "name": "摄影创作"
+            }
+          },
+          "end": {
+            "identity": "13",
+            "labels": ["Technique"],
+            "properties": {
+              "name": "构图"
+            }
+          },
+          "relationship": {
+            "start": "11",
+            "end": "13",
+            "type": "USES",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "2",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "Python"
+            }
+          },
+          "end": {
+            "identity": "14",
+            "labels": ["Application"],
+            "properties": {
+              "name": "数据分析"
+            }
+          },
+          "relationship": {
+            "start": "2",
+            "end": "14",
+            "type": "FOR",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "3",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "JavaScript"
+            }
+          },
+          "end": {
+            "identity": "15",
+            "labels": ["Framework"],
+            "properties": {
+              "name": "Vue.js"
+            }
+          },
+          "relationship": {
+            "start": "3",
+            "end": "15",
+            "type": "FRAMEWORK",
+            "properties": {}
+          }
+        },
+        {
+          "start": {
+            "identity": "3",
+            "labels": ["Technology"],
+            "properties": {
+              "name": "JavaScript"
+            }
+          },
+          "end": {
+            "identity": "16",
+            "labels": ["Framework"],
+            "properties": {
+              "name": "React"
+            }
+          },
+          "relationship": {
+            "start": "3",
+            "end": "16",
+            "type": "FRAMEWORK",
+            "properties": {}
+          }
+        }
+      ]
+    }
+  }
+]

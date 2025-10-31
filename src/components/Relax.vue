@@ -142,7 +142,10 @@ onUnmounted(() => {
   width: 100%;
   min-height: 500px;
   position: relative;
-  background: transparent;
+  background-image: url('../assets/background/image.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: 30px 0 80px;
   overflow: hidden;
 }
@@ -156,7 +159,7 @@ onUnmounted(() => {
   gap: 12px;
   max-width: 1400px;
   margin: 0 auto 40px;
-  padding: 0 40px;
+  /* padding: 0 40px; */
 }
 
 .title-icon {
@@ -190,6 +193,29 @@ onUnmounted(() => {
 .view-more:hover {
   color: #9575b5;
   background: rgba(184, 160, 200, 0.1);
+}
+
+/* 背景透明化和紫色雾蒙 */
+.relax-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.relax-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.06);
+  z-index: 2;
 }
 
 .photo-wall-container {
