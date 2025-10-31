@@ -26,7 +26,9 @@
             <div class="skill-icon">
               <svg v-html="skill.icon" width="40" height="40"></svg>
             </div>
-            <h3 class="skill-name">{{ skill.name }}</h3>
+            <h3 class="skill-name" @click="navigateToKnowledgeGraph(skill.name)">
+              {{ skill.name }}
+            </h3>
           </div>
         </div>
       </div>
@@ -50,7 +52,20 @@
 
 <script setup>
 import { ref } from "vue";
+import { useRouter } from "vue-router";
 import Star from "./Star.vue";
+
+const router = useRouter();
+
+// 跳转到知识图谱页面并传递搜索关键词
+const navigateToKnowledgeGraph = (keyword) => {
+  router.push({
+    path: '/knowledge-graph',
+    query: {
+      search: keyword
+    }
+  });
+};
 
 const skills = ref([
   {
@@ -269,6 +284,19 @@ const skills = ref([
   font-weight: 600;
   color: #2c3e50;
   margin: 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.skill-name:hover {
+  color: #9575b5;
+  transform: translateY(-2px);
+  text-shadow: 0 2px 4px rgba(149, 117, 181, 0.3);
+}
+
+.skill-name:active {
+  transform: translateY(0);
 }
 
 /* 响应式设计 */

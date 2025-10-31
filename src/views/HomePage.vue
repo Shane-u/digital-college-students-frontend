@@ -59,6 +59,9 @@
                 <!-- </CompetitionBorder> -->
               </div>
 
+              <!-- 中间分隔线 -->
+              <div class="competition-divider"></div>
+
               <!-- 右侧：视频展示 -->
               <div class="competition-right">
                 <!-- 风采一览文字（调整位置） -->
@@ -495,8 +498,17 @@ export default {
 .competition-layout {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  gap: 40px;
+  gap: 24px;
   align-items: start; /* 顶部对齐 */
+  position: relative;
+}
+
+/* 中间分隔线 */
+.competition-divider {
+  width: 1px;
+  height: 400px;
+  border-left: 2px dashed #edb2f9; /* 浅紫色虚线 */
+  align-self: center; /* 垂直居中 */
 }
 
 .competition-left {

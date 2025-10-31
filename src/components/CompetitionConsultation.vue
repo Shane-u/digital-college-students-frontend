@@ -93,7 +93,7 @@
   
   <style scoped>
   .consultation-container {
-    width: 400px;
+    width: 460px;
     height: 100%;
     padding: 20px;
     background: white;

@@ -82,10 +82,11 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const router = useRouter()
+const route = useRoute()
 const graphIframe = ref(null)
 
 // 状态管理
@@ -93,6 +94,13 @@ const displayMode = ref('node') // 'node' 或 'text'
 const searchKeyword = ref('')
 const spacingValue = ref(1.0)
 const selectedNode = ref(null)
+
+// 向 iframe 发送消息
+const sendMessageToIframe = (message) => {
+  if (graphIframe.value && graphIframe.value.contentWindow) {
+    graphIframe.value.contentWindow.postMessage(message, window.location.origin)
+  }
+}
 
 // 返回功能
 const goBack = () => {
@@ -125,12 +133,21 @@ const handleSpacingChange = () => {
   })
 }
 
-// 向 iframe 发送消息
-const sendMessageToIframe = (message) => {
-  if (graphIframe.value && graphIframe.value.contentWindow) {
-    graphIframe.value.contentWindow.postMessage(message, window.location.origin)
+// 监听路由查询参数，如果有search参数则自动设置搜索关键词
+watch(() => route.query.search, (newSearch) => {
+  if (newSearch && typeof newSearch === 'string') {
+    searchKeyword.value = newSearch
+    // 如果iframe已加载，立即执行搜索
+    if (graphIframe.value && graphIframe.value.contentWindow) {
+      setTimeout(() => {
+        sendMessageToIframe({
+          type: 'search',
+          keyword: newSearch
+        })
+      }, 300)
+    }
   }
-}
+}, { immediate: true })
 
 // 处理来自 iframe 的消息
 const handleMessage = (event) => {
@@ -154,10 +171,14 @@ const onIframeLoad = () => {
   console.log('知识图谱iframe加载完成')
   // 确保iframe加载完成后再发送消息
   setTimeout(() => {
-    if (searchKeyword.value) {
+    // 优先使用路由参数中的搜索关键词
+    const routeSearch = route.query.search
+    const keyword = routeSearch && typeof routeSearch === 'string' ? routeSearch : searchKeyword.value
+    if (keyword) {
+      searchKeyword.value = keyword
       sendMessageToIframe({
         type: 'search',
-        keyword: searchKeyword.value
+        keyword: keyword
       })
     }
   }, 500)
