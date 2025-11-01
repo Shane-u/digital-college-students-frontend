@@ -466,6 +466,8 @@ export default {
   /* max-width: 1200px; */
   margin: 0 auto;
   /* padding: 0 20px; */
+  position: relative;
+  z-index: 3; /* 确保内容在蒙层之上 */
 }
 
 .section-title-wrap {
@@ -492,9 +494,36 @@ export default {
 
 /* 竞赛板块样式 */
 .competition {
-  background: transparent; /* 移除单独背景，使用全局背景 */
+  background-image: url("../assets/background/competition.jpg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
   min-height: 600px;
   padding: 30px 0;
+}
+
+/* 背景透明化和紫色雾蒙 */
+.competition::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.competition::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.08);
+  z-index: 2;
 }
 
 /* 竞赛板块左右分栏布局 - 确保顶部对齐 */
@@ -550,7 +579,33 @@ export default {
 /* 职业规划板块样式 - 共用全局背景 */
 .career {
   background: transparent;
+  position: relative;
   /* padding: 30px 0; */
+}
+
+/* 背景透明化和紫色雾蒙 - 与厚积薄发板块保持一致 */
+.career::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+  pointer-events: none; /* 确保不阻挡交互 */
+}
+
+.career::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.08);
+  z-index: 2;
+  pointer-events: none; /* 确保不阻挡交互 */
 }
 
 /* 厚积薄发板块样式（与成长轨迹共用背景） */
