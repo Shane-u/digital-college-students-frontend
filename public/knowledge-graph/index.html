@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>知识图谱</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: transparent;
+			overflow: hidden;
+		}
+		svg {
+			width: 100%;
+			height: 100%;
+		}
+		.links line {
+			stroke: rgba(212, 175, 55, 0.4);
+			stroke-opacity: 0.5;
+			stroke-width: 1.5px;
+		}
+		.links line.inactive {
+			stroke-opacity: 0.15;
+		}
+		.nodes circle {
+			stroke: rgba(212, 175, 55, 0.6);
+			stroke-width: 2px;
+			filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.3));
+		}
+		.nodes circle:hover {
+			cursor: pointer;
+			filter: drop-shadow(0 0 8px rgba(212, 175, 55, 0.6));
+			stroke: rgba(212, 175, 55, 0.9);
+		}
+		.nodes circle.inactive {
+			opacity: 0.2;
+		}
+		.texts text {
+			font-size: 12px;
+			fill: #f4e99b;
+			text-anchor: middle;
+			pointer-events: none;
+			font-weight: 500;
+			text-shadow: 0 0 8px rgba(212, 175, 55, 0.6), 0 0 4px rgba(0, 0, 0, 0.8);
+		}
+		.texts text.inactive {
+			opacity: 0.2;
+		}
+	</style>
+	<script src="https://d3js.org/d3.v4.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/neo4j-driver"></script>
+</head>
+<body>
+	<svg id="svg1"></svg>
+	
+	<script type="text/javascript">
+		document.addEventListener('DOMContentLoaded', function() {
+			// Neo4j 配置
+			const NEO4J_CONFIG = {
+				url: "bolt://172.27.60.133:7687",
+				user: "neo4j",
+				password: "12345678"
+			};
+			
+			const labels = ['Enterprise', 'Type', 'Region', 'Country', 'Skill', 'Technology', 'Tool', 'Concept', 'Genre', 'Equipment', 'Technique', 'Application', 'Framework']
+			const colors = ['#55ffff', '#aaaaff', '#4e88af', '#ca635f', '#9575b5', '#b8a0c8', '#d5b8e0', '#ca635f', '#4e88af', '#55ffff', '#aaaaff', '#e5d4f0', '#c4b5ce']
+			
+			var svg = d3.select("#svg1"),
+				width = window.innerWidth,
+				height = window.innerHeight;
+			
+			svg.attr("width", width).attr("height", height);
+			
+			window.addEventListener('resize', function() {
+				width = window.innerWidth;
+				height = window.innerHeight;
+				svg.attr("width", width).attr("height", height);
+				if (simulation) {
+					simulation.force("center", d3.forceCenter(width / 2, height / 2));
+					simulation.alpha(0.2).restart();
+				}
+			});
+			
+			function identityToString(id) {
+				if (id == null) return '';
+				if (typeof id === 'object' && typeof id.toString === 'function') return id.toString();
+				return String(id);
+			}
+			
+			function hashToUnit(val) {
+				var str = String(val);
+				var h = 0;
+				for (var i = 0; i < str.length; i++) {
+					h = ((h << 5) - h) + str.charCodeAt(i);
+					h |= 0;
+				}
+				return (h >>> 0) / 4294967295;
+			}
+			
+			// 生成五颜六色的节点颜色
+			function getNodeColor(d) {
+				// 使用节点ID生成唯一的色调
+				var t = hashToUnit(d.id || d.properties && d.properties.name || Math.random());
+				var hue = Math.floor(t * 360); // 0-360度的色相
+				
+				// 根据label类型稍微调整基色，但保持五颜六色
+				for (var i = 0; i < labels.length; i++) {
+					if (d.label === labels[i]) { 
+						hue = (hue + i * 30) % 360; // 每个类型偏移30度
+						break; 
+					}
+				}
+				
+				// 使用HSL生成鲜艳的颜色（高饱和度、中等亮度）
+				var saturation = 70 + (hashToUnit(d.id || Math.random()) * 20); // 70-90%
+				var lightness = 50 + (hashToUnit(d.properties && d.properties.name || Math.random()) * 20); // 50-70%
+				
+				return d3.hsl(hue, saturation / 100, lightness / 100).toString();
+			}
+			
+			// 加载数据函数：优先使用 Neo4j，失败时回退到本地 JSON
+			function loadGraphData() {
+				// 优先尝试使用 Neo4j 实时数据
+				if (window.neo4j && NEO4J_CONFIG && NEO4J_CONFIG.url) {
+					let driver;
+					try {
+						driver = neo4j.driver(
+							NEO4J_CONFIG.url,
+							neo4j.auth.basic(NEO4J_CONFIG.user, NEO4J_CONFIG.password),
+							{ disableLosslessIntegers: false }
+						);
+						const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+						// 返回路径，保持与现有代码期望的 p.segments 结构一致
+						const cypher = 'MATCH p=()-[r]->() RETURN p LIMIT 200';
+						return session.run(cypher).then(result => {
+							const data = result.records.map(rec => ({ p: rec.get('p') }));
+							session.close();
+							driver.close();
+							console.log('Neo4j data loaded successfully:', data.length, 'paths');
+							return data;
+						}).catch(err => {
+							console.error('Neo4j query failed, fallback to local JSON:', err);
+							if (session) {
+								session.close().catch(() => {});
+							}
+							if (driver) {
+								driver.close().catch(() => {});
+							}
+							// 回退到本地 JSON
+							return new Promise((resolve, reject) => {
+								d3.json('data/records.json', function(error, data) { 
+									if (error) reject(error); 
+									else resolve(data); 
+								});
+							});
+						});
+					} catch (e) {
+						console.error('Neo4j driver init failed, fallback to local JSON:', e);
+						if (driver) {
+							driver.close().catch(() => {});
+						}
+						// 回退到本地 JSON
+						return new Promise((resolve, reject) => {
+							d3.json('data/records.json', function(error, data) { 
+								if (error) reject(error); 
+								else resolve(data); 
+							});
+						});
+					}
+				}
+				// 如果没有 Neo4j 配置，直接使用本地 JSON
+				return new Promise((resolve, reject) => {
+					d3.json('data/records.json', function(error, data) { 
+						if (error) reject(error); 
+						else resolve(data); 
+					});
+				});
+			}
+			
+			// 力导常量：控制节点间距（基准值 + 可调倍数）
+			var BASE_BODY_STRENGTH = -500;
+			var BASE_COLLISION_RADIUS = 40;
+			var BASE_DIST_SCALE = 100;
+			var BODY_STRENGTH = BASE_BODY_STRENGTH;
+			var COLLISION_RADIUS = BASE_COLLISION_RADIUS;
+			var DIST_SCALE = BASE_DIST_SCALE;
+			
+			var simulation = d3.forceSimulation().velocityDecay(0.2)
+				.force("link", d3.forceLink().id(d => d.id).distance(DIST_SCALE))
+				.force("charge", d3.forceManyBody().strength(BODY_STRENGTH))
+				.force("center", d3.forceCenter(width / 2, height / 2))
+				.force("collision", d3.forceCollide(COLLISION_RADIUS));
+			
+			// 全局变量，用于存储节点和连线数据
+			var nodes = []
+			var links = []
+			
+			// 使用新的数据加载函数
+			loadGraphData().then(function(graph) {
+				
+				let nodeSet = []
+				nodes = []
+				links = []
+				
+				for (let item of graph) {
+					for (let segment of item.p.segments) {
+						var startId = identityToString(segment.start.identity);
+						var endId = identityToString(segment.end.identity);
+						var relStart = identityToString(segment.relationship.start);
+						var relEnd = identityToString(segment.relationship.end);
+						
+						if (nodeSet.indexOf(startId) == -1) {
+							nodeSet.push(startId)
+							nodes.push({
+								id: startId,
+								label: segment.start.labels[0],
+								properties: segment.start.properties
+							})
+						}
+						if (nodeSet.indexOf(endId) == -1) {
+							nodeSet.push(endId)
+							nodes.push({
+								id: endId,
+								label: segment.end.labels[0],
+								properties: segment.end.properties
+							})
+						}
+						links.push({
+							source: relStart,
+							target: relEnd,
+							type: segment.relationship.type,
+							properties: segment.relationship.properties
+						})
+					}
+				}
+				
+				var link = svg.append("g").attr("class", "links").selectAll("line").data(links).enter()
+					.append("line").attr("stroke-width", 2);
+				
+				var node = svg.append("g").attr("class", "nodes").selectAll("circle").data(nodes).enter()
+					.append("circle")
+					.attr("r", d => {
+						let size = 15;
+						if (d.label === 'Skill') size = 20;
+						return size;
+					})
+					.attr("fill", d => getNodeColor(d))
+					.attr("stroke", "#fff")
+					.attr("stroke-width", 2)
+					.attr("name", d => d.properties.name)
+					.attr("id", d => d.id)
+					.call(d3.drag()
+						.on("start", dragstarted)
+						.on("drag", dragged)
+						.on("end", dragended)
+					);
+				
+				node.append("title").text(d => d.properties.name)
+				
+				// 添加文字标签显示在节点下方
+				var text = svg.append("g").attr("class", "texts").selectAll("text")
+					.data(nodes)
+					.enter()
+					.append("text")
+					.text(d => d.properties.name || d.id)
+					.attr("font-size", d => {
+						let size = 12;
+						if (d.label === 'Skill') size = 14;
+						return size + "px";
+					})
+					.attr("fill", "#333")
+					.attr("text-anchor", "middle")
+					.attr("dy", "0.35em") // 垂直居中对齐
+					.style("pointer-events", "none")
+					.style("font-weight", "500")
+				
+				simulation.nodes(nodes).on("tick", ticked);
+				simulation.force("link").links(links);
+				
+				function ticked() {
+					link
+						.attr("x1", d => d.source.x)
+						.attr("y1", d => d.source.y)
+						.attr("x2", d => d.target.x)
+						.attr("y2", d => d.target.y);
+					
+					node
+						.attr("cx", d => d.x)
+						.attr("cy", d => d.y);
+					
+					// 更新文字标签位置，显示在节点下方
+					text
+						.attr("x", d => d.x)
+						.attr("y", d => {
+							let radius = 15;
+							if (d.label === 'Skill') radius = 20;
+							return d.y + radius + 18; // 节点中心Y + 半径 + 间距
+						});
+				}
+				
+				var dragging = false;
+				
+				function dragstarted(d) {
+					if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+					d.fx = d.x;
+					d.fy = d.y;
+					dragging = true;
+				}
+				
+				function dragged(d) {
+					d.fx = d3.event.x;
+					d.fy = d3.event.y;
+				}
+				
+				function dragended(d) {
+					if (!d3.event.active) simulation.alphaTarget(0);
+					d.fx = null;
+					d.fy = null;
+					dragging = false;
+				}
+				
+				node.on('mouseenter', function(d) {
+					if (!dragging) {
+						var name = d.properties.name || d.id;
+						var id = d.id;
+						var nodeColor = d3.select(this).attr('fill');
+						
+						// 发送节点选择信息到父窗口
+						if (window.parent) {
+							window.parent.postMessage({
+								type: 'nodeSelected',
+								name: name,
+								color: nodeColor,
+								properties: d.properties || {},
+								id: id
+							}, window.location.origin);
+						}
+						
+						d3.select('.nodes').selectAll('circle').attr('class', function(d) {
+							if (d.properties.name == name) {
+								return '';
+							} else {
+								for (var i = 0; i < links.length; i++) {
+									if (links[i]['source'].properties.name == name && links[i]['target'].id == d.id) {
+										return '';
+									}
+									if (links[i]['target'].properties.name == name && links[i]['source'].id == d.id) {
+										return '';
+									}
+								}
+								return "inactive";
+							}
+						});
+						
+						d3.select(".links").selectAll('line').attr('class', function(d) {
+							if (d.source.properties.name == name || d.target.properties.name == name) {
+								return '';
+							} else {
+								return 'inactive';
+							}
+						});
+						
+						// 同时高亮文字标签
+						d3.select('.texts').selectAll('text').attr('class', function(d) {
+							if (d.properties.name == name) {
+								return '';
+							} else {
+								for (var i = 0; i < links.length; i++) {
+									if (links[i]['source'].properties.name == name && links[i]['target'].id == d.id) {
+										return '';
+									}
+									if (links[i]['target'].properties.name == name && links[i]['source'].id == d.id) {
+										return '';
+									}
+								}
+								return "inactive";
+							}
+						});
+					}
+				});
+				
+				node.on('mouseleave', function() {
+					// 发送节点取消选择信息到父窗口
+					if (window.parent) {
+						window.parent.postMessage({
+							type: 'nodeDeselected'
+						}, window.location.origin);
+					}
+					
+					d3.select('.nodes').selectAll('circle').attr('class', '');
+					d3.select('.links').selectAll('line').attr('class', '');
+					d3.select('.texts').selectAll('text').attr('class', '');
+				});
+			}).catch(function(error) {
+				console.error('Failed to load graph data:', error);
+				// 在页面上显示错误信息（可选）
+				svg.append("text")
+					.attr("x", width / 2)
+					.attr("y", height / 2)
+					.attr("text-anchor", "middle")
+					.style("font-size", "16px")
+					.style("fill", "#9575b5")
+					.text("数据加载失败，请检查 Neo4j 连接或数据文件");
+			});
+			
+			// 监听来自父窗口的消息
+			window.addEventListener('message', function(event) {
+				if (event.origin !== window.location.origin) return;
+				
+				var data = event.data;
+				if (!data || !data.type) return;
+				
+				if (data.type === 'modeChange') {
+					// 切换显示模式（节点/文字）
+					if (data.mode === 'node') {
+						d3.selectAll('.texts text').style('display', 'none');
+						d3.selectAll('.nodes circle').style('display', 'block');
+					} else if (data.mode === 'text') {
+						d3.selectAll('.nodes circle').style('display', 'none');
+						d3.selectAll('.texts text').style('display', 'block');
+					}
+				} else if (data.type === 'search') {
+					// 搜索功能（参考原始实现，确保nodes和links已定义）
+					if (!nodes || !links || nodes.length === 0) {
+						console.warn('节点数据未加载，无法搜索');
+						return;
+					}
+					
+					var keyword = data.keyword || '';
+					console.log('搜索关键词:', keyword, '节点数:', nodes.length, '连线数:', links.length);
+					
+					if (keyword === '') {
+						// 如果输入为空，显示所有节点和连线
+						d3.selectAll('.nodes circle').attr('class', '');
+						d3.selectAll('.texts text').attr('class', '');
+						d3.selectAll('.links line').attr('class', '');
+					} else {
+						// 搜索所有节点
+						d3.selectAll('.nodes circle').attr('class', function(d) {
+							// 如果节点名称包含关键词，显示
+							if (d.properties && d.properties.name && d.properties.name.indexOf(keyword) >= 0) {
+								return '';
+							} else {
+								// 优化：与该搜索节点相关联的节点均显示
+								for (var i = 0; i < links.length; i++) {
+									// 处理source和target可能是字符串ID或对象的情况
+									var sourceNode = null;
+									var targetNode = null;
+									
+									if (typeof links[i].source === 'object') {
+										sourceNode = links[i].source;
+									} else {
+										sourceNode = nodes.find(function(n) { return n.id == links[i].source; });
+									}
+									
+									if (typeof links[i].target === 'object') {
+										targetNode = links[i].target;
+									} else {
+										targetNode = nodes.find(function(n) { return n.id == links[i].target; });
+									}
+									
+									// 如果起点包含关键词且终点是当前节点，显示
+									if (sourceNode && sourceNode.properties && sourceNode.properties.name && 
+										sourceNode.properties.name.indexOf(keyword) >= 0 && targetNode && targetNode.id == d.id) {
+										return '';
+									}
+									// 如果终点包含关键词且起点是当前节点，显示
+									if (targetNode && targetNode.properties && targetNode.properties.name && 
+										targetNode.properties.name.indexOf(keyword) >= 0 && sourceNode && sourceNode.id == d.id) {
+										return '';
+									}
+								}
+								return 'inactive'; // 隐藏
+							}
+						});
+						
+						// 搜索文字标签
+						d3.selectAll('.texts text').attr('class', function(d) {
+							if (d.properties && d.properties.name && d.properties.name.indexOf(keyword) >= 0) {
+								return '';
+							} else {
+								// 优化：与该搜索节点相关联的节点均显示
+								for (var i = 0; i < links.length; i++) {
+									var sourceNode = null;
+									var targetNode = null;
+									
+									if (typeof links[i].source === 'object') {
+										sourceNode = links[i].source;
+									} else {
+										sourceNode = nodes.find(function(n) { return n.id == links[i].source; });
+									}
+									
+									if (typeof links[i].target === 'object') {
+										targetNode = links[i].target;
+									} else {
+										targetNode = nodes.find(function(n) { return n.id == links[i].target; });
+									}
+									
+									if (sourceNode && sourceNode.properties && sourceNode.properties.name && 
+										sourceNode.properties.name.indexOf(keyword) >= 0 && targetNode && targetNode.id == d.id) {
+										return '';
+									}
+									if (targetNode && targetNode.properties && targetNode.properties.name && 
+										targetNode.properties.name.indexOf(keyword) >= 0 && sourceNode && sourceNode.id == d.id) {
+										return '';
+									}
+								}
+								return 'inactive';
+							}
+						});
+						
+						// 搜索连线
+						d3.selectAll('.links line').attr('class', function(d) {
+							var linkSource = null;
+							var linkTarget = null;
+							
+							if (typeof d.source === 'object') {
+								linkSource = d.source;
+							} else {
+								linkSource = nodes.find(function(n) { return n.id == d.source; });
+							}
+							
+							if (typeof d.target === 'object') {
+								linkTarget = d.target;
+							} else {
+								linkTarget = nodes.find(function(n) { return n.id == d.target; });
+							}
+							
+							if ((linkSource && linkSource.properties && linkSource.properties.name && linkSource.properties.name.indexOf(keyword) >= 0) ||
+								(linkTarget && linkTarget.properties && linkTarget.properties.name && linkTarget.properties.name.indexOf(keyword) >= 0)) {
+								return '';
+							} else {
+								return 'inactive'; // 隐藏
+							}
+						});
+					}
+				} else if (data.type === 'spacingChange') {
+					// 间距缩放
+					var scale = data.value || 1.0;
+					BODY_STRENGTH = BASE_BODY_STRENGTH * scale;
+					COLLISION_RADIUS = BASE_COLLISION_RADIUS * scale;
+					DIST_SCALE = BASE_DIST_SCALE * scale;
+					
+					if (simulation) {
+						simulation.force("charge").strength(BODY_STRENGTH);
+						simulation.force("collision").radius(COLLISION_RADIUS);
+						simulation.force("link").distance(DIST_SCALE);
+						simulation.alpha(0.4).restart();
+					}
+				}
+			});
+		});
+	</script>
+</body>
+</html>

@@ -11,7 +11,7 @@
 
     <div class="knowledge-content">
       <!-- 左侧：技能展示 -->
-      <div class="knowledge-right">
+      <div class="knowledge-right animate__animated" ref="knowledgeLeftPart">
         <!-- 顶部横线和标题 -->
         <div class="right-header">
           <div class="header-line">
@@ -34,7 +34,7 @@
       </div>
 
       <!-- 右侧：知识图谱 -->
-      <div class="knowledge-left">
+      <div class="knowledge-left animate__animated" ref="knowledgeRightPart">
         <div class="knowledge-graph">
           <!-- 交互式知识图谱 -->
           <iframe
@@ -54,6 +54,15 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import Star from "./Star.vue";
+
+const knowledgeLeftPart = ref(null);
+const knowledgeRightPart = ref(null);
+
+// 暴露 ref 给父组件
+defineExpose({
+  knowledgeLeftPart,
+  knowledgeRightPart
+});
 
 const router = useRouter();
 

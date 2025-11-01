@@ -93,8 +93,8 @@
 
       <!-- Knowledge Photo Section -->
       <section id="knowledge" class="section knowledge-section">
-        <KnowledgePhoto />
-        <ChengzhangGuiji />
+        <KnowledgePhoto ref="knowledgePhotoRef" />
+        <ChengzhangGuiji ref="chengzhangGuijiRef" />
       </section>
 
       <!-- Relax Section -->
@@ -163,6 +163,10 @@ export default {
     // 左右元素的引用
     const leftCompetition = ref(null);
     const rightCompetition = ref(null);
+    
+    // 厚积薄发和成长轨迹组件的引用
+    const knowledgePhotoRef = ref(null);
+    const chengzhangGuijiRef = ref(null);
 
     const slides = [pic4, pic2, pic3, pic1];
     
@@ -294,12 +298,109 @@ export default {
         competitionObserver.observe(competitionSection);
       }
 
+      // 记录上次滚动位置，用于判断滚动方向
+      let lastScrollY = window.scrollY;
+      
+      // 监听页面滚动，持续更新滚动位置
+      const handleScroll = () => {
+        lastScrollY = window.scrollY;
+      };
+      
+      // 监听"成长轨迹"标题可见性，触发时间轴动画（仅向下滚动时）
+      const chengzhangTitleObserver = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          
+          if (entry.isIntersecting && chengzhangGuijiRef.value?.timelineWrapper) {
+            // 实时检测滚动方向
+            const currentScrollY = window.scrollY;
+            const isScrollingDown = currentScrollY > lastScrollY;
+            
+            // 只有向下滚动时才触发动画
+            if (isScrollingDown) {
+              // 重置动画类
+              chengzhangGuijiRef.value.timelineWrapper.classList.remove("animate__flipInX");
+              // 强制重绘，确保动画能重新触发
+              void chengzhangGuijiRef.value.timelineWrapper.offsetWidth;
+              // 触发动画
+              chengzhangGuijiRef.value.timelineWrapper.classList.add("animate__flipInX");
+            }
+            // 更新滚动位置
+            lastScrollY = currentScrollY;
+          } else {
+            // 离开视口时移除动画类，确保下次进入时能重新触发
+            if (chengzhangGuijiRef.value?.timelineWrapper) {
+              chengzhangGuijiRef.value.timelineWrapper.classList.remove("animate__flipInX");
+            }
+          }
+        },
+        { threshold: 0.1 }
+      );
+      
+      // 添加滚动事件监听
+      window.addEventListener('scroll', handleScroll, { passive: true });
+
+      // 查找"成长轨迹"标题元素
+      setTimeout(() => {
+        const chengzhangTitle = document.querySelector('.chengzhang-guiji .section-title');
+        if (chengzhangTitle) {
+          chengzhangTitleObserver.observe(chengzhangTitle);
+        }
+      }, 100);
+
+      // 监听"厚积薄发"标题可见性，触发左右部分动画
+      const knowledgeTitleObserver = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (entry.isIntersecting && knowledgePhotoRef.value) {
+            // 重置左侧动画
+            if (knowledgePhotoRef.value.knowledgeLeftPart) {
+              knowledgePhotoRef.value.knowledgeLeftPart.classList.remove("animate__backInLeft");
+              void knowledgePhotoRef.value.knowledgeLeftPart.offsetWidth;
+              knowledgePhotoRef.value.knowledgeLeftPart.classList.add("animate__backInLeft");
+            }
+            // 重置右侧动画
+            if (knowledgePhotoRef.value.knowledgeRightPart) {
+              knowledgePhotoRef.value.knowledgeRightPart.classList.remove("animate__backInRight");
+              void knowledgePhotoRef.value.knowledgeRightPart.offsetWidth;
+              knowledgePhotoRef.value.knowledgeRightPart.classList.add("animate__backInRight");
+            }
+          } else {
+            // 离开视口时移除动画类，确保下次进入时能重新触发
+            if (knowledgePhotoRef.value?.knowledgeLeftPart) {
+              knowledgePhotoRef.value.knowledgeLeftPart.classList.remove("animate__backInLeft");
+            }
+            if (knowledgePhotoRef.value?.knowledgeRightPart) {
+              knowledgePhotoRef.value.knowledgeRightPart.classList.remove("animate__backInRight");
+            }
+          }
+        },
+        { threshold: 0.1 }
+      );
+
+      // 查找"厚积薄发"标题元素
+      setTimeout(() => {
+        const knowledgeTitle = document.querySelector('.knowledge-photo .section-title');
+        if (knowledgeTitle) {
+          knowledgeTitleObserver.observe(knowledgeTitle);
+        }
+      }, 100);
+
       // 清理函数
       onUnmounted(() => {
         stopAutoSlide();
         if (observer && heroRef.value) observer.unobserve(heroRef.value);
         if (competitionObserver && competitionSection) {
           competitionObserver.unobserve(competitionSection);
+        }
+        window.removeEventListener('scroll', handleScroll);
+        const chengzhangTitle = document.querySelector('.chengzhang-guiji .section-title');
+        if (chengzhangTitle) {
+          chengzhangTitleObserver.unobserve(chengzhangTitle);
+        }
+        const knowledgeTitle = document.querySelector('.knowledge-photo .section-title');
+        if (knowledgeTitle) {
+          knowledgeTitleObserver.unobserve(knowledgeTitle);
         }
       });
     });
@@ -331,6 +432,8 @@ export default {
       leftCompetition,
       rightCompetition,
       userInfo,
+      knowledgePhotoRef,
+      chengzhangGuijiRef,
     };
   },
 };

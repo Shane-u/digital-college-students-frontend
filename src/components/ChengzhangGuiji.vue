@@ -10,7 +10,14 @@
     </div>
 
     <!-- 时间轴内容 -->
-    <ul class="timeline-wrapper" @scroll="scrollEvent">
+    <ul 
+      class="timeline-wrapper animate__animated" 
+      ref="timelineWrapper" 
+      @scroll="scrollEvent"
+      @mouseenter="handleMouseEnter"
+      @mouseleave="handleMouseLeave"
+      @wheel="handleWheel"
+    >
       <li
         class="timeline-item"
         v-for="item in props.timelineList"
@@ -82,9 +89,12 @@
 </template>
   
   <script setup>
-import { ref, defineProps, defineEmits } from "vue";
+import { ref, defineProps, defineEmits, onMounted, onUnmounted } from "vue";
 import Star from "./Star.vue";
 import { ElPopover } from 'element-plus';
+
+const timelineWrapper = ref(null);
+const isMouseOverTimeline = ref(false);
 
 const props = defineProps({
   timelineList: {
@@ -245,6 +255,88 @@ const scrollEvent = (e) => {
 const handleBottomClick = () => {
   emit("handleBottomClick");
 };
+
+// 鼠标进入时间轴区域
+const handleMouseEnter = () => {
+  isMouseOverTimeline.value = true;
+};
+
+// 鼠标离开时间轴区域
+const handleMouseLeave = () => {
+  isMouseOverTimeline.value = false;
+};
+
+// 检测时间轴是否到达左端
+const isAtLeftEnd = () => {
+  if (!timelineWrapper.value) return false;
+  return timelineWrapper.value.scrollLeft <= 0;
+};
+
+// 检测时间轴是否到达右端
+const isAtRightEnd = () => {
+  if (!timelineWrapper.value) return false;
+  const scrollLeft = timelineWrapper.value.scrollLeft;
+  const scrollWidth = timelineWrapper.value.scrollWidth;
+  const clientWidth = timelineWrapper.value.clientWidth;
+  // 允许1px的误差
+  return scrollLeft + clientWidth >= scrollWidth - 1;
+};
+
+// 处理滚轮事件
+const handleWheel = (e) => {
+  if (!timelineWrapper.value || !isMouseOverTimeline.value) return;
+  
+  const deltaY = e.deltaY;
+  // 调整滚动速度，增大滚动幅度
+  const scrollAmount = Math.abs(deltaY) * 2;
+  const isAtLeft = isAtLeftEnd();
+  const isAtRight = isAtRightEnd();
+  
+  // 向下滚动（正deltaY）- 时间轴向右滚动
+  if (deltaY > 0) {
+    // 如果已经在右端，允许页面滚动（不阻止默认行为）
+    if (isAtRight) {
+      return; // 允许事件冒泡，页面可以继续向下滚动
+    }
+    // 阻止默认滚动，滚动时间轴向右
+    e.preventDefault();
+    e.stopPropagation();
+    const maxScroll = timelineWrapper.value.scrollWidth - timelineWrapper.value.clientWidth;
+    const newScrollLeft = Math.min(
+      timelineWrapper.value.scrollLeft + scrollAmount, 
+      maxScroll
+    );
+    timelineWrapper.value.scrollLeft = newScrollLeft;
+  } 
+  // 向上滚动（负deltaY）- 时间轴向左滚动
+  else if (deltaY < 0) {
+    // 如果已经在左端，允许页面滚动（不阻止默认行为）
+    if (isAtLeft) {
+      return; // 允许事件冒泡，页面可以继续向上滚动
+    }
+    // 阻止默认滚动，滚动时间轴向左
+    e.preventDefault();
+    e.stopPropagation();
+    const newScrollLeft = Math.max(
+      timelineWrapper.value.scrollLeft - scrollAmount, 
+      0
+    );
+    timelineWrapper.value.scrollLeft = newScrollLeft;
+  }
+};
+
+onMounted(() => {
+  // 确保时间轴可以横向滚动，并设置平滑滚动
+  if (timelineWrapper.value) {
+    timelineWrapper.value.style.overflowX = 'scroll';
+    timelineWrapper.value.style.scrollBehavior = 'smooth';
+  }
+});
+
+// 暴露 ref 给父组件
+defineExpose({
+  timelineWrapper
+});
 </script>
   
   <style scoped>
