@@ -4,6 +4,7 @@ import HomePage from '../views/HomePage.vue'
 import EduCompetitionPage from '../views/EduCompetitionPage.vue'
 import SubjectCompetitionPage from '../views/SubjectCompetitionPage.vue'
 import KnowledgeGraphPage from '../views/KnowledgeGraphPage.vue'
+import ProfilePage from '../views/ProfilePage.vue'
 
 const routes = [
   {
@@ -34,6 +35,11 @@ const routes = [
     path: '/knowledge-graph',
     name: 'KnowledgeGraph',
     component: KnowledgeGraphPage
+  },
+  {
+    path: '/profile',
+    name: 'Profile',
+    component: ProfilePage
   },
 ]
 

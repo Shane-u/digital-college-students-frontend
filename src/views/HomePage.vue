@@ -94,6 +94,7 @@
       <!-- Knowledge Photo Section -->
       <section id="knowledge" class="section knowledge-section">
         <KnowledgePhoto />
+        <ChengzhangGuiji />
       </section>
 
       <!-- Relax Section -->
@@ -126,6 +127,7 @@ import Guidaotu from "../components/Guidaotu.vue";
 import NavBar from "../components/NavBar.vue";
 import CareerPlanning from "../components/CareerPlanning.vue";
 import KnowledgePhoto from "../components/KnowledgePhoto.vue";
+import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
 export default {
@@ -135,6 +137,7 @@ export default {
     Competition,
     Shalou,
     KnowledgePhoto,
+    ChengzhangGuiji,
     Relax,
     // CompetitionBorder,
     CompetitionConsultation,
@@ -550,11 +553,38 @@ export default {
   /* padding: 30px 0; */
 }
 
-/* 厚积薄发板块样式 */
+/* 厚积薄发板块样式（与成长轨迹共用背景） */
 .knowledge-section {
-  background: transparent;
+  background-image: url("../assets/background/knowledgePhoto.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
   padding: 0;
   margin: 0;
+}
+
+/* 背景透明化和紫色雾蒙 */
+.knowledge-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 1;
+}
+
+.knowledge-section::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(149, 117, 181, 0.08);
+  z-index: 2;
 }
 
 /* 闲暇时光板块样式 */

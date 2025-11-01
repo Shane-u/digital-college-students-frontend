@@ -92,10 +92,7 @@ const skills = ref([
   width: 100%;
   min-height: 600px;
   position: relative;
-  background-image: url("../assets/background/knowledgePhoto.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  /* 背景已移至父容器knowledge-section */
   padding: 30px 40px 60px 0;
 }
 
@@ -143,28 +140,7 @@ const skills = ref([
   background: rgba(184, 160, 200, 0.1);
 }
 
-/* 背景透明化和紫色雾蒙 */
-.knowledge-photo::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.8);
-  z-index: 1;
-}
-
-.knowledge-photo::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(149, 117, 181, 0.08);
-  z-index: 2;
-}
+/* 背景透明化和紫色雾蒙已移至父容器knowledge-section */
 
 .knowledge-content {
   position: relative;
