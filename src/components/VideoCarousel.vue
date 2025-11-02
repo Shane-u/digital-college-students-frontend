@@ -28,6 +28,9 @@
 
 <script setup>
 import { ref } from 'vue';
+import com1 from '../assets/competition/com1.jpg';
+import com2 from '../assets/competition/com2.jpg';
+import com3 from '../assets/competition/com3.jpg';
 
 // 默认激活第一张（索引0）
 const activeIndex = ref(0);
@@ -37,22 +40,22 @@ const carouselItems = ref([
   {
     id: 1,
     number: '01.',
-    title: '校地合作',
-    image: 'https://raicom-caia1caim2.oss-cn-hangzhou.aliyuncs.com/36d1cbca37e74736ba6c19061d626fc8.webp',
+    title: '睿抗机器人开发者大赛',
+    image: com1,
     link: '#/cooperation/campus'
   },
   {
     id: 2,
     number: '02.',
-    title: '校企合作',
-    image: '/pic_lb2.png',
+    title: '计算机系统能力大赛',
+    image: com2,
     link: '#/cooperation/enterprise'
   },
   {
     id: 3,
     number: '03.',
-    title: '国际合作',
-    image: '/pic_lb3.png',
+    title: '中国大学生计算机设计大赛',
+    image: com3,
     link: '#/cooperation/international'
   }
 ]);
@@ -74,6 +77,7 @@ const handleLinkClick = (link) => {
   width: 100%;
   height: 100%;
   padding: 20px;
+  z-index: 8;
 }
 
 .carousel-container {
@@ -148,7 +152,15 @@ const handleLinkClick = (link) => {
 
 /* 激活状态时文字在左下角 - 通过transform实现滑动 */
 .carousel-text.text-bottom {
-  transform: translateY(360px);
+  transform: translateY(340px);
+}
+
+/* 激活状态时，文字可以完整显示，移除宽度限制 */
+.carousel-text.text-bottom .item-title {
+  max-width: none; /* 激活状态下不限制宽度，允许完整显示 */
+  white-space: normal; /* 允许换行显示完整内容 */
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .item-number {
@@ -168,6 +180,10 @@ const handleLinkClick = (link) => {
   transition: all 0.3s ease;
   display: inline-block;
   position: relative;
+  white-space: nowrap; /* 防止换行 */
+  overflow: hidden; /* 隐藏溢出内容 */
+  text-overflow: ellipsis; /* 显示省略号 */
+  max-width: 140px; /* 非激活状态下的最大宽度 */
 }
 
 .item-title::after {
@@ -211,6 +227,11 @@ const handleLinkClick = (link) => {
   
   .item-title {
     font-size: 24px;
+    max-width: 120px; /* 响应式下的非激活状态宽度 */
+  }
+  
+  .carousel-text.text-bottom .item-title {
+    max-width: none; /* 激活状态下不限制宽度 */
   }
 }
 
@@ -239,6 +260,11 @@ const handleLinkClick = (link) => {
   
   .item-title {
     font-size: 20px;
+    max-width: 100px; /* 响应式下的非激活状态宽度 */
+  }
+  
+  .carousel-text.text-bottom .item-title {
+    max-width: none; /* 激活状态下不限制宽度 */
   }
 }
 

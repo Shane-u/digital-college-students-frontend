@@ -142,7 +142,7 @@ onUnmounted(() => {
   width: 100%;
   min-height: 500px;
   position: relative;
-  background-image: url('../assets/background/image.png');
+  /* background-image: url('../assets/background/image.png'); */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

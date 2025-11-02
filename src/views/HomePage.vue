@@ -1,7 +1,7 @@
 <template>
   <div class="home-page">
     <MouseFollower />
-
+    <!-- <TriangleBackground class="triangle-background"/> -->
     <!-- 使用共享导航组件 -->
     <NavBar :transparent="isNavTransparent" :userInfo="userInfo" />
 
@@ -13,8 +13,12 @@
         :style="{ transform: `translateX(-${currentIndex * 100}%)` }"
         @transitionend="onTransitionEnd"
       >
-        <div v-for="(img, i) in displaySlides" :key="i">
-          <img :src="img" alt="轮播图" class="slide-img" />
+        <div v-for="(slide, i) in displaySlides" :key="i" class="slide-item">
+          <img :src="slide.img" alt="轮播图" class="slide-img" />
+          <div class="slide-text-overlay">
+            <h1 class="slide-title">{{ slide.title }}</h1>
+            <p class="slide-subtitle">{{ slide.subtitle }}</p>
+          </div>
         </div>
       </div>
       <!-- 底部渐变遮罩层 -->
@@ -36,7 +40,6 @@
         </button>
       </div>
     </section>
-
     <div 
     >
         <!-- Competition Section -->
@@ -55,7 +58,7 @@
                 ref="leftCompetition"
               >
                 <!-- <CompetitionBorder> -->
-                  <CompetitionConsultation />
+                  <CompetitionConsultation class="competition-consultation"/>
                 <!-- </CompetitionBorder> -->
               </div>
 
@@ -114,13 +117,11 @@ import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import MouseFollower from "../components/MouseFollower.vue";
 import Shalou from "../components/Shalou.vue";
-import pic1 from "../assets/pic_lb1.png";
-import pic2 from "../assets/pic_lb2.png";
-import pic3 from "../assets/pic_lb3.png";
-import pic4 from "../assets/pic_lb4.png";
-// import background from "../assets/background.png";
+import pic1 from "../assets/lunbotu/1.png";
+import pic2 from "../assets/lunbotu/2.png";
+import pic3 from "../assets/lunbotu/3.png";
+import pic4 from "../assets/lunbotu/4.png";
 import Competition from "../components/Competition.vue";
-// import CompetitionBorder from "../components/Competition_border.vue";
 import CompetitionConsultation from "../components/CompetitionConsultation.vue";
 import VideoCarousel from "../components/VideoCarousel.vue";
 import Guidaotu from "../components/Guidaotu.vue";
@@ -130,9 +131,11 @@ import KnowledgePhoto from "../components/KnowledgePhoto.vue";
 import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
+import TriangleBackground from "../components/TriangleBackground.vue";
 export default {
   name: "HomePage",
   components: {
+    TriangleBackground,
     MouseFollower,
     Competition,
     Shalou,
@@ -168,7 +171,37 @@ export default {
     const knowledgePhotoRef = ref(null);
     const chengzhangGuijiRef = ref(null);
 
-    const slides = [pic4, pic2, pic3, pic1];
+    const slides = [
+      { 
+        img: pic3, 
+        title: "“砚湖之韵 理迎新声”", 
+        subtitle: `璀璨的星光，点亮青春的梦想
+                   激昂的旋律，奏响奋进的乐章`
+      },
+      { 
+        img: pic2, 
+        title: `我们从同样的起点出发
+                   走向不同的未来`, 
+        subtitle: `学位帽抛向天空的瞬间
+                    把说不出口的舍不得
+                       都藏进了风里` 
+      },
+      { 
+        img: pic1, 
+        title: "迷彩青春，当“燃”开场!!!", 
+        subtitle: `我们目光坚定，我们朝气蓬勃
+以山海为志，赴青春之约
+此刻整装，迈向崭新篇章` 
+      },
+      { 
+        img: pic4, 
+        title: "邂逅古老智慧，构想新颖创意", 
+        subtitle: `手中的笔尖
+在书中挥舞
+描绘出知识的轮廓
+图书馆在光影的渲染下更显得庄重和古朴` 
+      }
+    ];
     
 
     const displaySlides = computed(() => {
@@ -298,26 +331,34 @@ export default {
         competitionObserver.observe(competitionSection);
       }
 
-      // 记录上次滚动位置，用于判断滚动方向
+      // 记录滚动位置和状态，用于判断滚动方向
       let lastScrollY = window.scrollY;
+      let titleWasVisible = false;
+      let scrollDirection = 'none'; // 'up', 'down', 'none'
       
-      // 监听页面滚动，持续更新滚动位置
+      // 持续监听滚动，更新滚动位置和方向
       const handleScroll = () => {
-        lastScrollY = window.scrollY;
+        const currentScrollY = window.scrollY;
+        if (currentScrollY > lastScrollY) {
+          scrollDirection = 'down';
+        } else if (currentScrollY < lastScrollY) {
+          scrollDirection = 'up';
+        }
+        lastScrollY = currentScrollY;
       };
       
-      // 监听"成长轨迹"标题可见性，触发时间轴动画（仅向下滚动时）
+      window.addEventListener('scroll', handleScroll, { passive: true });
+      
+      // 监听"成长轨迹"标题可见性，只在从不可见变为可见时触发动画（且是向下滚动）
       const chengzhangTitleObserver = new IntersectionObserver(
         (entries) => {
           const entry = entries[0];
+          const isCurrentlyVisible = entry.isIntersecting;
           
-          if (entry.isIntersecting && chengzhangGuijiRef.value?.timelineWrapper) {
-            // 实时检测滚动方向
-            const currentScrollY = window.scrollY;
-            const isScrollingDown = currentScrollY > lastScrollY;
-            
-            // 只有向下滚动时才触发动画
-            if (isScrollingDown) {
+          // 只在从不可见变为可见时触发（第一次看到标题）
+          if (isCurrentlyVisible && !titleWasVisible) {
+            // 检测滚动方向：只有向下滚动时才触发动画
+            if (scrollDirection === 'down' && chengzhangGuijiRef.value?.timelineWrapper) {
               // 重置动画类
               chengzhangGuijiRef.value.timelineWrapper.classList.remove("animate__flipInX");
               // 强制重绘，确保动画能重新触发
@@ -325,20 +366,20 @@ export default {
               // 触发动画
               chengzhangGuijiRef.value.timelineWrapper.classList.add("animate__flipInX");
             }
-            // 更新滚动位置
-            lastScrollY = currentScrollY;
-          } else {
+          }
+          
+          if (!isCurrentlyVisible) {
             // 离开视口时移除动画类，确保下次进入时能重新触发
             if (chengzhangGuijiRef.value?.timelineWrapper) {
               chengzhangGuijiRef.value.timelineWrapper.classList.remove("animate__flipInX");
             }
           }
+          
+          // 更新状态
+          titleWasVisible = isCurrentlyVisible;
         },
         { threshold: 0.1 }
       );
-      
-      // 添加滚动事件监听
-      window.addEventListener('scroll', handleScroll, { passive: true });
 
       // 查找"成长轨迹"标题元素
       setTimeout(() => {
@@ -395,7 +436,7 @@ export default {
         }
         window.removeEventListener('scroll', handleScroll);
         const chengzhangTitle = document.querySelector('.chengzhang-guiji .section-title');
-        if (chengzhangTitle) {
+        if (chengzhangTitle && chengzhangTitleObserver) {
           chengzhangTitleObserver.unobserve(chengzhangTitle);
         }
         const knowledgeTitle = document.querySelector('.knowledge-photo .section-title');
@@ -450,7 +491,9 @@ export default {
   background-position: center;
   background-repeat: no-repeat;
 }
-
+.triangle-background{
+  z-index: 4;
+}
 
 
 /* 轮播图样式（全屏显示） */
@@ -459,7 +502,7 @@ export default {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  z-index: 1;
+  z-index: 6;
 }
 
 /* 轮播图底部渐变遮罩层 */
@@ -491,11 +534,48 @@ export default {
   transition: none !important;
 }
 
-.slide-img {
+.slide-item {
+  position: relative;
   width: 98.9vw;
   height: 100vh;
+  flex-shrink: 0;
+}
+
+.slide-img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   object-position: center;
+}
+
+.slide-text-overlay {
+  position: absolute;
+  left: 60px;
+  top: 80%;
+  transform: translateY(-50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.slide-title {
+  font-size: 40px;
+  font-weight: 700;
+  color: #FFD700;
+  margin: 0 0 12px 0;
+  line-height: 1.2;
+  letter-spacing: 2px;
+  white-space: pre-line;
+}
+
+.slide-subtitle {
+  font-size: 28px;
+  font-weight: 500;
+  color: #FFFFFF;
+  margin: 0;
+  line-height: 1.4;
+  letter-spacing: 1px;
+  white-space: pre-line;
+  /* text-align: center; */
 }
 
 /* Hero内容层 */
@@ -505,7 +585,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100vh;
-  z-index: 2;
+  z-index: 7;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -597,13 +677,10 @@ export default {
 
 /* 竞赛板块样式 */
 .competition {
-  background-image: url("../assets/background/competition.jpg");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   position: relative;
   min-height: 600px;
   padding: 30px 0;
+
 }
 
 /* 背景透明化和紫色雾蒙 */
@@ -642,7 +719,7 @@ export default {
 .competition-divider {
   width: 1px;
   height: 400px;
-  border-left: 2px dashed #edb2f9; /* 浅紫色虚线 */
+  border-left: 2px dashed #fff; /* 浅紫色虚线 */
   align-self: center; /* 垂直居中 */
 }
 
@@ -650,6 +727,9 @@ export default {
   display: flex;
   flex-direction: column;
   opacity: 0; /* 初始隐藏 */
+}
+.competition-consultation{
+  z-index: 6;
 }
 
 .competition-right {
@@ -713,7 +793,7 @@ export default {
 
 /* 厚积薄发板块样式（与成长轨迹共用背景） */
 .knowledge-section {
-  background-image: url("../assets/background/knowledgePhoto.png");
+  /* background-image: url("../assets/background/knowledgePhoto.png"); */
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -784,6 +864,18 @@ export default {
   .competition-right {
     width: 100%;
   }
+
+  .slide-text-overlay {
+    left: 50px;
+  }
+
+  .slide-title {
+    font-size: 48px;
+  }
+
+  .slide-subtitle {
+    font-size: 22px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -808,6 +900,18 @@ export default {
 
   .hero-content-layer {
     padding-top: 50px;
+  }
+
+  .slide-text-overlay {
+    left: 30px;
+  }
+
+  .slide-title {
+    font-size: 36px;
+  }
+
+  .slide-subtitle {
+    font-size: 18px;
   }
 }
 </style>

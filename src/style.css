@@ -1,3 +1,28 @@
+/* 引入本地字体文件 */
+@font-face {
+  font-family: 'SourceHanSansCN-Regular';
+  src: url('/fonts/SourceHanSansCN-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SourceHanSansCN-Bold';
+  src: url('/fonts/SourceHanSansCN-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SourceHanSerifCN-Regular';
+  src: url('/fonts/SourceHanSerifCN-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* 科技感蓝色系配色方案 */
 :root {
   /* 主色调 - 蓝色系 */
@@ -40,10 +65,17 @@ html {
 }
 
 body {
-  font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', sans-serif;
+  font-family: 'SourceHanSansCN-Regular', 'PingFang SC', 'Microsoft YaHei', 'Inter', sans-serif;
   background: #ffffff;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* 粗体文字使用 Bold 字体 */
+b, strong, h1, h2, h3, h4, h5, h6,
+.bold, .font-bold {
+  font-family: 'SourceHanSansCN-Bold', 'PingFang SC', 'Microsoft YaHei', 'Inter', sans-serif;
+  font-weight: bold;
 }
 
 /* 通用按钮样式 */

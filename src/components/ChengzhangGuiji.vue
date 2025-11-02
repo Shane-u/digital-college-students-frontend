@@ -10,9 +10,9 @@
     </div>
 
     <!-- 时间轴内容 -->
-    <ul 
-      class="timeline-wrapper animate__animated" 
-      ref="timelineWrapper" 
+    <ul
+      class="timeline-wrapper animate__animated"
+      ref="timelineWrapper"
       @scroll="scrollEvent"
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
@@ -28,11 +28,7 @@
             <div class="in-circle"></div>
             <!-- 修复：气泡包裹整个时间节点区域，确保点击触发 -->
             <div class="timeline-date">
-              <el-popover
-                placement="bottom"
-                trigger="hover"
-                width="200"
-              >
+              <el-popover placement="bottom" trigger="hover" width="200">
                 <!-- Element Plus 使用 #reference 作为触发元素 -->
                 <template #reference>
                   <span class="timeline-title">
@@ -40,7 +36,9 @@
                   </span>
                 </template>
                 <!-- 内容直接放在组件标签内 -->
-                <div style="padding: 8px 0; line-height: 1.6; text-align: center;">
+                <div
+                  style="padding: 8px 0; line-height: 1.6; text-align: center"
+                >
                   {{ item.content }}
                 </div>
               </el-popover>
@@ -59,7 +57,7 @@
               :key="subItem.id"
               class="sub-item-box"
             >
-              <span>{{ subItem.name + ":" + subItem.num }}人</span>
+              <span>{{ subItem.name}}</span>
               <!-- 根据奇数偶数判断上下展示 -->
               <div
                 :class="`sub-line-box ${
@@ -91,7 +89,7 @@
   <script setup>
 import { ref, defineProps, defineEmits, onMounted, onUnmounted } from "vue";
 import Star from "./Star.vue";
-import { ElPopover } from 'element-plus';
+import { ElPopover } from "element-plus";
 
 const timelineWrapper = ref(null);
 const isMouseOverTimeline = ref(false);
@@ -108,20 +106,20 @@ const props = defineProps({
           content: "探索方向，在新鲜与迷茫中锚定初心",
           isShow: true,
           children: [
-          {
-              name: "商务洽谈",
+            {
+              name: "2018.9.15",
               num: 2,
-              content: "对外合作",
+              content: "加入校学生会文艺部，参与迎新晚会策划",
             },
             {
-              name: "商务洽谈",
+              name: "2018.11.3",
               num: 2,
-              content: "对外合作",
+              content: "首次参加校级数学建模竞赛，获优秀奖",
             },
             {
-              name: "商务洽谈",
+              name: "2018.12.20",
               num: 2,
-              content: "对外合作",
+              content: "加入英语角社团，坚持每周口语练习",
             },
           ],
         },
@@ -133,19 +131,19 @@ const props = defineProps({
           isShow: true,
           children: [
             {
-              name: "创始团队",
+              name: "2019.3.10",
               num: 5,
-              content: "股份分红",
+              content: "组队参加'互联网+'创新创业大赛，进入校赛决赛",
             },
             {
-              name: "创始团队",
+              name: "2019.5.25",
               num: 5,
-              content: "股份分红",
+              content: "通过大学英语六级考试，分数520分",
             },
             {
-              name: "创始团队",
+              name: "2019.9.8",
               num: 5,
-              content: "股份分红",
+              content: "担任班级学习委员，组织专业课答疑小组",
             },
           ],
         },
@@ -157,39 +155,35 @@ const props = defineProps({
           isShow: true,
           children: [
             {
-              name: "内务部",
+              name: "2020.1.15",
               num: 10,
-              content: "负责接待",
+              content: "获得国家励志奖学金，专业排名前5%",
             },
             {
-              name: "内务部",
+              name: "2020.4.20",
               num: 10,
-              content: "负责接待",
-            },{
-              name: "内务部",
+              content: "参与教师主持的科研项目，负责数据收集分析",
+            },
+            {
+              name: "2020.6.30",
               num: 10,
-              content: "负责接待",
+              content: "暑期在某科技公司实习，完成3个项目模块开发",
             },
             {
-              name: "技术部",
+              name: "2020.10.12",
               num: 20,
-              content: "前端：5人，后端10人，测试5人",
+              content: "带领团队获省级大学生程序设计竞赛二等奖",
             },
             {
-              name: "技术部",
+              name: "2020.11.28",
               num: 20,
-              content: "前端：5人，后端10人，测试5人",
+              content: "发表1篇省级学术期刊论文（第二作者）",
             },
             {
-              name: "技术部",
+              name: "2020.12.5",
               num: 20,
-              content: "前端：5人，后端10人，测试5人",
+              content: "确定考研方向，开始系统复习专业课",
             },
-            // {
-            //   name: "总裁办xxx",
-            //   num: 2,
-            //   content: "负责事务为XXX",
-            // },
           ],
         },
         {
@@ -200,9 +194,19 @@ const props = defineProps({
           isShow: true,
           children: [
             {
-              name: "商务洽谈",
+              name: "2021.3.20",
               num: 2,
-              content: "对外合作",
+              content: "完成本科毕业论文，获优秀毕业设计称号",
+            },
+            {
+              name: "2021.4.15",
+              num: 2,
+              content: "通过研究生复试，被目标院校录取",
+            },
+            {
+              name: "2021.6.10",
+              num: 2,
+              content: "作为毕业生代表在学院毕业典礼上发言",
             },
           ],
         },
@@ -211,7 +215,6 @@ const props = defineProps({
           date: "2022",
           title: "毕业",
           content: "2022年",
-          
         },
         // {
         //   id: 6,
@@ -285,13 +288,13 @@ const isAtRightEnd = () => {
 // 处理滚轮事件
 const handleWheel = (e) => {
   if (!timelineWrapper.value || !isMouseOverTimeline.value) return;
-  
+
   const deltaY = e.deltaY;
   // 调整滚动速度，增大滚动幅度
   const scrollAmount = Math.abs(deltaY) * 2;
   const isAtLeft = isAtLeftEnd();
   const isAtRight = isAtRightEnd();
-  
+
   // 向下滚动（正deltaY）- 时间轴向右滚动
   if (deltaY > 0) {
     // 如果已经在右端，允许页面滚动（不阻止默认行为）
@@ -301,13 +304,14 @@ const handleWheel = (e) => {
     // 阻止默认滚动，滚动时间轴向右
     e.preventDefault();
     e.stopPropagation();
-    const maxScroll = timelineWrapper.value.scrollWidth - timelineWrapper.value.clientWidth;
+    const maxScroll =
+      timelineWrapper.value.scrollWidth - timelineWrapper.value.clientWidth;
     const newScrollLeft = Math.min(
-      timelineWrapper.value.scrollLeft + scrollAmount, 
+      timelineWrapper.value.scrollLeft + scrollAmount,
       maxScroll
     );
     timelineWrapper.value.scrollLeft = newScrollLeft;
-  } 
+  }
   // 向上滚动（负deltaY）- 时间轴向左滚动
   else if (deltaY < 0) {
     // 如果已经在左端，允许页面滚动（不阻止默认行为）
@@ -318,7 +322,7 @@ const handleWheel = (e) => {
     e.preventDefault();
     e.stopPropagation();
     const newScrollLeft = Math.max(
-      timelineWrapper.value.scrollLeft - scrollAmount, 
+      timelineWrapper.value.scrollLeft - scrollAmount,
       0
     );
     timelineWrapper.value.scrollLeft = newScrollLeft;
@@ -328,14 +332,14 @@ const handleWheel = (e) => {
 onMounted(() => {
   // 确保时间轴可以横向滚动，并设置平滑滚动
   if (timelineWrapper.value) {
-    timelineWrapper.value.style.overflowX = 'scroll';
-    timelineWrapper.value.style.scrollBehavior = 'smooth';
+    timelineWrapper.value.style.overflowX = "scroll";
+    timelineWrapper.value.style.scrollBehavior = "smooth";
   }
 });
 
 // 暴露 ref 给父组件
 defineExpose({
-  timelineWrapper
+  timelineWrapper,
 });
 </script>
   
@@ -344,7 +348,6 @@ defineExpose({
   width: 100%;
   min-height: 600px;
   position: relative;
-  padding: 30px 40px 60px 0;
   z-index: 3; /* 确保在紫色蒙层之上 */
 }
 
@@ -416,7 +419,7 @@ ul.timeline-wrapper {
   font-family: DS-Digital, sans-serif;
   list-style: none;
   margin: 0;
-  padding: 200px 20px;
+  padding: 250px 20px 200px 20px;
   white-space: nowrap;
   overflow-x: scroll;
   position: relative;
@@ -500,7 +503,7 @@ ul.timeline-wrapper {
 .long-line .sub-item-box {
   margin-top: -20px;
   position: relative;
-  z-index: 6; /* 确保子元素在蒙层之上 */
+  z-index: 8; /* 确保子元素在蒙层之上，比时间轴层级更高 */
 }
 
 .long-line .sub-item-box span {
@@ -518,11 +521,14 @@ ul.timeline-wrapper {
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  position: relative;
 }
 
 .long-line .sub-item-box .sub-line-box .children-line-box {
   width: 0px;
-  border-left: 1px solid rgba(106, 76, 138, 0.7);
+  /* border-left 已移至 .top-line 和 .bottom-line 中 */
+  position: relative;
+  z-index: 8; /* 确保线条显示在最上层 */
 }
 
 .long-line .sub-item-box .sub-line-box .children-box {
@@ -541,8 +547,10 @@ ul.timeline-wrapper {
 }
 
 .long-line .top-line-box {
-  margin-top: -100px;
-  height: 60px;
+  margin-top: -200px; /* 向上移动到合适位置，连接到时间轴圆点 */
+  height: 180px; /* 增加高度以正确连接到时间轴 */
+  position: relative;
+  z-index: 8;
 }
 
 .long-line .bottom-line-box {
@@ -551,18 +559,32 @@ ul.timeline-wrapper {
 }
 
 .long-line .top-line {
-  height: 65px;
+  height: 80px; /* 连接方框到时间轴的高度 */
+  /* position: relative;
+  z-index: 8; */
+  position: absolute;
+  bottom: 0px;
+  border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
+  /* margin-left: 50%; 居中显示 */
+  transform: translateX(-50%); /* 居中显示 */
 }
 
 .long-line .bottom-line {
   height: 120px;
+  border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
+  /* margin-left: 50%; 居中显示 */
+  transform: translateX(-50%); /* 居中显示 */
 }
 
 .long-line .top-children-box {
-  margin-top: -90px;
+  margin-top: -200px; /* 调整位置，确保线条从方框底部延伸到时间轴 */
   background-color: #e2e2e2;
   border-radius: 5px;
   width: 100px;
+  position: relative;
+  z-index: 8; /* 确保方框显示在最上层 */
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .long-line .bottom-children-box {

@@ -12,7 +12,7 @@ export default {
 
 <style>
 #app {
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: 'Noto Sans SC', 'SourceHanSansCN-Regular', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;

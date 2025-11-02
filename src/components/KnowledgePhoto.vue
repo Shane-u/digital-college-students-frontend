@@ -175,8 +175,10 @@ const skills = ref([
   width: 100%;
   min-width: 700px;
   height: 550px;
-  background: rgba(0,0,0, 0.95);
-  border-radius: 20px;
+  /* background: #070d16; */
+  background-image: url('https://cdn.pixabay.com/photo/2024/09/19/21/07/night-sky-9059825_1280.jpg');
+  border-radius: 5px;
+  border: 5px solid rgba(149, 117, 181, 0.3);
   padding: 0;
   border: 2px solid rgba(149, 117, 181, 0.3);
   overflow: hidden;
