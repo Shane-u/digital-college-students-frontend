@@ -15,17 +15,17 @@
           </div>
         </div>
         <div class="nav-center nav-center-transparent" ref="navLinksRef">
-          <a href="/home" class="nav-link bold">首页</a>
+          <router-link to="/home" class="nav-link bold" exact>首页</router-link>
           <div class="nav-dropdown">
-            <a class="nav-link bold">竞赛活动</a>
+            <span class="nav-link bold">竞赛活动</span>
             <div class="dropdown-menu">
-              <a href="/competition/edu" class="dropdown-item">教育部榜单竞赛</a>
-              <a href="/competition/subject" class="dropdown-item">学科专业竞赛</a>
+              <router-link to="/competition/edu" class="dropdown-item" exact>教育部榜单竞赛</router-link>
+              <router-link to="/competition/subject" class="dropdown-item" exact>学科专业竞赛</router-link>
             </div>
           </div>
-          <a href="/home#career" class="nav-link bold">职业规划</a>
-          <a href="/knowledge-graph" class="nav-link bold">知识图谱</a>
-          <a href="/home#profile" class="nav-link bold">个人主页</a>
+          <span class="nav-link bold nav-link-inactive">职业规划</span>
+          <router-link to="/knowledge-graph" class="nav-link bold" exact>知识图谱</router-link>
+          <span class="nav-link bold nav-link-inactive">个人主页</span>
           <div
             class="active-indicator"
             ref="indicatorRef"
@@ -50,7 +50,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+
+// 获取当前路由
+const route = useRoute()
+
+// 接收 props
+const props = defineProps({
+  transparent: {
+    type: Boolean,
+    default: false // 默认不透明，只有首页传入 true
+  }
+})
 
 // 元素引用（替代原JS中的getElementById）
 const navbar = ref(null)
@@ -71,7 +83,10 @@ const indicatorStyle = ref({
 // 导航栏透明状态标识
 let isNavTransparent = true
 
-// 滚动处理函数（保留原逻辑）
+// 当前激活的链接
+const activeLink = ref(null)
+
+// 滚动处理函数（修改为仅在需要透明效果的页面工作）
 const handleScroll = () => {
   // 更新滚动进度条
   const scrollTop = window.scrollY
@@ -79,16 +94,19 @@ const handleScroll = () => {
   const scrollPercent = (scrollTop / docHeight) * 100
   scrollProgress.value.style.width = `${scrollPercent}%`
 
-  // 导航栏状态切换
-  if (scrollTop < 50) {
-    if (!isNavTransparent) {
-      navbar.value.classList.add('navbar-transparent')
-      isNavTransparent = true
-    }
-  } else {
-    if (isNavTransparent) {
-      navbar.value.classList.remove('navbar-transparent')
-      isNavTransparent = false
+  // 只在启用透明效果的页面才切换导航栏状态
+  if (props.transparent) {
+    // 导航栏状态切换
+    if (scrollTop < 50) {
+      if (!isNavTransparent) {
+        navbar.value.classList.add('navbar-transparent')
+        isNavTransparent = true
+      }
+    } else {
+      if (isNavTransparent) {
+        navbar.value.classList.remove('navbar-transparent')
+        isNavTransparent = false
+      }
     }
   }
 }
@@ -114,20 +132,133 @@ const moveIndicator = (linkElement) => {
   }
 }
 
+// 根据路由路径找到对应的导航链接
+const findActiveLinkByRoute = () => {
+  if (!navLinksRef.value) return null
+  
+  const currentPath = route.path
+  const currentHash = route.hash
+  const fullPath = currentPath + currentHash
+  
+  // 获取所有导航链接（router-link和普通链接），排除nav-link-inactive
+  const links = navLinksRef.value.querySelectorAll('.nav-link:not(.nav-link-inactive)')
+  
+  // 1. 优先精确匹配完整路径（包括 hash）
+  for (const link of links) {
+    const to = link.getAttribute('to') || link.getAttribute('href')
+    if (!to) continue
+    
+    if (to === fullPath) {
+      return link
+    }
+  }
+  
+  // 2. 如果没有hash，匹配路径
+  if (!currentHash) {
+    for (const link of links) {
+      const to = link.getAttribute('to') || link.getAttribute('href')
+      if (!to) continue
+      
+      // 精确匹配路径（不含hash）
+      if (to === currentPath) {
+        return link
+      }
+    }
+  }
+  
+  // 3. 如果当前在首页且有hash，匹配对应的hash链接
+  if ((currentPath === '/home' || currentPath === '/') && currentHash) {
+    for (const link of links) {
+      const to = link.getAttribute('to') || link.getAttribute('href')
+      if (!to) continue
+      
+      if (to === `/home${currentHash}`) {
+        return link
+      }
+    }
+  }
+  
+  // 4. 默认返回首页链接（只在路径为/或/home且无hash时）
+  if ((currentPath === '/home' || currentPath === '/') && !currentHash) {
+    for (const link of links) {
+      const to = link.getAttribute('to') || link.getAttribute('href')
+      if (to === '/home' && !to.includes('#')) {
+        return link
+      }
+    }
+  }
+  
+  return null
+}
+
+// 更新激活链接
+const updateActiveLink = () => {
+  const currentPath = route.path
+  const currentHash = route.hash
+  
+  // 移除所有链接的 active 类
+  if (navLinksRef.value) {
+    const allLinks = navLinksRef.value.querySelectorAll('.nav-link')
+    allLinks.forEach(link => link.classList.remove('active'))
+    
+    // 移除所有下拉菜单项的 active 类
+    const allDropdownItems = document.querySelectorAll('.dropdown-item')
+    allDropdownItems.forEach(item => item.classList.remove('active'))
+  }
+  
+  // 如果是竞赛页面，特殊处理
+  if (currentPath.includes('/competition')) {
+    // 找到对应的下拉菜单项并激活
+    const dropdownItems = document.querySelectorAll('.dropdown-item')
+    let activatedDropdownItem = null
+    
+    dropdownItems.forEach(item => {
+      const to = item.getAttribute('to') || item.getAttribute('href')
+      if (to && to === currentPath) {
+        item.classList.add('active')
+        activatedDropdownItem = item
+      }
+    })
+    
+    // 给"竞赛活动"这个父级链接添加active类
+    const competitionParent = navLinksRef.value?.querySelector('.nav-dropdown .nav-link')
+    if (competitionParent && activatedDropdownItem) {
+      competitionParent.classList.add('active')
+      activeLink.value = competitionParent
+      moveIndicator(competitionParent)
+    }
+  } else {
+    // 其他页面使用正常的查找逻辑
+    const newActiveLink = findActiveLinkByRoute()
+    if (newActiveLink) {
+      activeLink.value = newActiveLink
+      newActiveLink.classList.add('active')
+      moveIndicator(newActiveLink)
+    }
+  }
+}
+
 // 处理导航链接鼠标悬停
 const handleNavLinkMouseEnter = (event) => {
+  // 如果是非激活链接，不移动指示器
+  if (event.target.classList.contains('nav-link-inactive')) {
+    return
+  }
   moveIndicator(event.target)
+}
+
+// 处理导航区域鼠标离开
+const handleNavCenterMouseLeave = () => {
+  // 恢复到当前激活的链接
+  if (activeLink.value) {
+    moveIndicator(activeLink.value)
+  }
 }
 
 // 初始化活动指示器
 const initializeIndicator = () => {
   setTimeout(() => {
-    if (navLinksRef.value) {
-      const firstLink = navLinksRef.value.querySelector('.nav-link')
-      if (firstLink) {
-        moveIndicator(firstLink)
-      }
-    }
+    updateActiveLink()
   }, 100)
 }
 
@@ -144,8 +275,24 @@ const initUserStatus = () => {
   }
 }
 
+// 监听路由变化
+watch(() => route.path, () => {
+  updateActiveLink()
+})
+
+watch(() => route.hash, () => {
+  updateActiveLink()
+})
+
 // 组件挂载时绑定事件和初始化
 onMounted(() => {
+  // 根据 transparent prop 设置初始状态
+  if (!props.transparent && navbar.value) {
+    // 非透明页面，移除透明类，确保导航栏一直是白色的
+    navbar.value.classList.remove('navbar-transparent')
+    isNavTransparent = false
+  }
+  
   // 监听滚动事件
   window.addEventListener('scroll', handleScroll)
   // 初始执行一次滚动处理（确保初始状态正确）
@@ -164,6 +311,8 @@ onMounted(() => {
     navLinks.forEach(link => {
       link.addEventListener('mouseenter', handleNavLinkMouseEnter)
     })
+    // 为导航中心区域绑定鼠标离开事件
+    navLinksRef.value.addEventListener('mouseleave', handleNavCenterMouseLeave)
   }
 })
 
@@ -179,6 +328,8 @@ onUnmounted(() => {
     navLinks.forEach(link => {
       link.removeEventListener('mouseenter', handleNavLinkMouseEnter)
     })
+    // 移除鼠标离开事件
+    navLinksRef.value.removeEventListener('mouseleave', handleNavCenterMouseLeave)
   }
 })
 </script>
@@ -220,7 +371,7 @@ body {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   transition: background-color 0.5s ease, box-shadow 0.4s ease, padding 0.3s ease, height 0.3s ease;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+
 }
 
 /* 透明状态样式 */
@@ -296,19 +447,39 @@ body {
   position: relative;
   padding: 0.5rem 0;
   color: #4b5563;
-  text-decoration: none;
+  text-decoration: none !important;
   font-weight: 500;
-  transition: color 0.3s ease;
+  transition: all 0.3s ease;
   font-size: 19px;
   display: inline-block;
+}
+
+/* 确保router-link没有默认样式 */
+.nav-link:focus,
+.nav-link:active,
+.nav-link:visited {
+  text-decoration: none !important;
+  outline: none;
 }
 
 .nav-link:hover {
   color: #4f46e5;
 }
 
-.nav-link.active {
-  color: #4f46e5;
+/* 非激活的导航链接（职业规划、个人主页） */
+.nav-link.nav-link-inactive {
+  cursor: default;
+}
+
+.nav-link.nav-link-inactive:hover {
+  color: #4b5563;
+}
+
+.nav-link.active,
+.nav-link.router-link-exact-active {
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 1px rgba(79, 70, 229, 0.3);
 }
 
 /* 透明状态时导航链接为白色 */
@@ -320,20 +491,34 @@ body {
   color: #e0d7ff;
 }
 
+/* 透明状态时非激活链接保持原色 */
+.navbar-transparent .nav-link.nav-link-inactive:hover {
+  color: #ffffff;
+}
+
+.navbar-transparent .nav-link.active,
+.navbar-transparent .nav-link.router-link-exact-active {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
 /* 活动指示器 */
 .active-indicator {
   position: absolute;
   bottom: 0;
   left: 0;
-  height: 3px;
+  height: 4px;
   background: linear-gradient(90deg, #4f46e5, #a855f7);
-  border-radius: 3px;
+  border-radius: 4px;
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
 }
 
 /* 透明状态时活动指示器为白色 */
 .navbar-transparent .active-indicator {
   background: linear-gradient(90deg, #ffffff, #e0d7ff);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.5);
 }
 
 .nav-auth {
@@ -440,6 +625,10 @@ body {
   display: inline-block;
 }
 
+.nav-dropdown .nav-link {
+  cursor: pointer;
+}
+
 .dropdown-menu {
   display: none;
   position: absolute;
@@ -451,23 +640,41 @@ body {
   z-index: 1000;
   border-radius: 6px;
   padding: 8px 0;
-  margin-top: -2px;
+  margin-top: -5px;
 }
 
 .dropdown-item {
   display: block;
   padding: 10px 20px;
   color: #4a2599;
-  text-decoration: none;
+  text-decoration: none !important;
   font-size: 15px;
   text-align: left;
   transition: all 0.2s;
+  font-weight: 500;
+}
+
+/* 确保dropdown-item没有默认样式 */
+.dropdown-item:focus,
+.dropdown-item:active,
+.dropdown-item:visited {
+  text-decoration: none !important;
+  outline: none;
+  color: #4a2599;
 }
 
 .dropdown-item:hover {
   background-color: #f3e8ff;
   color: #6a3dc4;
   padding-left: 22px;
+}
+
+.dropdown-item.active,
+.dropdown-item.router-link-exact-active {
+  background-color: #f3e8ff;
+  color: #4f46e5 !important;
+  font-weight: 700;
+  border-left: 3px solid #4f46e5;
 }
 
 .nav-dropdown:hover .dropdown-menu {

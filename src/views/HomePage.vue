@@ -1,9 +1,9 @@
 <template>
   <div class="home-page">
     <MouseFollower />
-    <!-- <TriangleBackground class="triangle-background"/> -->
+    <TriangleBackground class="triangle-background"/>
     <!-- 使用共享导航组件 -->
-    <NavBar :transparent="isNavTransparent" :userInfo="userInfo" />
+    <NavBar :transparent="true" />
 
     <!-- 轮播图容器 -->
     <div class="hero-slides">
@@ -87,6 +87,7 @@
             <Shalou class="title-icon Shalou-near" />
             <h2 class="section-title">职业规划</h2>
             <span class="view-more-container"><a href="" class="view-more">查看更多-></a></span>
+
           </div>
           
           <CareerPlanning />
@@ -105,9 +106,11 @@
         <Relax />
       </section>
     </div>
-    
     <!-- Footer -->
     <Footer />
+    
+    <!-- Live2D Widget Assistant -->
+    <WankoAssistant />
   </div>
 </template>
 
@@ -132,6 +135,7 @@ import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
 import TriangleBackground from "../components/TriangleBackground.vue";
+import WankoAssistant from "../components/WankoAssistant.vue";
 export default {
   name: "HomePage",
   components: {
@@ -150,10 +154,10 @@ export default {
     Footer,
     CareerPlanning,
     Star,
+    WankoAssistant,
   },
   setup() {
     const router = useRouter();
-    const isNavTransparent = ref(true);
     const heroRef = ref(null);
     const currentIndex = ref(0);
     const withTransition = ref(true);
@@ -300,16 +304,6 @@ export default {
         return;
       }
 
-      // 导航栏透明度监听
-      const observer = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          isNavTransparent.value = entry.isIntersecting;
-        },
-        { threshold: 0.2 }
-      );
-      if (heroRef.value) observer.observe(heroRef.value);
-
       // 启动轮播
       startAutoSlide();
 
@@ -430,7 +424,6 @@ export default {
       // 清理函数
       onUnmounted(() => {
         stopAutoSlide();
-        if (observer && heroRef.value) observer.unobserve(heroRef.value);
         if (competitionObserver && competitionSection) {
           competitionObserver.unobserve(competitionSection);
         }
@@ -458,7 +451,6 @@ export default {
     };
 
     return {
-      isNavTransparent,
       heroRef,
       currentSlide,
       currentIndex,

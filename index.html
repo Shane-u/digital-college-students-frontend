@@ -1,18 +1,69 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>数字化大学生系统</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数字化大学生系统</title>
+  <!-- <script src="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js"></script> -->
+  <script>
+    // live2d_path 参数建议使用绝对路径
+    const live2d_path = "https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/";
+    //const live2d_path = "/live2d-widget/";
+
+    // 封装异步加载资源的方法
+    function loadExternalResource(url, type) {
+      return new Promise((resolve, reject) => {
+        let tag;
+
+        if (type === "css") {
+          tag = document.createElement("link");
+          tag.rel = "stylesheet";
+          tag.href = url;
+        }
+        else if (type === "js") {
+          tag = document.createElement("script");
+          tag.src = url;
+        }
+        if (tag) {
+          tag.onload = () => resolve(url);
+          tag.onerror = () => reject(url);
+          document.head.appendChild(tag);
+        }
+      });
+    }
+
+    // 加载 waifu.css live2d.min.js waifu-tips.js
+    if (screen.width >= 768) {
+      Promise.all([
+        loadExternalResource(live2d_path + "waifu.css", "css"),
+        loadExternalResource(live2d_path + "live2d.min.js", "js"),
+        loadExternalResource(live2d_path + "waifu-tips.js", "js")
+      ]).then(() => {
+        // 配置选项的具体用法见 README.md
+        initWidget({
+          drag: true,
+          waifuPath: live2d_path + "waifu-tips.json",
+          // apiPath: "https://live2d.fghrsh.net/api/",
+          cdnPath: "https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/",
+          tools: ["hitokoto", "switch-model", "switch-texture", "quit"],
+        });
+
+        let tips = document.querySelector("#waifu-tips");
+        tips.style.display = "none";
+        let span = document.querySelector("#waifu-toggle span")
+        span.innerHTML = "打开/关闭";
+      });
+    }
+    localStorage.setItem('modelId', "2");
+  </script>
+
+</head>
+
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
 </html>
-
-
-
-
-

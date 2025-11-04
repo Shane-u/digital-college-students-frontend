@@ -1,7 +1,8 @@
 <template>
     <div class="consultation-container">
       <div class="consultation-header">
-        <h3 class="consultation-title">最新竞赛 <span class="top10-text">TOP10</span></h3>
+        <h3 class="consultation-title">最新竞赛 <span class="top10-text">TOP10</span>
+        <span style="font-size: 14px; color: #666;">(数据来源于赛氪网)</span></h3>
         <div class="divider"></div>
       </div>
       <div class="consultation-list">

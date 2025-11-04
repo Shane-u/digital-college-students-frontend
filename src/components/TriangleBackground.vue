@@ -58,7 +58,7 @@ export default {
         this.red = config.red
         this.green = config.green
         this.blue = config.blue
-        this.opacity = 0.2
+        this.opacity = 0.08
       }
 
       update(globalScale, bounceY) {
