@@ -73,12 +73,21 @@ import NavBar from "../components/NavBar.vue";
 import SidebarMenu from "../components/SidebarMenu.vue";
 import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import SearchBar from "../components/SearchBar.vue";
+import {
+  getGrowthRecordList,
+  getMilestoneStatistics,
+  searchGrowthRecords
+} from "../api/growthRecord";
 
 const router = useRouter();
 
 // 里程碑数据
 const milestones = ref([]);
 const searchKeyword = ref("");
+const milestoneStats = ref({
+  milestoneCount: 0,
+  latestRecordTime: ""
+});
 
 // 热门标签
 const hotTags = computed(() => {
@@ -106,15 +115,15 @@ const hotTags = computed(() => {
   return tagArray.slice(0, 3);
 });
 
-// 总里程碑数
-const totalMilestones = computed(() => milestones.value.length);
+// 总里程碑数（使用后端统计数据）
+const totalMilestones = computed(() => milestoneStats.value.milestoneCount || 0);
 
 // 记录时长（天数）
 const totalTags = computed(() => {
   if (milestones.value.length === 0) return '0天';
   
-  // 找到最早和最晚的里程碑
-  const dates = milestones.value.map(m => new Date(m.date));
+  // 找到最早和最晚的里程碑（使用recordTime字段）
+  const dates = milestones.value.map(m => new Date(m.recordTime));
   const earliest = new Date(Math.min(...dates));
   const latest = new Date(Math.max(...dates));
   
@@ -126,20 +135,33 @@ const totalTags = computed(() => {
   return `${diffDays}天`;
 });
 
-// 最近记录日期
+// 最近记录日期（使用后端统计数据）
 const latestRecordDate = computed(() => {
-  if (milestones.value.length === 0) return "暂无记录";
-
-  const latestMilestone = milestones.value.reduce((latest, current) => {
-    return new Date(current.date) > new Date(latest.date) ? current : latest;
-  });
-
-  return latestMilestone.date;
+  if (milestoneStats.value.latestRecordTime) {
+    // 格式化日期为 YYYY-MM-DD
+    return milestoneStats.value.latestRecordTime.split('T')[0];
+  }
+  return "暂无记录";
 });
 
 // 搜索功能
-const handleSearch = (keyword) => {
+const handleSearch = async (keyword) => {
   searchKeyword.value = keyword;
+  
+  if (!keyword) {
+    // 如果搜索关键词为空，重新加载里程碑
+    await loadMilestones();
+  } else {
+    // 使用后端搜索API，然后过滤出4星及以上的
+    try {
+      const data = await searchGrowthRecords(keyword);
+      if (data) {
+        milestones.value = data.filter(r => r.importance >= 4);
+      }
+    } catch (error) {
+      console.error('搜索失败:', error);
+    }
+  }
 };
 
 // 处理主时间节点点击（年份）
@@ -165,35 +187,16 @@ const handleSubDateClick = (subItem) => {
 
 // 成长轨迹时间线数据
 const milestoneTimeline = computed(() => {
-  // 从localStorage获取成长记录
-  const savedRecords = localStorage.getItem("growthRecords");
-  if (!savedRecords) {
-    return getDefaultTimeline();
-  }
-
-  const records = JSON.parse(savedRecords);
-
-  // 过滤重要程度>=4的记录
-  let importantRecords = records.filter((r) => r.importance >= 4);
-
-  // 根据搜索关键词过滤
-  if (searchKeyword.value) {
-    const keyword = searchKeyword.value.toLowerCase();
-    importantRecords = importantRecords.filter((record) => {
-      const description = (record.description || "").toLowerCase();
-      const reflection = (record.reflection || "").toLowerCase();
-      return description.includes(keyword) || reflection.includes(keyword);
-    });
-  }
-
-  if (importantRecords.length === 0) {
+  // 使用从后端加载的里程碑数据
+  if (milestones.value.length === 0) {
     return getDefaultTimeline();
   }
 
   // 按年份分组
   const yearGroups = {};
-  importantRecords.forEach((record) => {
-    const year = new Date(record.date).getFullYear();
+  milestones.value.forEach((record) => {
+    if (!record.recordTime) return; // 跳过没有recordTime的记录
+    const year = new Date(record.recordTime).getFullYear();
     if (!yearGroups[year]) {
       yearGroups[year] = [];
     }
@@ -208,7 +211,10 @@ const milestoneTimeline = computed(() => {
     .sort()
     .forEach((year) => {
       const yearRecords = yearGroups[year];
-      yearRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
+      yearRecords.sort((a, b) => {
+        if (!a.recordTime || !b.recordTime) return 0;
+        return new Date(a.recordTime) - new Date(b.recordTime);
+      });
 
       timeline.push({
         id: id++,
@@ -217,8 +223,8 @@ const milestoneTimeline = computed(() => {
         content: `共${yearRecords.length}个重要里程碑`,
         isShow: true,
         children: yearRecords.map((record) => ({
-          name: record.date,
-          content: record.description || record.reflection || "重要事件",
+          name: record.recordTime ? record.recordTime.split('T')[0] : '', // 只取日期部分
+          content: record.eventDesc || record.reflection || "重要事件",
         })),
       });
     });
@@ -301,18 +307,43 @@ const addMilestone = () => {
   window.location.href = "/growth/record";
 };
 
-// 加载里程碑数据
-const loadMilestones = () => {
-  const savedRecords = localStorage.getItem("growthRecords");
-  if (savedRecords) {
-    const records = JSON.parse(savedRecords);
-    // 过滤重要程度>=4的记录作为里程碑
-    milestones.value = records.filter((r) => r.importance >= 4);
+// 加载里程碑数据（4星及以上）
+const loadMilestones = async () => {
+  try {
+    const data = await getGrowthRecordList({
+      current: 1,
+      pageSize: 1000,
+      minImportance: 4, // 只获取4星及以上
+      sortField: 'recordTime',
+      sortOrder: 'descend'
+    });
+    
+    if (data && data.records) {
+      milestones.value = data.records;
+    } else {
+      milestones.value = [];
+    }
+  } catch (error) {
+    console.error('加载里程碑失败:', error);
+    milestones.value = [];
   }
 };
 
-onMounted(() => {
-  loadMilestones();
+// 加载里程碑统计信息
+const loadMilestoneStatistics = async () => {
+  try {
+    const data = await getMilestoneStatistics();
+    if (data) {
+      milestoneStats.value = data;
+    }
+  } catch (error) {
+    console.error('加载里程碑统计信息失败:', error);
+  }
+};
+
+onMounted(async () => {
+  await loadMilestones();
+  await loadMilestoneStatistics();
 });
 </script>
 

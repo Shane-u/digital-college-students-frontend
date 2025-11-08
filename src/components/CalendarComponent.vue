@@ -33,15 +33,6 @@
         @click="selectDay(day)"
       >
         <div class="day-number">{{ day.day }}</div>
-        <!-- 操作按钮区域 -->
-        <div v-if="day.hasRecord" class="day-actions" @click.stop>
-          <button class="action-btn preview-btn" @click="previewRecord(day)" title="预览">
-            <img src="../assets/chengzhang_icon/preview.png" alt="预览" class="btn-icon" />
-          </button>
-          <button class="action-btn delete-btn" @click="deleteRecord(day)" title="删除">
-            <img src="../assets/chengzhang_icon/trash.png" alt="删除" class="btn-icon" />
-          </button>
-        </div>
         <div v-if="day.hasRecord && day.recordDescription" class="day-description">
           {{ day.recordDescription }}
         </div>
@@ -64,7 +55,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['selectDate', 'previewRecord', 'deleteRecord'])
+const emit = defineEmits(['selectDate'])
 
 // 当前显示的年月
 const today = new Date()
@@ -198,18 +189,6 @@ const selectDay = (day) => {
   emit('selectDate', day.dateStr)
 }
 
-// 预览记录
-const previewRecord = (day) => {
-  if (!day.isCurrentMonth) return
-  emit('previewRecord', day.dateStr)
-}
-
-// 删除记录
-const deleteRecord = (day) => {
-  if (!day.isCurrentMonth) return
-  emit('deleteRecord', day.dateStr)
-}
-
 // 监听外部传入的选中日期
 watch(() => props.selectedDate, (newVal) => {
   if (newVal) {
@@ -341,14 +320,23 @@ watch(() => props.selectedDate, (newVal) => {
   z-index: 0;
 }
 
-.calendar-day.today .day-number {
+.calendar-day.today {
   color: #b8a0c8;
+}
+
+.calendar-day.today .day-number {
+  color: #7d5196;
   font-weight: 700;
+  font-size: 20px;
 }
 
 .calendar-day.selected {
   background: rgba(184, 160, 200, 0.1);
   box-shadow: inset 0 0 0 3px #b8a0c8;
+}
+
+.calendar-day.has-record {
+  background: rgba(184, 160, 200, 0.08);
 }
 
 .day-number {
@@ -361,7 +349,7 @@ watch(() => props.selectedDate, (newVal) => {
 
 .day-description {
   font-size: 12px;
-  color: white;
+  color: #666;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -371,59 +359,15 @@ watch(() => props.selectedDate, (newVal) => {
   -webkit-box-orient: vertical;
   word-break: break-all;
   width: 100%;
-  background: #b8a0c8;
-  padding: 4px 6px;
-  border-radius: 4px;
 }
 
-.day-actions {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  z-index: 10;
+.calendar-day.today .day-weight {
+  background: rgba(255, 255, 255, 0.3);
+  /* color: white; */
 }
 
-.calendar-day:hover .day-actions {
-  opacity: 1;
-}
-
-.action-btn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.action-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.preview-btn:hover {
-  background: #e3f2fd;
-}
-
-.delete-btn:hover {
-  background: #ffebee;
-}
-
-.btn-icon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
+.calendar-day.today .day-description {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* 响应式调整 */

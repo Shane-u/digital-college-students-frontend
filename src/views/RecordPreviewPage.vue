@@ -25,9 +25,9 @@
         <!-- 记录详情 -->
         <div class="record-body">
           <!-- 事件描述 -->
-          <div v-if="record.description" class="record-section">
+          <div v-if="record.eventDesc" class="record-section">
             <h3 class="section-title">事件描述</h3>
-            <div class="section-content">{{ record.description }}</div>
+            <div class="section-content">{{ record.eventDesc }}</div>
           </div>
 
           <!-- 重要程度 -->
@@ -48,7 +48,7 @@
             <div class="section-content">
               <div class="images-grid">
                 <div v-for="(image, index) in record.images" :key="index" class="image-item">
-                  <img :src="image" :alt="`图片 ${index + 1}`" @click="previewImage(image)" />
+                  <img :src="image.imageUrl || image" :alt="image.imageName || `图片 ${index + 1}`" @click="previewImage(image.imageUrl || image)" />
                 </div>
               </div>
             </div>
@@ -59,11 +59,22 @@
             <h3 class="section-title">相关文件</h3>
             <div class="section-content">
               <div class="files-list">
-                <div v-for="(file, index) in record.files" :key="index" class="file-item" @click="previewFile(file)">
-                  <span class="file-icon">{{ getFileIcon(file.name) }}</span>
-                  <span class="file-name">{{ file.name }}</span>
-                  <button class="file-preview-btn" v-if="canPreviewFile(file.name)">
+                <div v-for="(file, index) in record.files" :key="index" class="file-item">
+                  <span class="file-icon">{{ getFileIcon(file.fileName || file.name) }}</span>
+                  <span class="file-name">{{ file.fileName || file.name }}</span>
+                  <button 
+                    v-if="canPreviewFile(file.fileName || file.name)" 
+                    class="file-preview-btn" 
+                    @click.stop="previewFile(file)"
+                  >
                     预览
+                  </button>
+                  <button 
+                    v-else 
+                    class="file-download-btn" 
+                    @click.stop="downloadFile(file)"
+                  >
+                    下载
                   </button>
                 </div>
               </div>
@@ -111,10 +122,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { ElMessage } from 'element-plus'
+import { getGrowthRecordList, getGrowthRecord } from '../api/growthRecord'
+import request from '../api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,11 +139,13 @@ const filePreviewVisible = ref(false)
 const previewFileUrl = ref('')
 const previewFileName = ref('')
 const printArea = ref(null)
+let currentBlobUrl = null // 保存当前的blob URL，用于清理
 
 // 格式化日期
 const formattedDate = computed(() => {
-  if (!record.value.date) return ''
-  const date = new Date(record.value.date)
+  const dateStr = record.value.recordTime || record.value.date
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
   const year = date.getFullYear()
   const month = date.getMonth() + 1
   const day = date.getDate()
@@ -179,41 +194,99 @@ const getFileIcon = (fileName) => {
   return iconMap[ext] || '📎'
 }
 
-// 判断是否可以预览文件
+// 判断是否可以预览文件（只支持PDF）
 const canPreviewFile = (fileName) => {
   const ext = fileName.split('.').pop().toLowerCase()
-  return ['pdf', 'doc', 'docx'].includes(ext)
+  return ext === 'pdf'
 }
 
-// 预览文件
+// 预览文件（只支持PDF）
 const previewFile = async (file) => {
-  const ext = file.name.split('.').pop().toLowerCase()
+  const fileName = file.fileName || file.name
+  const ext = fileName.split('.').pop().toLowerCase()
   
-  if (!canPreviewFile(file.name)) {
-    ElMessage.warning('该文件类型不支持在线预览')
+  if (ext === 'pdf') {
+    // PDF 文件使用浏览器自带的PDF查看器预览
+    previewFileName.value = fileName
+    const fileUrl = file.fileUrl || file.url
+    if (!fileUrl) {
+      ElMessage.error('文件URL不存在，无法预览')
+      return
+    }
+    
+    try {
+      ElMessage.info('正在加载PDF文件...')
+      
+      // 判断fileUrl是完整URL还是相对路径
+      let requestUrl = fileUrl
+      if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+        // 相对路径，需要拼接baseURL
+        // 如果fileUrl以/开头，去掉开头的/，因为baseURL已经包含/api
+        requestUrl = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`
+      }
+      
+      // 使用axios获取PDF文件（会自动携带认证token）
+      const response = await request({
+        url: requestUrl,
+        method: 'GET',
+        responseType: 'blob', // 重要：指定响应类型为blob
+        headers: {
+          'Accept': 'application/pdf'
+        }
+      })
+      
+      // 清理之前的blob URL（如果存在）
+      if (currentBlobUrl) {
+        URL.revokeObjectURL(currentBlobUrl)
+      }
+      
+      // 创建blob URL
+      const blob = new Blob([response], { type: 'application/pdf' })
+      const blobUrl = URL.createObjectURL(blob)
+      currentBlobUrl = blobUrl
+      previewFileUrl.value = blobUrl
+      filePreviewVisible.value = true
+      ElMessage.success('PDF加载成功')
+    } catch (error) {
+      console.error('加载PDF失败:', error)
+      if (error.response) {
+        ElMessage.error(`加载PDF失败: ${error.response.status} ${error.response.statusText}`)
+      } else if (error.request) {
+        ElMessage.error('无法连接到服务器，请检查网络连接')
+      } else {
+        ElMessage.error('加载PDF文件失败，请稍后重试')
+      }
+    }
+  } else {
+    // 其他文件类型只支持下载
+    downloadFile(file)
+  }
+}
+
+// 下载文件
+const downloadFile = (file) => {
+  const fileUrl = file.fileUrl || file.url
+  const fileName = file.fileName || file.name
+  
+  if (!fileUrl) {
+    ElMessage.error('文件URL不存在，无法下载')
     return
   }
   
-  previewFileName.value = file.name
+  // 创建下载链接
+  const link = document.createElement('a')
+  link.href = fileUrl
+  link.download = fileName
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
   
-  if (ext === 'pdf') {
-    // PDF 文件直接预览
-    previewFileUrl.value = file.url || URL.createObjectURL(file.raw)
-    filePreviewVisible.value = true
-  } else if (ext === 'doc' || ext === 'docx') {
-    // Word 文件使用 Microsoft Office Online Viewer
-    const fileUrl = file.url || URL.createObjectURL(file.raw)
-    // 注意：这需要文件是公开可访问的URL，本地base64可能无法预览
-    previewFileUrl.value = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`
-    filePreviewVisible.value = true
-    
-    // 提示用户
-    ElMessage.info('Word文件预览需要网络连接，如无法加载请下载查看')
-  }
+  ElMessage.success('文件下载已开始')
 }
 
 // 加载记录数据
-onMounted(() => {
+onMounted(async () => {
   const dateStr = route.params.date
   if (!dateStr) {
     ElMessage.error('未找到记录')
@@ -221,20 +294,54 @@ onMounted(() => {
     return
   }
 
-  // 从 localStorage 加载记录
-  const savedRecords = localStorage.getItem('growthRecords')
-  if (savedRecords) {
-    const records = JSON.parse(savedRecords)
-    const foundRecord = records.find(r => r.date === dateStr)
-    if (foundRecord) {
-      record.value = foundRecord
+  try {
+    // 通过日期查询记录列表
+    const data = await getGrowthRecordList({
+      current: 1,
+      pageSize: 100,
+      sortField: 'recordTime',
+      sortOrder: 'descend'
+    })
+    
+    if (data && data.records) {
+      // 找到对应日期的记录
+      const foundRecord = data.records.find(r => {
+        const recordDate = r.recordTime ? r.recordTime.split('T')[0] : ''
+        return recordDate === dateStr
+      })
+      
+      if (foundRecord) {
+        record.value = foundRecord
+      } else {
+        ElMessage.error('未找到该日期的记录')
+        router.back()
+      }
     } else {
-      ElMessage.error('未找到该日期的记录')
+      ElMessage.error('未找到记录数据')
       router.back()
     }
-  } else {
-    ElMessage.error('没有记录数据')
+  } catch (error) {
+    console.error('加载记录失败:', error)
+    ElMessage.error('加载记录失败')
     router.back()
+  }
+})
+
+// 监听预览对话框关闭，清理blob URL
+watch(filePreviewVisible, (newVal) => {
+  if (!newVal && currentBlobUrl) {
+    // 对话框关闭时，释放blob URL
+    URL.revokeObjectURL(currentBlobUrl)
+    currentBlobUrl = null
+    previewFileUrl.value = ''
+  }
+})
+
+// 组件卸载时清理blob URL
+onUnmounted(() => {
+  if (currentBlobUrl) {
+    URL.revokeObjectURL(currentBlobUrl)
+    currentBlobUrl = null
   }
 })
 </script>
@@ -445,6 +552,21 @@ onMounted(() => {
 
 .file-preview-btn:hover {
   background: #9575b5;
+}
+
+.file-download-btn {
+  padding: 5px 15px;
+  background: #67c23a;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.file-download-btn:hover {
+  background: #85ce61;
 }
 
 .record-footer {

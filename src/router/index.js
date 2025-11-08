@@ -9,6 +9,7 @@ import GrowthRecordPage from '../views/GrowthRecordPage.vue'
 import MilestonePage from '../views/MilestonePage.vue'
 import PhotoWallPage from '../views/PhotoWallPage.vue'
 import RecordPreviewPage from '../views/RecordPreviewPage.vue'
+import ResumeBuilderPage from '../views/ResumeBuilderPage.vue'
 
 const routes = [
   {
@@ -64,6 +65,21 @@ const routes = [
     path: '/growth/record/preview/:date',
     name: 'RecordPreview',
     component: RecordPreviewPage
+  },
+  {
+    path: '/career/resume',
+    name: 'ResumeBuilder',
+    component: ResumeBuilderPage
+  },
+  {
+    path: '/career/showcase',
+    name: 'CareerShowcase',
+    component: () => import('../views/CareerShowcasePage.vue')
+  },
+  {
+    path: '/career/planning',
+    name: 'CareerPlanning',
+    component: () => import('../views/CareerPlanningPage.vue')
   },
 ]
 

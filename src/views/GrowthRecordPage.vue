@@ -163,6 +163,16 @@ import SidebarMenu from '../components/SidebarMenu.vue'
 import CalendarComponent from '../components/CalendarComponent.vue'
 import SearchBar from '../components/SearchBar.vue'
 import { ElMessage } from 'element-plus'
+import {
+  uploadImage,
+  uploadFile,
+  addGrowthRecord,
+  updateGrowthRecord,
+  deleteGrowthRecord,
+  getGrowthRecordList,
+  getStatistics,
+  searchGrowthRecords
+} from '../api/growthRecord'
 
 const router = useRouter()
 const route = useRoute()
@@ -173,9 +183,15 @@ const searchKeyword = ref('')
 const selectedDate = ref('')
 const dialogVisible = ref(false)
 const dialogTitle = ref('添加成长记录')
+const statistics = ref({
+  recordCount: 0,
+  imageCount: 0,
+  fileCount: 0
+})
 
 // 表单数据
 const recordForm = ref({
+  id: null,
   date: '',
   description: '',
   images: [],
@@ -185,39 +201,46 @@ const recordForm = ref({
 })
 
 // 搜索功能
-const handleSearch = (keyword) => {
+const handleSearch = async (keyword) => {
   searchKeyword.value = keyword
+  
+  if (!keyword) {
+    // 如果搜索关键词为空，重新加载所有记录
+    await loadRecords()
+  } else {
+    // 使用后端搜索API
+    try {
+      const data = await searchGrowthRecords(keyword)
+      if (data) {
+        records.value = data
+      }
+    } catch (error) {
+      console.error('搜索失败:', error)
+    }
+  }
 }
 
-// 过滤后的记录
+// 过滤后的记录（现在直接返回records，因为搜索已经由后端处理）
 const filteredRecords = computed(() => {
-  if (!searchKeyword.value) {
-    return records.value
-  }
-  
-  const keyword = searchKeyword.value.toLowerCase()
-  return records.value.filter(record => {
-    const description = (record.description || '').toLowerCase()
-    const reflection = (record.reflection || '').toLowerCase()
-    return description.includes(keyword) || reflection.includes(keyword)
-  })
+  return records.value.map(record => ({
+    ...record,
+    date: record.recordTime ? record.recordTime.split('T')[0] : '',
+    description: record.eventDesc || '',
+    hasRecord: true
+  }))
 })
 
-// 统计数据
+// 统计数据（使用后端返回的数据）
 const totalRecords = computed(() => {
-  return records.value.length
-})
-
-const textRecords = computed(() => {
-  return records.value.filter(r => r.description && r.description.trim() !== '').length
+  return statistics.value.recordCount || 0
 })
 
 const photoRecords = computed(() => {
-  return records.value.filter(r => r.images && r.images.length > 0).length
+  return statistics.value.imageCount || 0
 })
 
 const fileRecords = computed(() => {
-  return records.value.filter(r => r.files && r.files.length > 0).length
+  return statistics.value.fileCount || 0
 })
 
 // 格式化选中的日期
@@ -233,39 +256,65 @@ const formattedSelectedDate = computed(() => {
 })
 
 // 选择日期
-const handleSelectDate = (dateStr) => {
+const handleSelectDate = (dateStr, openDialog = true) => {
   console.log('点击了日期:', dateStr)
   selectedDate.value = dateStr
   
-  // 检查是否已有记录
-  const existingRecord = records.value.find(r => r.date === dateStr)
+  // 如果不需要打开弹窗，直接返回
+  if (!openDialog) {
+    return
+  }
+  
+  // 检查是否已有记录（使用recordTime字段）
+  const existingRecord = records.value.find(r => {
+    const recordDate = r.recordTime ? r.recordTime.split('T')[0] : r.recordTime
+    return recordDate === dateStr
+  })
   
   if (existingRecord) {
     // 编辑已有记录
     dialogTitle.value = '编辑成长记录'
     
-    // 转换 base64 图片为 el-upload 需要的格式
+    // 转换后端图片数据为 el-upload 需要的格式
     const convertedImages = []
     if (existingRecord.images && existingRecord.images.length > 0) {
-      existingRecord.images.forEach((base64Str, index) => {
-        if (typeof base64Str === 'string' && base64Str.startsWith('data:image')) {
-          convertedImages.push({
-            name: `image-${index}.jpg`,
-            url: base64Str,
-            uid: Date.now() + index
-          })
-        }
+      existingRecord.images.forEach((img, index) => {
+        convertedImages.push({
+          id: img.id,
+          name: img.imageName || `image-${index}.jpg`,
+          url: img.imageUrl,
+          uid: img.id || Date.now() + index
+        })
+      })
+    }
+    
+    // 转换后端文件数据为 el-upload 需要的格式
+    const convertedFiles = []
+    if (existingRecord.files && existingRecord.files.length > 0) {
+      existingRecord.files.forEach((file, index) => {
+        convertedFiles.push({
+          id: file.id,
+          name: file.fileName,
+          url: file.fileUrl,
+          uid: file.id || Date.now() + index
+        })
       })
     }
     
     recordForm.value = {
-      ...existingRecord,
-      images: convertedImages
+      id: existingRecord.id,
+      date: dateStr,
+      description: existingRecord.eventDesc || '',
+      images: convertedImages,
+      files: convertedFiles,
+      reflection: existingRecord.reflection || '',
+      importance: existingRecord.importance || 0
     }
   } else {
     // 创建新记录
     dialogTitle.value = '添加成长记录'
     recordForm.value = {
+      id: null,
       date: dateStr,
       description: '',
       images: [],
@@ -289,12 +338,21 @@ const addTodayRecord = () => {
 
 // 预览记录
 const handlePreviewRecord = (dateStr) => {
-  const record = records.value.find(r => r.date === dateStr)
+  console.log('处理预览请求，日期:', dateStr)
+  // 使用 recordTime 字段来匹配日期
+  const record = records.value.find(r => {
+    const recordDate = r.recordTime ? r.recordTime.split('T')[0] : ''
+    return recordDate === dateStr
+  })
   if (record) {
+    console.log('找到记录，跳转到预览页面')
     router.push({
       name: 'RecordPreview',
       params: { date: dateStr }
     })
+  } else {
+    console.error('未找到该日期的记录:', dateStr, '当前记录数:', records.value.length)
+    ElMessage.warning('未找到该日期的记录')
   }
 }
 
@@ -320,22 +378,34 @@ const handleDeleteRecord = (dateStr) => {
     }
   })
   
-  const handleDeleteClick = (e) => {
+  const handleDeleteClick = async (e) => {
     if (e.target.id === 'confirm-delete') {
       // 确认删除
-      const index = records.value.findIndex(r => r.date === dateStr)
-      if (index !== -1) {
-        records.value.splice(index, 1)
-        localStorage.setItem('growthRecords', JSON.stringify(records.value))
-        ElMessage.success('删除成功')
-        
-        // 关闭消息框
-        const messageBoxes = document.querySelectorAll('.el-message')
-        messageBoxes.forEach(box => {
-          if (box.querySelector('#confirm-delete')) {
-            box.remove()
-          }
-        })
+      const record = records.value.find(r => {
+        const recordDate = r.recordTime ? r.recordTime.split('T')[0] : r.recordTime
+        return recordDate === dateStr
+      })
+      
+      if (record && record.id) {
+        try {
+          await deleteGrowthRecord(record.id)
+          ElMessage.success('删除成功')
+          
+          // 重新加载数据
+          await loadRecords()
+          await loadStatistics()
+          
+          // 关闭消息框
+          const messageBoxes = document.querySelectorAll('.el-message')
+          messageBoxes.forEach(box => {
+            if (box.querySelector('#confirm-delete')) {
+              box.remove()
+            }
+          })
+        } catch (error) {
+          console.error('删除失败:', error)
+          ElMessage.error('删除失败，请重试')
+        }
       }
       document.removeEventListener('click', handleDeleteClick)
     } else if (e.target.id === 'cancel-delete') {
@@ -383,105 +453,116 @@ const saveRecord = async () => {
     return
   }
   
-  // 处理图片，转换为base64
-  const processedImages = []
-  for (const image of recordForm.value.images) {
-    if (image.raw) {
-      // 新上传的图片，需要转换
-      try {
-        const base64 = await convertFileToBase64(image)
-        processedImages.push(base64)
-      } catch (error) {
-        console.error('图片转换失败:', error)
+  try {
+    // 1. 上传新图片，获取图片ID
+    const imageIds = []
+    for (const image of recordForm.value.images) {
+      if (image.raw) {
+        // 新上传的图片
+        const uploadedImage = await uploadImage(image.raw, 2, recordForm.value.date)
+        imageIds.push(uploadedImage.id)
+      } else if (image.id) {
+        // 已存在的图片
+        imageIds.push(image.id)
       }
-    } else if (typeof image === 'string') {
-      // 字符串形式的 base64
-      processedImages.push(image)
-    } else if (image.url && typeof image.url === 'string') {
-      // 已存在的图片，直接使用 url (base64)
-      processedImages.push(image.url)
     }
+    
+    // 2. 上传新文件，获取文件ID
+    const fileIds = []
+    for (const file of recordForm.value.files) {
+      if (file.raw) {
+        // 新上传的文件
+        const uploadedFile = await uploadFile(file.raw)
+        fileIds.push(uploadedFile.id)
+      } else if (file.id) {
+        // 已存在的文件
+        fileIds.push(file.id)
+      }
+    }
+    
+    // 3. 构造记录时间（添加时分秒）
+    const recordTime = `${recordForm.value.date}T12:00:00`
+    
+    // 4. 创建或更新记录
+    const recordData = {
+      eventDesc: recordForm.value.description,
+      reflection: recordForm.value.reflection,
+      importance: recordForm.value.importance,
+      recordTime: recordTime,
+      imageIds: imageIds,
+      fileIds: fileIds
+    }
+    
+    if (recordForm.value.id) {
+      // 更新记录
+      recordData.id = recordForm.value.id
+      await updateGrowthRecord(recordData)
+      ElMessage.success('记录更新成功')
+    } else {
+      // 添加新记录
+      await addGrowthRecord(recordData)
+      ElMessage.success('记录添加成功')
+    }
+    
+    // 5. 关闭对话框并重新加载数据
+    dialogVisible.value = false
+    await loadRecords()
+    await loadStatistics()
+  } catch (error) {
+    console.error('保存记录失败:', error)
+    ElMessage.error('保存记录失败，请重试')
   }
-  
-  // 创建要保存的记录
-  const recordToSave = {
-    ...recordForm.value,
-    images: processedImages
-  }
-  
-  // 检查是否是编辑
-  const index = records.value.findIndex(r => r.date === recordToSave.date)
-  
-  if (index !== -1) {
-    // 更新记录
-    records.value[index] = recordToSave
-    ElMessage.success('记录更新成功')
-  } else {
-    // 添加新记录
-    records.value.push(recordToSave)
-    ElMessage.success('记录添加成功')
-  }
-  
-  // 保存到localStorage
-  localStorage.setItem('growthRecords', JSON.stringify(records.value))
-  
-  dialogVisible.value = false
 }
 
 // 加载记录
-const loadRecords = () => {
-  const savedRecords = localStorage.getItem('growthRecords')
-  if (savedRecords) {
-    records.value = JSON.parse(savedRecords)
-  } else {
-    // 添加一些模拟数据
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.getMonth() + 1
+const loadRecords = async () => {
+  try {
+    const data = await getGrowthRecordList({
+      current: 1,
+      pageSize: 1000, // 获取所有记录
+      sortField: 'recordTime',
+      sortOrder: 'descend'
+    })
     
-    records.value = [
-      {
-        date: `${year}-${String(month).padStart(2, '0')}-05`,
-        description: '完成项目第一阶段开发',
-        images: [],
-        files: [],
-        reflection: '今天完成了项目的核心功能，感觉很有成就感。',
-        importance: 4
-      },
-      {
-        date: `${year}-${String(month).padStart(2, '0')}-12`,
-        description: '参加技术分享会',
-        images: [],
-        files: [],
-        reflection: '学习了很多新技术，收获满满。',
-        importance: 3
-      },
-      {
-        date: `${year}-${String(month).padStart(2, '0')}-18`,
-        description: '通过代码审查',
-        images: [],
-        files: [],
-        reflection: '代码质量得到了认可。',
-        importance: 5
-      }
-    ]
+    if (data && data.records) {
+      records.value = data.records
+    } else {
+      records.value = []
+    }
+  } catch (error) {
+    console.error('加载记录失败:', error)
+    records.value = []
   }
 }
 
-onMounted(() => {
-  loadRecords()
+// 加载统计信息
+const loadStatistics = async () => {
+  try {
+    const data = await getStatistics()
+    if (data) {
+      statistics.value = data
+    }
+  } catch (error) {
+    console.error('加载统计信息失败:', error)
+  }
+}
+
+onMounted(async () => {
+  await loadRecords()
+  await loadStatistics()
   
   // 检查是否有从里程碑页面跳转过来的日期参数
   if (route.query.date) {
-    // 设置选中日期并打开对话框
-    handleSelectDate(route.query.date)
+    // 从里程碑页面跳转过来时，只选中日期，不打开弹窗
+    handleSelectDate(route.query.date, false)
   }
 })
 
 // 监听路由变化，处理日期定位
 watch(() => route.query.date, (newDate) => {
   if (newDate) {
-    handleSelectDate(newDate)
+    // 从里程碑页面跳转过来时，只选中日期，不打开弹窗
+    handleSelectDate(newDate, false)
     // 清除查询参数（可选）
     // router.replace({ query: {} })
   }

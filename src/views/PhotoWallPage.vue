@@ -110,7 +110,7 @@
                     @click.stop="deletePhoto(photo)" 
                     title="删除照片"
                   >
-                    <img src="../assets/chengzhang_icon/trash.png" alt="删除" class="delete-icon" />
+                    <img :src="trashIcon" alt="删除" class="delete-icon" />
                   </button>
                 </div>
                 <div class="photo-meta">
@@ -239,6 +239,15 @@ import NavBar from '../components/NavBar.vue'
 import SidebarMenu from '../components/SidebarMenu.vue'
 import SearchBar from '../components/SearchBar.vue'
 import { ElDialog, ElMessage } from 'element-plus'
+import {
+  uploadImage,
+  addGrowthRecord,
+  getGrowthRecordList,
+  getPhotoWallStatistics,
+  searchGrowthRecords,
+  deleteImage
+} from '../api/growthRecord'
+import trashIcon from '../assets/chengzhang_icon/trash.png'
 
 const viewDialogVisible = ref(false)
 const uploadDialogVisible = ref(false)
@@ -248,6 +257,11 @@ const searchKeyword = ref('')
 const batchDeleteMode = ref(false) // 批量删除模式
 const selectedPhotos = ref([]) // 选中的照片
 const currentGroup = ref(null) // 当前操作的月份组
+const photoStats = ref({
+  imageCount: 0,
+  latestRecordTime: '',
+  totalDays: 0
+})
 const uploadForm = ref({
   title: '',
   description: '',
@@ -256,94 +270,120 @@ const uploadForm = ref({
   syncToGrowthRecord: true
 })
 
-// 从成长记录中加载照片
-const loadPhotosFromRecords = () => {
-  const photos = []
-  
-  // 1. 从成长记录中加载照片
-  const savedRecords = localStorage.getItem('growthRecords')
-  if (savedRecords) {
-    const records = JSON.parse(savedRecords)
+// 从后端加载照片
+const loadPhotosFromRecords = async () => {
+  try {
+    const photos = []
     
-    records.forEach(record => {
-      // 检查记录中是否有图片
-      if (record.images && record.images.length > 0) {
-        record.images.forEach((image, index) => {
-          // 处理图片URL
-          let imageUrl = ''
-          if (typeof image === 'string') {
-            // 如果是字符串，直接使用
-            imageUrl = image
-          } else if (image.url) {
-            // 如果有url属性
-            imageUrl = image.url
-          } else if (image.raw) {
-            // 如果有raw文件对象，创建临时URL
-            imageUrl = URL.createObjectURL(image.raw)
-          }
-          
-          if (imageUrl) {
-            photos.push({
-              id: `growth-${record.date}-${index}`,
-              title: record.description || '成长记录',
-              url: imageUrl,
-              date: record.date,
-              description: record.description,
-              reflection: record.reflection,
-              importance: record.importance,
-              source: 'growth'
-            })
-          }
-        })
-      }
+    // 从成长记录中加载所有照片（包括type=1和type=2）
+    const recordsData = await getGrowthRecordList({
+      current: 1,
+      pageSize: 1000,
+      sortField: 'recordTime',
+      sortOrder: 'descend'
     })
-  }
-  
-  // 2. 从独立照片墙存储中加载照片
-  const savedPhotoWall = localStorage.getItem('photoWallPhotos')
-  if (savedPhotoWall) {
-    const photoWallPhotos = JSON.parse(savedPhotoWall)
     
-    photoWallPhotos.forEach((photo, index) => {
-      if (photo.images && photo.images.length > 0) {
-        photo.images.forEach((image, imgIndex) => {
-          photos.push({
-            id: `photowall-${photo.date}-${index}-${imgIndex}`,
-            title: photo.title || '照片',
-            url: image,
-            date: photo.date,
-            description: photo.description,
-            reflection: photo.reflection,
-            source: 'photowall'
+    if (recordsData && recordsData.records) {
+      recordsData.records.forEach(record => {
+        // 检查记录中是否有图片
+        if (record.images && record.images.length > 0) {
+          record.images.forEach((image, index) => {
+            // 加载所有类型的图片（type=1和type=2都显示在照片墙）
+            if (image.imageUrl) {
+              // 使用uploadTime作为日期，如果没有则使用recordTime
+              const photoDate = image.uploadTime 
+                ? image.uploadTime.split('T')[0] 
+                : (record.recordTime ? record.recordTime.split('T')[0] : '')
+              
+              photos.push({
+                id: `growth-${record.id}-${image.id}`,
+                imageId: image.id, // 保存图片ID用于删除
+                title: record.eventDesc || image.imageName || '照片',
+                url: image.imageUrl,
+                date: photoDate,
+                description: record.eventDesc || '',
+                reflection: record.reflection || '',
+                importance: record.importance || 0,
+                source: 'growth',
+                recordId: record.id,
+                imageType: image.type // 保存图片类型
+              })
+            }
           })
-        })
-      }
+        }
+      })
+    }
+    
+    // 按日期降序排序（使用uploadTime或recordTime）
+    photos.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0)
+      const dateB = b.date ? new Date(b.date) : new Date(0)
+      return dateB - dateA
     })
+    
+    allPhotos.value = photos
+    console.log('加载照片完成，共', photos.length, '张照片')
+  } catch (error) {
+    console.error('加载照片失败:', error)
+    allPhotos.value = []
   }
-  
-  // 按日期降序排序
-  photos.sort((a, b) => new Date(b.date) - new Date(a.date))
-  allPhotos.value = photos
 }
 
 // 搜索功能
-const handleSearch = (keyword) => {
+const handleSearch = async (keyword) => {
   searchKeyword.value = keyword
+  
+  if (!keyword) {
+    // 如果搜索关键词为空，重新加载所有照片
+    await loadPhotosFromRecords()
+  } else {
+    // 使用后端搜索API
+    try {
+      const data = await searchGrowthRecords(keyword)
+      if (data) {
+        const photos = []
+        data.forEach(record => {
+          if (record.images && record.images.length > 0) {
+            record.images.forEach((image, index) => {
+              // 搜索时也加载所有类型的图片
+              if (image.imageUrl) {
+                const photoDate = image.uploadTime 
+                  ? image.uploadTime.split('T')[0] 
+                  : (record.recordTime ? record.recordTime.split('T')[0] : '')
+                
+                photos.push({
+                  id: `growth-${record.id}-${image.id}`,
+                  imageId: image.id,
+                  title: record.eventDesc || image.imageName || '照片',
+                  url: image.imageUrl,
+                  date: photoDate,
+                  description: record.eventDesc || '',
+                  reflection: record.reflection || '',
+                  importance: record.importance || 0,
+                  source: 'growth',
+                  recordId: record.id,
+                  imageType: image.type
+                })
+              }
+            })
+          }
+        })
+        photos.sort((a, b) => {
+          const dateA = a.date ? new Date(a.date) : new Date(0)
+          const dateB = b.date ? new Date(b.date) : new Date(0)
+          return dateB - dateA
+        })
+        allPhotos.value = photos
+      }
+    } catch (error) {
+      console.error('搜索失败:', error)
+    }
+  }
 }
 
-// 过滤后的照片
+// 过滤后的照片（现在直接返回allPhotos，因为搜索已经由后端处理）
 const filteredPhotos = computed(() => {
-  if (!searchKeyword.value) {
-    return allPhotos.value
-  }
-  
-  const keyword = searchKeyword.value.toLowerCase()
-  return allPhotos.value.filter(photo => {
-    const title = (photo.title || '').toLowerCase()
-    const description = (photo.description || '').toLowerCase()
-    const reflection = (photo.reflection || '').toLowerCase()
-    return title.includes(keyword) || description.includes(keyword) || reflection.includes(keyword)
-  })
+  return allPhotos.value
 })
 
 // 按月份分组
@@ -371,28 +411,23 @@ const groupedPhotos = computed(() => {
   return Object.values(groups).sort((a, b) => b.monthKey.localeCompare(a.monthKey))
 })
 
-// 总照片数
-const totalPhotos = computed(() => filteredPhotos.value.length)
+// 总照片数（使用后端统计数据）
+const totalPhotos = computed(() => photoStats.value.imageCount || 0)
 
-// 最新日期
+// 最新日期（使用后端统计数据）
 const latestDate = computed(() => {
-  if (allPhotos.value.length === 0) return '暂无记录'
-  return allPhotos.value[0].date
+  if (photoStats.value.latestRecordTime) {
+    return photoStats.value.latestRecordTime.split('T')[0]
+  }
+  return '暂无记录'
 })
 
-// 记录时长（天数）
+// 记录时长（天数，使用后端统计数据）
 const recordDuration = computed(() => {
-  if (allPhotos.value.length === 0) return '0天'
-  
-  const earliest = new Date(allPhotos.value[allPhotos.value.length - 1].date)
-  const latest = new Date(allPhotos.value[0].date)
-  
-  // 计算天数差
-  const diffTime = latest - earliest
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  
-  if (diffDays === 0) return '当天'
-  return `${diffDays}天`
+  const days = photoStats.value.totalDays || 0
+  if (days === 0) return '0天'
+  if (days === 1) return '当天'
+  return `${days}天`
 })
 
 // 显示上传对话框
@@ -434,64 +469,61 @@ const savePhotos = async () => {
     return
   }
   
-  // 处理图片，转换为base64
-  const processedImages = []
-  for (const image of uploadForm.value.images) {
-    if (image.raw) {
-      try {
-        const base64 = await convertFileToBase64(image)
-        processedImages.push(base64)
-      } catch (error) {
-        console.error('图片转换失败:', error)
+  try {
+    // 1. 上传所有图片，获取图片ID
+    const imageIds = []
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    const uploadTime = `${todayStr} ${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}:${String(today.getSeconds()).padStart(2, '0')}`
+    
+    for (const image of uploadForm.value.images) {
+      if (image.raw) {
+        // 根据是否同步到成长记录决定type
+        const imageType = uploadForm.value.syncToGrowthRecord ? 2 : 1
+        const uploadedImage = await uploadImage(image.raw, imageType, uploadTime)
+        imageIds.push(uploadedImage.id)
       }
-    } else if (typeof image === 'string') {
-      processedImages.push(image)
     }
+    
+    if (uploadForm.value.syncToGrowthRecord) {
+      // 同步到成长记录：创建成长记录
+      const recordTime = `${todayStr}T12:00:00`
+      await addGrowthRecord({
+        eventDesc: uploadForm.value.title,
+        reflection: uploadForm.value.reflection || uploadForm.value.description || '',
+        importance: 0,
+        recordTime: recordTime,
+        imageIds: imageIds,
+        fileIds: []
+      })
+      
+      ElMessage.success('照片上传成功，已同步到成长记录')
+    } else {
+      // 只保存到照片墙：type=1的图片已经上传，但需要创建记录关联这些照片
+      // 创建一个成长记录来关联这些照片，这样它们才能显示在照片墙中
+      // 记录的事件描述使用照片标题，这样用户可以在照片墙中看到
+      const recordTime = `${todayStr}T12:00:00`
+      await addGrowthRecord({
+        eventDesc: uploadForm.value.title || '照片墙照片',
+        reflection: uploadForm.value.reflection || uploadForm.value.description || '',
+        importance: 0,
+        recordTime: recordTime,
+        imageIds: imageIds, // 关联type=1的图片
+        fileIds: []
+      })
+      
+      ElMessage.success('照片上传成功，已保存到照片墙')
+    }
+    
+    uploadDialogVisible.value = false
+    
+    // 重新加载照片和统计信息
+    await loadPhotosFromRecords()
+    await loadPhotoWallStatistics()
+  } catch (error) {
+    console.error('上传照片失败:', error)
+    ElMessage.error('上传照片失败，请重试')
   }
-  
-  // 创建新记录
-  const today = new Date()
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  
-  if (uploadForm.value.syncToGrowthRecord) {
-    // 同步到成长记录
-    const newRecord = {
-      date: todayStr,
-      description: uploadForm.value.title,
-      images: processedImages,
-      files: [],
-      reflection: uploadForm.value.reflection || uploadForm.value.description || '',
-      importance: 0
-    }
-    
-    const savedRecords = localStorage.getItem('growthRecords')
-    const records = savedRecords ? JSON.parse(savedRecords) : []
-    records.push(newRecord)
-    localStorage.setItem('growthRecords', JSON.stringify(records))
-    
-    ElMessage.success('照片上传成功，已同步到成长记录')
-  } else {
-    // 只保存到照片墙
-    const photoWallRecord = {
-      date: todayStr,
-      title: uploadForm.value.title,
-      description: uploadForm.value.description || '',
-      reflection: uploadForm.value.reflection || '',
-      images: processedImages
-    }
-    
-    const savedPhotoWall = localStorage.getItem('photoWallPhotos')
-    const photoWallPhotos = savedPhotoWall ? JSON.parse(savedPhotoWall) : []
-    photoWallPhotos.push(photoWallRecord)
-    localStorage.setItem('photoWallPhotos', JSON.stringify(photoWallPhotos))
-    
-    ElMessage.success('照片上传成功，仅保存在照片墙')
-  }
-  
-  uploadDialogVisible.value = false
-  
-  // 重新加载照片
-  loadPhotosFromRecords()
 }
 
 // 查看照片
@@ -520,59 +552,31 @@ const deletePhoto = (photo) => {
     }
   })
   
-  const handleDeletePhotoClick = (e) => {
+  const handleDeletePhotoClick = async (e) => {
     if (e.target.id === 'confirm-delete-photo') {
-      // 从 allPhotos 中删除
-      const photoIndex = allPhotos.value.findIndex(p => p.id === photo.id)
-      if (photoIndex !== -1) {
-        const deletedPhoto = allPhotos.value[photoIndex]
-        allPhotos.value.splice(photoIndex, 1)
-        
-        // 如果照片来源于 growthRecords，也要从 localStorage 中删除
-        const savedRecords = localStorage.getItem('growthRecords')
-        if (savedRecords) {
-          const records = JSON.parse(savedRecords)
-          const recordIndex = records.findIndex(r => r.date === deletedPhoto.date)
-          if (recordIndex !== -1 && records[recordIndex].images) {
-            // 从该记录的 images 中删除这张照片
-            const imgIndex = records[recordIndex].images.findIndex(img => img === deletedPhoto.url)
-            if (imgIndex !== -1) {
-              records[recordIndex].images.splice(imgIndex, 1)
-              localStorage.setItem('growthRecords', JSON.stringify(records))
+      // 使用后端API删除图片
+      if (photo.imageId) {
+        try {
+          await deleteImage(photo.imageId)
+          ElMessage.success('照片已删除')
+          
+          // 重新加载照片和统计信息
+          await loadPhotosFromRecords()
+          await loadPhotoWallStatistics()
+          
+          // 关闭消息框
+          const messageBoxes = document.querySelectorAll('.el-message')
+          messageBoxes.forEach(box => {
+            if (box.querySelector('#confirm-delete-photo')) {
+              box.remove()
             }
-          }
+          })
+        } catch (error) {
+          console.error('删除照片失败:', error)
+          ElMessage.error('删除照片失败，请重试')
         }
-        
-        // 如果照片来源于 photoWallPhotos，也要删除
-        const savedPhotoWall = localStorage.getItem('photoWallPhotos')
-        if (savedPhotoWall) {
-          const photoWallPhotos = JSON.parse(savedPhotoWall)
-          const pwIndex = photoWallPhotos.findIndex(p => p.date === deletedPhoto.date)
-          if (pwIndex !== -1 && photoWallPhotos[pwIndex].images) {
-            const imgIndex = photoWallPhotos[pwIndex].images.findIndex(img => img === deletedPhoto.url)
-            if (imgIndex !== -1) {
-              photoWallPhotos[pwIndex].images.splice(imgIndex, 1)
-              // 如果该记录没有图片了，删除整个记录
-              if (photoWallPhotos[pwIndex].images.length === 0) {
-                photoWallPhotos.splice(pwIndex, 1)
-              }
-              localStorage.setItem('photoWallPhotos', JSON.stringify(photoWallPhotos))
-            }
-          }
-        }
-        
-        // 重新加载照片
-        loadPhotosFromRecords()
-        
-        ElMessage.success('照片已删除')
-        
-        // 关闭消息框
-        const messageBoxes = document.querySelectorAll('.el-message')
-        messageBoxes.forEach(box => {
-          if (box.querySelector('#confirm-delete-photo')) {
-            box.remove()
-          }
-        })
+      } else {
+        ElMessage.error('无法删除：缺少图片ID')
       }
       document.removeEventListener('click', handleDeletePhotoClick)
     } else if (e.target.id === 'cancel-delete-photo') {
@@ -643,62 +647,36 @@ const confirmBatchDelete = () => {
     }
   })
   
-  const handleBatchDeleteClick = (e) => {
+  const handleBatchDeleteClick = async (e) => {
     if (e.target.id === 'confirm-batch-delete') {
       // 执行批量删除
-      selectedPhotos.value.forEach(photo => {
-        // 从 allPhotos 中删除
-        const photoIndex = allPhotos.value.findIndex(p => p.id === photo.id)
-        if (photoIndex !== -1) {
-          allPhotos.value.splice(photoIndex, 1)
-        }
+      try {
+        const deletePromises = selectedPhotos.value
+          .filter(photo => photo.imageId)
+          .map(photo => deleteImage(photo.imageId))
         
-        // 从 localStorage 中删除
-        const savedRecords = localStorage.getItem('growthRecords')
-        if (savedRecords) {
-          const records = JSON.parse(savedRecords)
-          const recordIndex = records.findIndex(r => r.date === photo.date)
-          if (recordIndex !== -1 && records[recordIndex].images) {
-            const imgIndex = records[recordIndex].images.findIndex(img => img === photo.url)
-            if (imgIndex !== -1) {
-              records[recordIndex].images.splice(imgIndex, 1)
-              localStorage.setItem('growthRecords', JSON.stringify(records))
-            }
-          }
-        }
+        await Promise.all(deletePromises)
         
-        const savedPhotoWall = localStorage.getItem('photoWallPhotos')
-        if (savedPhotoWall) {
-          const photoWallPhotos = JSON.parse(savedPhotoWall)
-          const pwIndex = photoWallPhotos.findIndex(p => p.date === photo.date)
-          if (pwIndex !== -1 && photoWallPhotos[pwIndex].images) {
-            const imgIndex = photoWallPhotos[pwIndex].images.findIndex(img => img === photo.url)
-            if (imgIndex !== -1) {
-              photoWallPhotos[pwIndex].images.splice(imgIndex, 1)
-              if (photoWallPhotos[pwIndex].images.length === 0) {
-                photoWallPhotos.splice(pwIndex, 1)
-              }
-              localStorage.setItem('photoWallPhotos', JSON.stringify(photoWallPhotos))
-            }
+        // 退出批量删除模式
+        cancelBatchDelete()
+        
+        ElMessage.success(`已成功删除 ${selectedPhotos.value.length} 张照片`)
+        
+        // 重新加载照片和统计信息
+        await loadPhotosFromRecords()
+        await loadPhotoWallStatistics()
+        
+        // 关闭消息框
+        const messageBoxes = document.querySelectorAll('.el-message')
+        messageBoxes.forEach(box => {
+          if (box.querySelector('#confirm-batch-delete')) {
+            box.remove()
           }
-        }
-      })
-      
-      // 重新加载照片
-      loadPhotosFromRecords()
-      
-      // 退出批量删除模式
-      cancelBatchDelete()
-      
-      ElMessage.success(`已成功删除 ${selectedPhotos.value.length} 张照片`)
-      
-      // 关闭消息框
-      const messageBoxes = document.querySelectorAll('.el-message')
-      messageBoxes.forEach(box => {
-        if (box.querySelector('#confirm-batch-delete')) {
-          box.remove()
-        }
-      })
+        })
+      } catch (error) {
+        console.error('批量删除失败:', error)
+        ElMessage.error('批量删除失败，请重试')
+      }
       
       document.removeEventListener('click', handleBatchDeleteClick)
     } else if (e.target.id === 'cancel-batch-delete') {
@@ -743,8 +721,21 @@ const calculateDays = (dateStr) => {
   return `${diffDays}天`
 }
 
-onMounted(() => {
-  loadPhotosFromRecords()
+// 加载照片墙统计信息
+const loadPhotoWallStatistics = async () => {
+  try {
+    const data = await getPhotoWallStatistics()
+    if (data) {
+      photoStats.value = data
+    }
+  } catch (error) {
+    console.error('加载照片墙统计信息失败:', error)
+  }
+}
+
+onMounted(async () => {
+  await loadPhotosFromRecords()
+  await loadPhotoWallStatistics()
 })
 </script>
 

@@ -48,7 +48,7 @@ export default defineConfig({
     // 配置代理解决跨域问题
     proxy: {
       '/api': {
-        target: 'http://172.27.83.207:8121', // 后端服务地址
+        target: 'http://172.27.109.72:8121', // 后端服务地址
         changeOrigin: true, // 允许跨域
         secure: false, // 如果是https接口，需要配置这个参数
         // rewrite: (path) => path.replace(/^\/api/, '') // 如果不需要/api前缀，可以重写路径

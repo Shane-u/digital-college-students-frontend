@@ -23,7 +23,14 @@
               <router-link to="/competition/subject" class="dropdown-item" exact>学科专业竞赛</router-link>
             </div>
           </div>
-          <span class="nav-link bold nav-link-inactive">职业规划</span>
+          <div class="nav-dropdown">
+            <span class="nav-link bold">职业规划</span>
+            <div class="dropdown-menu">
+              <router-link to="/career/showcase" class="dropdown-item" exact>职业展示</router-link>
+              <router-link to="/career/planning" class="dropdown-item" exact>职业规划</router-link>
+              <router-link to="/career/resume" class="dropdown-item" exact>简历制作</router-link>
+            </div>
+          </div>
           <router-link to="/knowledge-graph" class="nav-link bold" exact>知识图谱</router-link>
           <div class="nav-dropdown">
             <span class="nav-link bold">成长轨迹</span>
@@ -213,52 +220,46 @@ const updateActiveLink = () => {
     allDropdownItems.forEach(item => item.classList.remove('active'))
   }
   
-  // 如果是竞赛页面，特殊处理
-  if (currentPath.includes('/competition')) {
-    // 找到对应的下拉菜单项并激活
-    const dropdownItems = document.querySelectorAll('.dropdown-item')
-    let activatedDropdownItem = null
-    
-    dropdownItems.forEach(item => {
-      const to = item.getAttribute('to') || item.getAttribute('href')
-      if (to && to === currentPath) {
-        item.classList.add('active')
-        activatedDropdownItem = item
-      }
-    })
-    
-    // 给"竞赛活动"这个父级链接添加active类
-    const competitionParent = navLinksRef.value?.querySelector('.nav-dropdown .nav-link')
-    if (competitionParent && activatedDropdownItem) {
-      competitionParent.classList.add('active')
-      activeLink.value = competitionParent
-      moveIndicator(competitionParent)
+  // 处理下拉菜单的激活逻辑（竞赛活动、职业规划、成长轨迹）
+  let activatedDropdownItem = null
+  let parentLink = null
+  
+  // 找到对应的下拉菜单项并激活
+  const dropdownItems = document.querySelectorAll('.dropdown-item')
+  dropdownItems.forEach(item => {
+    const to = item.getAttribute('to') || item.getAttribute('href')
+    if (to && to === currentPath) {
+      item.classList.add('active')
+      activatedDropdownItem = item
     }
-  } else if (currentPath.includes('/growth')) {
-    // 如果是成长轨迹页面，特殊处理
-    // 找到对应的下拉菜单项并激活
-    const dropdownItems = document.querySelectorAll('.dropdown-item')
-    let activatedDropdownItem = null
-    
-    dropdownItems.forEach(item => {
-      const to = item.getAttribute('to') || item.getAttribute('href')
-      if (to && to === currentPath) {
-        item.classList.add('active')
-        activatedDropdownItem = item
-      }
-    })
-    
-    // 给"成长轨迹"这个父级链接添加active类
-    // 获取所有的 nav-dropdown，第二个应该是成长轨迹
+  })
+  
+  // 如果找到了激活的下拉菜单项，找到对应的父级链接
+  if (activatedDropdownItem) {
     const allDropdowns = navLinksRef.value?.querySelectorAll('.nav-dropdown')
-    if (allDropdowns && allDropdowns.length >= 2) {
-      const growthParent = allDropdowns[1].querySelector('.nav-link')
-      if (growthParent && activatedDropdownItem) {
-        growthParent.classList.add('active')
-        activeLink.value = growthParent
-        moveIndicator(growthParent)
+    if (allDropdowns) {
+      for (const dropdown of allDropdowns) {
+        const items = dropdown.querySelectorAll('.dropdown-item')
+        // 检查激活的菜单项是否在这个下拉菜单中
+        let foundInThisDropdown = false
+        items.forEach(item => {
+          if (item === activatedDropdownItem) {
+            foundInThisDropdown = true
+          }
+        })
+        if (foundInThisDropdown) {
+          parentLink = dropdown.querySelector('.nav-link')
+          break
+        }
       }
     }
+  }
+  
+  // 如果找到了父级链接，激活它
+  if (parentLink && activatedDropdownItem) {
+    parentLink.classList.add('active')
+    activeLink.value = parentLink
+    moveIndicator(parentLink)
   } else {
     // 其他页面使用正常的查找逻辑
     const newActiveLink = findActiveLinkByRoute()
@@ -512,7 +513,14 @@ body {
 .nav-link.router-link-exact-active {
   color: #4f46e5 !important;
   font-weight: 700 !important;
-  text-shadow: 0 0 1px rgba(79, 70, 229, 0.3);
+  text-shadow: 0 0 1px rgba(125, 81, 150, 0.3);
+  border-bottom: 3px solid #4f46e5;
+  padding-bottom: calc(0.5rem - 3px);
+}
+
+.nav-link.active:hover,
+.nav-link.router-link-exact-active:hover {
+  color: #4f46e5 !important;
 }
 
 /* 透明状态时导航链接为白色 */
@@ -521,7 +529,7 @@ body {
 }
 
 .navbar-transparent .nav-link:hover {
-  color: #e0d7ff;
+  color: #d4a5ff;
 }
 
 /* 透明状态时非激活链接保持原色 */
@@ -534,6 +542,8 @@ body {
   color: #ffffff !important;
   font-weight: 700 !important;
   text-shadow: 0 0 1px rgba(255, 255, 255, 0.5);
+  border-bottom: 3px solid #ffffff;
+  padding-bottom: calc(0.5rem - 3px);
 }
 
 /* 活动指示器 */
@@ -545,7 +555,7 @@ body {
   background: linear-gradient(90deg, #4f46e5, #a855f7);
   border-radius: 4px;
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 2px 8px rgba(125, 81, 150, 0.4);
 }
 
 /* 透明状态时活动指示器为白色 */
