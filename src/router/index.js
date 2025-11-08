@@ -5,6 +5,10 @@ import EduCompetitionPage from '../views/EduCompetitionPage.vue'
 import SubjectCompetitionPage from '../views/SubjectCompetitionPage.vue'
 import KnowledgeGraphPage from '../views/KnowledgeGraphPage.vue'
 import ProfilePage from '../views/ProfilePage.vue'
+import GrowthRecordPage from '../views/GrowthRecordPage.vue'
+import MilestonePage from '../views/MilestonePage.vue'
+import PhotoWallPage from '../views/PhotoWallPage.vue'
+import RecordPreviewPage from '../views/RecordPreviewPage.vue'
 
 const routes = [
   {
@@ -40,6 +44,26 @@ const routes = [
     path: '/profile',
     name: 'Profile',
     component: ProfilePage
+  },
+  {
+    path: '/growth/record',
+    name: 'GrowthRecord',
+    component: GrowthRecordPage
+  },
+  {
+    path: '/growth/milestone',
+    name: 'Milestone',
+    component: MilestonePage
+  },
+  {
+    path: '/growth/photo-wall',
+    name: 'PhotoWall',
+    component: PhotoWallPage
+  },
+  {
+    path: '/growth/record/preview/:date',
+    name: 'RecordPreview',
+    component: RecordPreviewPage
   },
 ]
 

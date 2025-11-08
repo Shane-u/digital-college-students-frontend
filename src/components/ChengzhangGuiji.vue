@@ -1,7 +1,7 @@
 <template>
   <div class="chengzhang-guiji">
     <!-- 标题 -->
-    <div class="section-title-wrap">
+    <div class="section-title-wrap" v-if="!hideHeader">
       <Star class="title-icon" />
       <h2 class="section-title">成长轨迹</h2>
       <span class="view-more-container">
@@ -31,7 +31,7 @@
               <el-popover placement="bottom" trigger="hover" width="200">
                 <!-- Element Plus 使用 #reference 作为触发元素 -->
                 <template #reference>
-                  <span class="timeline-title">
+                  <span class="timeline-title" @click="handleDateClick(item)">
                     {{ item.title }}
                   </span>
                 </template>
@@ -57,7 +57,7 @@
               :key="subItem.id"
               class="sub-item-box"
             >
-              <span>{{ subItem.name}}</span>
+              <span class="sub-item-date" @click="handleSubDateClick(subItem)">{{ subItem.name}}</span>
               <!-- 根据奇数偶数判断上下展示 -->
               <div
                 :class="`sub-line-box ${
@@ -247,9 +247,13 @@ const props = defineProps({
       ];
     },
   },
+  hideHeader: {
+    type: Boolean,
+    default: false
+  }
 });
 
-const emit = defineEmits(["scrollEvent", "handleBottomClick"]);
+const emit = defineEmits(["scrollEvent", "handleBottomClick", "dateClick", "subDateClick"]);
 
 const scrollEvent = (e) => {
   emit("scrollEvent", e);
@@ -257,6 +261,16 @@ const scrollEvent = (e) => {
 
 const handleBottomClick = () => {
   emit("handleBottomClick");
+};
+
+// 处理日期点击（主时间节点）
+const handleDateClick = (item) => {
+  emit("dateClick", item);
+};
+
+// 处理子日期点击
+const handleSubDateClick = (subItem) => {
+  emit("subDateClick", subItem);
 };
 
 // 鼠标进入时间轴区域
@@ -514,6 +528,17 @@ ul.timeline-wrapper {
   padding: 2px 6px;
   border-radius: 4px;
   display: inline-block;
+}
+
+.sub-item-date {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sub-item-date:hover {
+  color: #7d5196;
+  background: rgba(184, 160, 200, 0.3) !important;
+  transform: scale(1.05);
 }
 
 .long-line .sub-item-box .sub-line-box {

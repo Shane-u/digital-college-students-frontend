@@ -25,7 +25,14 @@
           </div>
           <span class="nav-link bold nav-link-inactive">职业规划</span>
           <router-link to="/knowledge-graph" class="nav-link bold" exact>知识图谱</router-link>
-          <span class="nav-link bold nav-link-inactive">个人主页</span>
+          <div class="nav-dropdown">
+            <span class="nav-link bold">成长轨迹</span>
+            <div class="dropdown-menu">
+              <router-link to="/growth/record" class="dropdown-item" exact>成长记录</router-link>
+              <router-link to="/growth/milestone" class="dropdown-item" exact>里程碑</router-link>
+              <router-link to="/growth/photo-wall" class="dropdown-item" exact>照片墙</router-link>
+            </div>
+          </div>
           <div
             class="active-indicator"
             ref="indicatorRef"
@@ -227,6 +234,31 @@ const updateActiveLink = () => {
       activeLink.value = competitionParent
       moveIndicator(competitionParent)
     }
+  } else if (currentPath.includes('/growth')) {
+    // 如果是成长轨迹页面，特殊处理
+    // 找到对应的下拉菜单项并激活
+    const dropdownItems = document.querySelectorAll('.dropdown-item')
+    let activatedDropdownItem = null
+    
+    dropdownItems.forEach(item => {
+      const to = item.getAttribute('to') || item.getAttribute('href')
+      if (to && to === currentPath) {
+        item.classList.add('active')
+        activatedDropdownItem = item
+      }
+    })
+    
+    // 给"成长轨迹"这个父级链接添加active类
+    // 获取所有的 nav-dropdown，第二个应该是成长轨迹
+    const allDropdowns = navLinksRef.value?.querySelectorAll('.nav-dropdown')
+    if (allDropdowns && allDropdowns.length >= 2) {
+      const growthParent = allDropdowns[1].querySelector('.nav-link')
+      if (growthParent && activatedDropdownItem) {
+        growthParent.classList.add('active')
+        activeLink.value = growthParent
+        moveIndicator(growthParent)
+      }
+    }
   } else {
     // 其他页面使用正常的查找逻辑
     const newActiveLink = findActiveLinkByRoute()
@@ -407,6 +439,7 @@ body {
     gap: 2rem;
     position: relative;
     font-family: 'Noto Sans SC', 'SourceHanSansCN-Regular', Poppins, Arial, 'Microsoft YaHei', "\u5b8b\u4f53", Tahoma, Geneva, sans-serif;
+    margin-left: 50px;
   }
 
 .nav-right {
