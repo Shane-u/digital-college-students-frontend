@@ -51,21 +51,86 @@
           
           <div class="user-info-container" ref="userContainer" style="display: none;">
             <div class="user-avatar">
-              <span class="user-account" ref="userAccount">U</span>
-              <div class="user-dropdown">
-                <a class="dropdown-item logout-btn" ref="logoutBtn">退出登录</a>
-              </div>
+              <img v-if="userAvatar" :src="userAvatar" class="user-avatar-img" alt="用户头像" />
+              <span v-else class="user-account" ref="userAccount">{{ userDisplayName }}</span>
+            </div>
+            <div class="user-dropdown">
+              <a class="dropdown-item profile-btn" ref="profileBtn" @click="openProfileDialog">个人主页</a>
+              <a class="dropdown-item logout-btn" ref="logoutBtn" @click="handleLogout">退出登录</a>
             </div>
           </div>
         </div>
       </div>
     </nav>
+    
+    <!-- 个人主页对话框 -->
+    <el-dialog v-model="profileDialogVisible" title="个人主页" width="600px" :close-on-click-modal="false">
+      <el-form :model="profileForm" label-width="100px" ref="profileFormRef">
+        <el-form-item label="头像">
+          <el-upload
+            class="avatar-uploader"
+            :show-file-list="false"
+            :before-upload="beforeAvatarUpload"
+            :on-change="handleAvatarChange"
+            :auto-upload="false"
+          >
+            <img v-if="profileForm.avatar" :src="profileForm.avatar" class="avatar-preview" />
+            <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="昵称" prop="nickname">
+          <el-input v-model="profileForm.nickname" placeholder="请输入昵称" maxlength="20" show-word-limit />
+        </el-form-item>
+        <el-form-item label="性别">
+          <el-radio-group v-model="profileForm.gender">
+            <el-radio label="男">男</el-radio>
+            <el-radio label="女">女</el-radio>
+            <el-radio label="保密">保密</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="年级">
+          <el-select v-model="profileForm.grade" placeholder="请选择年级" style="width: 100%">
+            <el-option label="大一" value="大一" />
+            <el-option label="大二" value="大二" />
+            <el-option label="大三" value="大三" />
+            <el-option label="大四" value="大四" />
+            <el-option label="研一" value="研一" />
+            <el-option label="研二" value="研二" />
+            <el-option label="研三" value="研三" />
+            <el-option label="博士" value="博士" />
+            <el-option label="已毕业" value="已毕业" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="专业">
+          <el-input v-model="profileForm.major" placeholder="请输入专业" />
+        </el-form-item>
+        <el-form-item label="学校">
+          <el-input v-model="profileForm.school" placeholder="请输入学校" />
+        </el-form-item>
+        <el-form-item label="个人简介">
+          <el-input
+            v-model="profileForm.bio"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入个人简介"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="profileDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveProfile">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
 // 获取当前路由
 const route = useRoute()
@@ -87,6 +152,24 @@ const userAccount = ref(null)
 const logoutBtn = ref(null)
 const navLinksRef = ref(null)
 const indicatorRef = ref(null)
+const profileBtn = ref(null)
+const profileFormRef = ref(null)
+
+// 个人主页对话框
+const profileDialogVisible = ref(false)
+const profileForm = ref({
+  avatar: '',
+  nickname: '',
+  gender: '保密',
+  grade: '',
+  major: '',
+  school: '',
+  bio: ''
+})
+
+// 用户信息
+const userAvatar = ref('')
+const userDisplayName = ref('U')
 
 // 活动指示器样式
 const indicatorStyle = ref({
@@ -125,12 +208,93 @@ const handleScroll = () => {
   }
 }
 
+// 打开个人主页对话框
+const openProfileDialog = () => {
+  // 从localStorage加载用户信息
+  const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
+  const profile = JSON.parse(localStorage.getItem('userProfile') || '{}')
+  
+  profileForm.value = {
+    avatar: profile.avatar || userInfo.avatar || '',
+    nickname: profile.nickname || userInfo.nickname || userInfo.userAccount || '',
+    gender: profile.gender || '保密',
+    grade: profile.grade || '',
+    major: profile.major || '',
+    school: profile.school || '',
+    bio: profile.bio || ''
+  }
+  
+  profileDialogVisible.value = true
+}
+
+// 头像上传前验证
+const beforeAvatarUpload = (file) => {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件!')
+    return false
+  }
+  if (!isLt2M) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  return true
+}
+
+// 头像文件变化处理
+const handleAvatarChange = (file) => {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    profileForm.value.avatar = e.target.result
+  }
+  reader.readAsDataURL(file.raw)
+}
+
+// 保存个人资料
+const saveProfile = async () => {
+  try {
+    // 保存到localStorage
+    localStorage.setItem('userProfile', JSON.stringify(profileForm.value))
+    
+    // 更新用户信息显示
+    userAvatar.value = profileForm.value.avatar
+    userDisplayName.value = profileForm.value.nickname || 'U'
+    
+    // 更新userAccount显示
+    if (userAccount.value) {
+      if (userAvatar.value) {
+        // 如果有头像，显示头像
+        userAccount.value.style.display = 'none'
+      } else {
+        // 如果没有头像，显示昵称或U
+        userAccount.value.textContent = userDisplayName.value
+        userAccount.value.style.display = 'flex'
+      }
+    }
+    
+    ElMessage.success('保存成功!')
+    profileDialogVisible.value = false
+  } catch (error) {
+    console.error('保存失败:', error)
+    ElMessage.error('保存失败，请重试')
+  }
+}
+
 // 退出登录函数（保留原逻辑）
 const handleLogout = () => {
-  if (confirm('确定要退出登录吗？')) {
+  ElMessageBox.confirm('确定要退出登录吗？', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(() => {
     localStorage.removeItem('userInfo')
+    localStorage.removeItem('userProfile')
     window.location.href = '/login'
-  }
+  }).catch(() => {
+    // 取消操作
+  })
 }
 
 // 活动指示器移动函数
@@ -300,9 +464,27 @@ const initUserStatus = () => {
   const userInfo = localStorage.getItem('userInfo')
   if (userInfo) {
     const user = JSON.parse(userInfo)
-    const accountText = user.userAccount || 'U'
-    // 显示用户名首字母
-    userAccount.value.textContent = accountText.charAt(0).toUpperCase() || 'U'
+    const profile = JSON.parse(localStorage.getItem('userProfile') || '{}')
+    
+    // 设置用户头像和昵称
+    userAvatar.value = profile.avatar || user.avatar || ''
+    userDisplayName.value = profile.nickname || user.nickname || user.userAccount || 'U'
+    
+    // 显示用户名首字母或昵称
+    if (userAccount.value) {
+      if (userAvatar.value) {
+        // 如果有头像，隐藏文字
+        userAccount.value.style.display = 'none'
+      } else {
+        // 如果没有头像，显示昵称或用户名首字母
+        const displayText = userDisplayName.value.length > 1 
+          ? userDisplayName.value.charAt(0).toUpperCase()
+          : userDisplayName.value.toUpperCase()
+        userAccount.value.textContent = displayText
+        userAccount.value.style.display = 'flex'
+      }
+    }
+    
     loginLink.value.style.display = 'none'
     userContainer.value.style.display = 'block'
   }
@@ -597,6 +779,7 @@ body {
 .user-info-container {
   position: relative;
   font-family: 'Courier New', Courier, monospace;
+  overflow: visible;
 }
 
 .user-avatar {
@@ -610,7 +793,7 @@ body {
   color: white;
   font-weight: bold;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   border: 2px solid #e5e7eb;
   transition: transform 0.3s ease;
   position: relative;
@@ -620,29 +803,44 @@ body {
   transform: scale(1.1);
 }
 
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 .user-account {
   color: white;
   font-weight: bold;
   font-family:  Arial, sans-serif;
   font-size: 18px;
+  pointer-events: none;
 }
 
 .user-dropdown {
   display: none;
   position: absolute;
-  top: 100%;
+  top: calc(100% + 8px);
   right: 0;
-  min-width: 120px;
+  min-width: 150px;
   background-color: white;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  z-index: 1001;
   border-radius: 6px;
   padding: 8px 0;
-  margin-top: 5px;
+  margin-top: -6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
 }
 
+.user-info-container:hover .user-dropdown,
 .user-avatar:hover .user-dropdown {
-  display: block;
+  display: block !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
   animation: fadeIn 0.2s ease;
 }
 
@@ -651,15 +849,36 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.logout-btn {
-  color: #d946ef !important;
+.user-dropdown .dropdown-item {
+  color: #4a2599 !important;
   font-weight: 500;
-  display: block;
+  display: block !important;
   padding: 10px 20px;
+  cursor: pointer;
+  text-decoration: none !important;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
-.logout-btn:hover {
-  background-color: #f3e8ff;
+.user-dropdown .dropdown-item:hover {
+  background-color: #f3e8ff !important;
+  color: #6a3dc4 !important;
+  padding-left: 22px;
+}
+
+.user-dropdown .profile-btn {
+  color: #4a2599 !important;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.user-dropdown .logout-btn {
+  color: #d946ef !important;
+}
+
+.user-dropdown .logout-btn:hover {
+  background-color: #f3e8ff !important;
+  color: #d946ef !important;
 }
 
 /* 导航栏下拉菜单样式 */
@@ -757,5 +976,65 @@ body {
     font-size: 14px;
     padding: 5px 10px;
   }
+}
+
+/* 个人主页对话框样式 */
+:deep(.el-dialog__header) {
+  padding: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+:deep(.el-dialog__title) {
+  color: #7d5196;
+  font-weight: 800;
+}
+
+.avatar-uploader {
+  width: 120px;
+  height: 120px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+}
+
+.avatar-uploader:hover {
+  border-color: #b8a0c8;
+}
+
+.avatar-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+}
+
+:deep(.el-form-item__label) {
+  color: #404040;
+  font-weight: 500;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #b8a0c8 inset;
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: #b8a0c8;
+  box-shadow: 0 0 0 1px #b8a0c8 inset;
+}
+
+:deep(.el-select .el-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #b8a0c8 inset;
 }
 </style>

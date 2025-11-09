@@ -35,7 +35,7 @@
   
   <script>
   import { ref, onMounted } from 'vue';
-  import { getCompetitionList } from '../api/competitionApi.js';
+  import { getContestList } from '../api/competitionApi.js';
   // 引入 mock 定义，确保在发起 axios 请求前注册拦截
   import '../api/mockData.js';
   
@@ -49,11 +49,26 @@
       const fetchCompetitionList = async () => {
         try {
           loading.value = true;
-          // getCompetitionList 直接返回数组数据
-          const list = await getCompetitionList();
-          competitionList.value = Array.isArray(list) ? list : [];
+          // 获取前10条最新竞赛数据
+          const response = await getContestList({
+            current: 1,
+            pageSize: 10
+          });
+          
+          // 映射API返回的数据到组件需要的格式
+          if (response && response.records && Array.isArray(response.records)) {
+            competitionList.value = response.records.map(item => ({
+              id: item.contestId || item.id,
+              name: item.contestName || item.name || '',
+              url: item.contestUrl || item.url || '#',
+              popularity: item.levelName || item.timeName || item.organiserName || ''
+            }));
+          } else {
+            competitionList.value = [];
+          }
         } catch (error) {
           console.error('获取竞赛列表失败:', error);
+          competitionList.value = [];
         } finally {
           loading.value = false;
         }

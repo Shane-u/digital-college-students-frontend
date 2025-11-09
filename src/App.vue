@@ -5,12 +5,19 @@
         <component :is="Component" />
       </transition>
     </router-view>
+    <!-- 全局看板娘组件 -->
+    <WankoAssistant />
   </div>
 </template>
 
 <script>
+import WankoAssistant from './components/WankoAssistant.vue';
+
 export default {
-  name: 'App'
+  name: 'App',
+  components: {
+    WankoAssistant
+  }
 }
 </script>
 

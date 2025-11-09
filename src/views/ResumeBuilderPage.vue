@@ -41,8 +41,8 @@
                   <el-form-item label="专业">
                     <el-input v-model="resumeData.personalInfo.major" placeholder="请输入专业" />
                   </el-form-item>
-                  <el-form-item label="个人网站">
-                    <el-input v-model="resumeData.personalInfo.website" placeholder="请输入个人网站" />
+                  <el-form-item label="个人博客">
+                    <el-input v-model="resumeData.personalInfo.website" placeholder="请输入个人博客" />
                   </el-form-item>
                   <el-form-item label="头像">
                     <el-upload

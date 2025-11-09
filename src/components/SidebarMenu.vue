@@ -230,7 +230,7 @@ onMounted(() => {
 }
 
 .menu-item {
-  padding: 12px 24px;
+  padding: 6px 12px;
   color: white;
   text-decoration: none;
   transition: all 0.3s ease;

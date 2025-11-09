@@ -81,6 +81,11 @@ const routes = [
     name: 'CareerPlanning',
     component: () => import('../views/CareerPlanningPage.vue')
   },
+  {
+    path: '/competition/detail/:id',
+    name: 'ContestDetail',
+    component: () => import('../views/ContestDetailPage.vue')
+  },
 ]
 
 const router = createRouter({

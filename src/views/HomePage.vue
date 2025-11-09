@@ -108,9 +108,6 @@
     </div>
     <!-- Footer -->
     <Footer />
-    
-    <!-- Live2D Widget Assistant -->
-    <WankoAssistant />
   </div>
 </template>
 
@@ -135,7 +132,6 @@ import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
 import TriangleBackground from "../components/TriangleBackground.vue";
-import WankoAssistant from "../components/WankoAssistant.vue";
 export default {
   name: "HomePage",
   components: {
@@ -154,7 +150,6 @@ export default {
     Footer,
     CareerPlanning,
     Star,
-    WankoAssistant,
   },
   setup() {
     const router = useRouter();
