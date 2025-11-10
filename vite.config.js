@@ -51,13 +51,32 @@ export default defineConfig({
         target: 'http://172.27.109.72:8121', // 后端服务地址
         changeOrigin: true, // 允许跨域
         secure: false, // 如果是https接口，需要配置这个参数
-        // rewrite: (path) => path.replace(/^\/api/, '') // 如果不需要/api前缀，可以重写路径
+        // rewrite: (path) => path.replace(/^\/api/, '') // 如果后端不需要/api前缀，可以取消注释此行
         ws: true, // 支持websocket
+        // 保持连接，支持流式响应（SSE）
+        timeout: 600000, // 10分钟超时，适合流式请求（默认2分钟可能不够）
         configure: (proxy, options) => {
           // 配置代理选项
           proxy.on('proxyReq', (proxyReq, req, res) => {
             // 设置credentials，允许携带cookie
             proxyReq.setHeader('credentials', 'include');
+            // 对于流式请求，确保Accept头部正确
+            if (req.url && req.url.includes('/stream')) {
+              // 流式请求优先接受 text/event-stream
+              proxyReq.setHeader('Accept', 'text/event-stream, application/json, text/plain, */*');
+            }
+          });
+          // 处理代理响应，确保流式响应正确传递
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            // 对于流式请求，确保连接保持活跃
+            if (req.url && req.url.includes('/stream')) {
+              // 确保响应不被缓冲，直接流式传输
+              res.setHeader('X-Accel-Buffering', 'no'); // 禁用缓冲
+              // 保持连接活跃
+              if (!res.headersSent) {
+                res.setHeader('Connection', 'keep-alive');
+              }
+            }
           });
         }
       }

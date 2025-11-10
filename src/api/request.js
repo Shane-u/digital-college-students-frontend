@@ -6,7 +6,7 @@ const request = axios.create({
   // baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8101',
   baseURL: '/api',
   withCredentials: true,
-  credentials: 'include',
+  // credentials: 'include',
   timeout: 30000, // 30秒超时
   headers: {
     'Content-Type': 'application/json;charset=UTF-8'
@@ -18,11 +18,11 @@ request.interceptors.request.use(
   config => {
     // 从 localStorage 获取 token
     config.withCredentials = true
-    config.credentials = 'include'
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
-    }
+    // config.credentials = 'include'
+    // const token = localStorage.getItem('token')
+    // if (token) {
+    //   config.headers['Authorization'] = `Bearer ${token}`
+    // }
     return config
   },
   error => {

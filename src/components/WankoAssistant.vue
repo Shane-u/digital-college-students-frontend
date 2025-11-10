@@ -68,6 +68,12 @@
                 'bubble-right': msg.position === 'right'
               }"
             >
+              <!-- 思考过程 -->
+              <div v-if="msg.reasoning && msg.position !== 'right'" class="reasoning-content">
+                <div class="reasoning-label">💭 思考中...</div>
+                <div class="reasoning-text" v-html="renderReasoningContent(msg.reasoning)"></div>
+              </div>
+              <!-- 消息内容 -->
               <div v-if="msg.type === 'text'" class="bubble-content" v-html="renderMessageContent(msg)"></div>
               <img v-else-if="msg.type === 'image'" :src="msg.content.picUrl" alt="图片" class="message-image" />
             </div>
@@ -123,9 +129,9 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue';
-import axios from 'axios';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
+import { streamChat } from '../api/chatApi';
 import sanbikongGif from '../assets/sanbikong.gif';
 
 export default {
@@ -139,6 +145,8 @@ export default {
     const messagesContainer = ref(null);
     const showTip = ref(false);
     let tipTimer = null;
+    let abortController = null; // 用于取消流式请求
+    let currentSessionId = ref(''); // 当前会话ID
     
     const markedOptions = {
       gfm: true, 
@@ -231,102 +239,172 @@ export default {
     const renderMessageContent = (msg) => {
       if (msg.type === 'text') {
         try {
-          const processedText = msg.content.text.replace(/\\n/g, '\n');
+          const text = msg.content.text || '';
+          const processedText = text.replace(/\\n/g, '\n');
           return marked.parse(processedText, markedOptions);
         } catch (error) {
-          return msg.content.text;
+          return msg.content.text || '';
         }
       }
       return '';
     };
     
-    const sendQuestionToAI = async (question) => {
+    const renderReasoningContent = (reasoning) => {
+      if (!reasoning) return '';
       try {
-        isTyping.value = true;
-        const token = localStorage.getItem('token');
-        const headers = {
-          'Content-Type': 'application/json'
-        };
-        if (token) {
-          headers.Authorization = `Bearer ${token}`;
-        }
-        
-        const response = await axios.post('/api/question', {
-          question: question
-        }, { headers });
-        
-        if (response.data.code === 1 && response.data.data) {
-          let requestId = '';
-          const idMatch = response.data.data.match(/ID：([a-f0-9-]+)/i);
-          if (idMatch && idMatch[1]) {
-            requestId = idMatch[1];
-          } else {
-            isTyping.value = false;
-            appendMsg({
-              type: 'text',
-              content: { text: '抱歉，处理请求时出现问题，请稍后再试。' },
-              position: 'left',
-            });
-            return;
-          }
-          
-          const answer = await pollForAnswer(requestId, headers);
-          isTyping.value = false;
-          if (answer) {
-            appendMsg({
-              type: 'text',
-              content: { text: answer },
-              position: 'left',
-            });
-          } else {
-            appendMsg({
-              type: 'text',
-              content: { text: '抱歉，无法获取回答，请稍后再试。' },
-              position: 'left',
-            });
-          }
-        } else {
-          isTyping.value = false;
-          appendMsg({
-            type: 'text',
-            content: { text: '抱歉，我暂时无法回答您的问题，请稍后再试。' },
-            position: 'left',
+        const processedText = reasoning.replace(/\\n/g, '\n');
+        return marked.parse(processedText, markedOptions);
+      } catch (error) {
+        return reasoning;
+      }
+    };
+    
+    // 构建消息历史
+    const buildMessageHistory = () => {
+      const history = [];
+      messages.value.forEach(msg => {
+        if (msg.type === 'text' && msg.position !== 'system') {
+          history.push({
+            role: msg.position === 'right' ? 'user' : 'assistant',
+            content: msg.content.text || ''
           });
         }
+      });
+      return history;
+    };
+    
+    // 打字机式拼接渲染队列（逐字显示）
+    const reasoningQueue = ref('');
+    const contentQueue = ref('');
+    let typingRaf = null;
+    const startTyping = (assistantIndex) => {
+      if (typingRaf) return;
+      const step = () => {
+        let didUpdate = false;
+        // 优先渲染思考内容
+        if (reasoningQueue.value.length > 0 && messages.value[assistantIndex]) {
+          const ch = reasoningQueue.value.slice(0, 1);
+          reasoningQueue.value = reasoningQueue.value.slice(1);
+          messages.value[assistantIndex].reasoning =
+            (messages.value[assistantIndex].reasoning || '') + ch;
+          didUpdate = true;
+        } else if (contentQueue.value.length > 0 && messages.value[assistantIndex]) {
+          const ch = contentQueue.value.slice(0, 1);
+          contentQueue.value = contentQueue.value.slice(1);
+          messages.value[assistantIndex].content.text =
+            (messages.value[assistantIndex].content.text || '') + ch;
+          didUpdate = true;
+        }
+        if (didUpdate) {
+          scrollToBottom();
+        }
+        if (reasoningQueue.value.length > 0 || contentQueue.value.length > 0) {
+          typingRaf = requestAnimationFrame(step);
+        } else {
+          typingRaf = null;
+        }
+      };
+      typingRaf = requestAnimationFrame(step);
+    };
+    
+    const stopTyping = () => {
+      if (typingRaf) {
+        cancelAnimationFrame(typingRaf);
+        typingRaf = null;
+      }
+      reasoningQueue.value = '';
+      contentQueue.value = '';
+    };
+    
+    const sendQuestionToAI = async (question) => {
+      try {
+        // 取消之前的请求（如果有）
+        if (abortController) {
+          abortController.abort();
+        }
+        // 重置打字机状态
+        stopTyping();
+        
+        isTyping.value = true;
+        
+        // 构建消息历史
+        const messageHistory = buildMessageHistory();
+        messageHistory.push({
+          role: 'user',
+          content: question
+        });
+        
+        // 创建新的助手消息
+        const assistantMsgIndex = messages.value.length;
+        appendMsg({
+          type: 'text',
+          content: { text: '' },
+          position: 'left',
+          reasoning: ''
+        });
+        
+        // 流式输出处理
+        abortController = await streamChat(
+          {
+            messages: messageHistory,
+            model: 'doubao-seed-1-6-251015',
+            temperature: 0.7,
+            stream: true,
+            maxTokens: 2048,
+            sessionId: currentSessionId.value || undefined
+          },
+          // onMessage 回调：delta 为本次新增片段，采用逐字拼接
+          (reasoning, content, type, delta) => {
+            if (messages.value[assistantMsgIndex]) {
+              if (type === 'reasoning') {
+                reasoningQueue.value += (delta || '');
+              } else if (type === 'content') {
+                contentQueue.value += (delta || '');
+              }
+              startTyping(assistantMsgIndex);
+            }
+          },
+          // onError 回调
+          (error) => {
+            console.error('流式输出错误:', error);
+            isTyping.value = false;
+            if (messages.value[assistantMsgIndex]) {
+              messages.value[assistantMsgIndex].content.text = '抱歉，我暂时无法回答您的问题，请稍后再试。';
+            } else {
+              appendMsg({
+                type: 'text',
+                content: { text: '抱歉，我暂时无法回答您的问题，请稍后再试。' },
+                position: 'left',
+              });
+            }
+            scrollToBottom();
+          },
+          // onComplete 回调
+          (reasoning, content) => {
+            isTyping.value = false;
+            if (messages.value[assistantMsgIndex]) {
+              if (content) {
+                // 将队列剩余内容一次性刷完
+                contentQueue.value += '';
+              }
+              if (reasoning) {
+                reasoningQueue.value += '';
+              }
+            }
+            scrollToBottom();
+            abortController = null;
+          }
+        );
       } catch (error) {
+        console.error('发送消息错误:', error);
         isTyping.value = false;
         appendMsg({
           type: 'text',
           content: { text: '抱歉，我暂时无法回答您的问题，请稍后再试。' },
           position: 'left',
         });
+        scrollToBottom();
       }
-    };
-    
-    const pollForAnswer = async (requestId, headers) => {
-      const maxAttempts = 30;
-      const interval = 1000;
-      let attempts = 0;
-      
-      while (attempts < maxAttempts) {
-        try {
-          attempts++;
-          const statusResponse = await axios.get(`/api/status/${requestId}`, { headers });
-          if (statusResponse.data.code === 1 && statusResponse.data.data) {
-            let response = statusResponse.data.data;
-            response = response.trim();
-            return response;
-          }
-          if (statusResponse.data.code === 0 && statusResponse.data.msg === "问题结果没有得到，请继续轮询") {
-            await new Promise(resolve => setTimeout(resolve, interval));
-            continue;
-          }
-          return null;
-        } catch (error) {
-          await new Promise(resolve => setTimeout(resolve, interval));
-        }
-      }
-      return null;
     };
     
     const handleSend = (type = 'text', val = null) => {
@@ -352,6 +430,16 @@ export default {
       scrollToBottom();
     });
     
+    // 组件卸载时取消请求
+    onUnmounted(() => {
+      if (abortController) {
+        abortController.abort();
+      }
+      if (tipTimer) {
+        clearTimeout(tipTimer);
+      }
+    });
+    
     return {
       sanbikongGif,
       isExpanded,
@@ -367,7 +455,8 @@ export default {
       toggleChat,
       handleSend,
       handleQuickReplyClick,
-      renderMessageContent
+      renderMessageContent,
+      renderReasoningContent
     };
   }
 };
@@ -503,7 +592,7 @@ export default {
   position: fixed;
   bottom: 0;
   right: 0;
-  width: 360px;
+  width: 1200px;
   height: 600px;
   background: #fff;
   border-radius: 12px 12px 0 0;
@@ -664,6 +753,39 @@ export default {
 .bubble-content :deep(a) {
   color: #667eea;
   text-decoration: underline;
+}
+
+/* 思考过程样式 */
+.reasoning-content {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: rgba(102, 126, 234, 0.1);
+  border-left: 3px solid #667eea;
+  border-radius: 6px;
+}
+
+.reasoning-label {
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reasoning-text {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.reasoning-text :deep(p) {
+  margin: 0 0 6px 0;
+}
+
+.reasoning-text :deep(p:last-child) {
+  margin-bottom: 0;
 }
 
 .message-image {
