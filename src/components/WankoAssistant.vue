@@ -1,114 +1,129 @@
 <template>
   <div class="mascot-container" :class="{ 'expanded': isExpanded, 'chat-open': isChatOpen }">
-    <!-- 右侧边栏按钮 -->
-    <div class="sidebar-toggle" @click="toggleMascot">
-      <span v-if="!isExpanded">◀</span>
-      <span v-else>▶</span>
-    </div>
-    
-    <!-- 聊天对话框 -->
-    <div v-if="isChatOpen" class="chat-container">
-      <div class="chat-header">
-        <div class="chat-title">
-          <div class="avatar">
-            <img :src="sanbikongGif" alt="助手头像" class="avatar-gif" />
-          </div>
-          <div class="title-text">
-            <div class="name">智能助手</div>
-            <div class="status">在线为您服务</div>
-          </div>
-        </div>
-        <div class="chat-actions">
-          <button class="close-btn" @click="toggleChat">
-            <svg viewBox="0 0 24 24" width="18" height="18">
-              <path d="M6.7 5.3a1 1 0 0 0-1.4 1.4L10.6 12l-5.3 5.3a1 1 0 0 0 1.4 1.4L12 13.4l5.3 5.3a1 1 0 0 0 1.4-1.4L13.4 12l5.3-5.3a1 1 0 0 0-1.4-1.4L12 10.6 6.7 5.3z" fill="currentColor"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-      
-      <div class="chat-messages" ref="messagesContainer">
-        <div 
-          v-for="(message, index) in messages" 
-          :key="index" 
-          class="message-wrapper"
-          :class="{ 'user-wrapper': message.isUser, 'assistant-wrapper': !message.isUser }"
-        >
-          <div v-if="!message.isUser" class="assistant-avatar">
-            <img :src="sanbikongGif" alt="助手头像" class="avatar-gif-small" />
-          </div>
-          <div 
-            class="message" 
-            :class="{ 'user-message': message.isUser, 'assistant-message': !message.isUser }"
-          >
-            <div class="message-content" v-if="message.isUser">{{ message.text }}</div>
-            <div class="message-content" v-else v-html="message.text"></div>
-            <div class="message-time">{{ message.time }}</div>
-          </div>
-          <div v-if="message.isUser" class="user-avatar">
-            <div class="avatar-mini">👤</div>
-          </div>
-        </div>
-        <div v-if="isTyping" class="message-wrapper assistant-wrapper">
-          <div class="assistant-avatar">
-            <img :src="sanbikongGif" alt="助手头像" class="avatar-gif-small" />
-          </div>
-          <div class="message assistant-message">
-            <div class="message-content typing">
-              <span class="dot"></span>
-              <span class="dot"></span>
-              <span class="dot"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div class="chat-input-container">
-        <div class="input-wrapper">
-          <input 
-            v-model="userMessage" 
-            class="chat-input" 
-            placeholder="请输入您的问题..." 
-            @keyup.enter="sendMessage"
-          />
-        </div>
-        <button class="send-btn" @click="sendMessage">
-          <svg viewBox="0 0 24 24" width="18" height="18">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
-          </svg>
-        </button>
-      </div>
-      
-      <div class="quick-actions">
-        <button 
-          v-for="(action, index) in quickActions" 
-          :key="index" 
-          class="quick-action-btn"
-          @click="quickReply(action)"
-        >
-          {{ action }}
-        </button>
-      </div>
-    </div>
-    
-    <!-- GIF 动画容器 -->
+    <!-- 右侧边栏按钮 - 纵向排列的"三鼻孔" -->
     <div 
-      v-if="isExpanded"
+      v-if="!isChatOpen"
+      class="sidebar-toggle" 
+      :class="{ 'collapsed': !isExpanded }"
+      @click="toggleMascot"
+    >
+      <span class="text-char">三</span>
+      <span class="text-char">鼻</span>
+      <span class="text-char">孔</span>
+    </div>
+    
+    <!-- GIF 动画容器 - 聊天框打开时隐藏 -->
+    <div 
+      v-if="isExpanded && !isChatOpen"
       class="mascot-image-wrapper" 
       @click="handleMascotClick"
     >
+      <!-- 提示文字 -->
+      <div v-if="showTip" class="mascot-tip">
+        点击我就可以与我聊天啦~
+      </div>
       <img 
         :src="sanbikongGif" 
         alt="看板娘" 
         class="mascot-image"
       />
     </div>
+    
+    <!-- 聊天对话框 -->
+    <div v-if="isChatOpen" class="chat-container">
+      <!-- 聊天头部 -->
+      <div class="chat-header">
+        <div class="chat-navbar">
+          <div class="chat-title">智能助理</div>
+          <button class="collapse-btn" @click="toggleChat">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 15l-6-6-6 6"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- 消息列表 -->
+      <div class="message-list" ref="messagesContainer">
+        <div 
+          v-for="(msg, index) in messages" 
+          :key="index" 
+          class="message-item"
+          :class="{ 'message-right': msg.position === 'right' }"
+        >
+          <!-- 系统消息 -->
+          <div v-if="msg.type === 'system'" class="system-message">
+            {{ msg.content.text }}
+          </div>
+          
+          <!-- 普通消息 -->
+          <div v-else class="message-bubble-wrapper">
+            <div v-if="msg.position !== 'right'" class="message-avatar">
+              <img :src="sanbikongGif" alt="助手头像" />
+            </div>
+            <div 
+              class="message-bubble" 
+              :class="{ 
+                'bubble-left': msg.position !== 'right',
+                'bubble-right': msg.position === 'right'
+              }"
+            >
+              <div v-if="msg.type === 'text'" class="bubble-content" v-html="renderMessageContent(msg)"></div>
+              <img v-else-if="msg.type === 'image'" :src="msg.content.picUrl" alt="图片" class="message-image" />
+            </div>
+            <div v-if="msg.position === 'right'" class="message-avatar user-avatar">
+              <div class="avatar-icon">👤</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 打字指示器 -->
+        <div v-if="isTyping" class="message-item">
+          <div class="message-bubble-wrapper">
+            <div class="message-avatar">
+              <img :src="sanbikongGif" alt="助手头像" />
+            </div>
+            <div class="message-bubble bubble-left typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 快捷回复 -->
+      <div class="quick-replies">
+        <button
+          v-for="(reply, index) in quickActions"
+          :key="index"
+          class="quick-reply-btn"
+          :class="{ 
+            'highlight': reply.isHighlight,
+            'new': reply.isNew
+          }"
+          @click="handleQuickReplyClick(reply)"
+        >
+          <span v-if="reply.isNew" class="new-dot"></span>
+          {{ reply.name }}
+        </button>
+      </div>
+      
+      <!-- 输入区域 -->
+      <div class="input-area">
+        <input
+          v-model="userMessage"
+          @keyup.enter="handleSend"
+          placeholder="请输入..."
+          class="message-input"
+        />
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { marked } from 'marked';
 import sanbikongGif from '../assets/sanbikong.gif';
@@ -116,13 +131,14 @@ import sanbikongGif from '../assets/sanbikong.gif';
 export default {
   name: 'WankoAssistant',
   setup() {
-    const router = useRouter();
     const isExpanded = ref(false);
     const isChatOpen = ref(false);
     const userMessage = ref('');
     const messages = ref([]);
     const isTyping = ref(false);
     const messagesContainer = ref(null);
+    const showTip = ref(false);
+    let tipTimer = null;
     
     const markedOptions = {
       gfm: true, 
@@ -130,19 +146,28 @@ export default {
       silent: true
     };
     
-    const quickActions = [
-      '你好',
-      '帮助',
-      '常见问题',
-      '联系客服'
+    // 初始消息
+    const initialMessages = [
+      {
+        type: 'system',
+        content: { text: '数字校园专属智能助手 为您服务' },
+      },
+      {
+        type: 'text',
+        content: { text: 'Hi，我是你的专属智能助理，有问题请随时找我哦~' },
+        position: 'left',
+      },
     ];
     
-    const formatTime = () => {
-      return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    };
+    // 快捷回复
+    const quickActions = ref([
+      { name: '联系人工服务', isNew: true, isHighlight: true },
+      { name: '竞赛信息', isNew: true },
+      { name: '职业规划', isHighlight: true },
+      // { name: '学习资源' },
+    ]);
     
-    const addMessage = (message) => {
-      messages.value.push(message);
+    const scrollToBottom = () => {
       nextTick(() => {
         if (messagesContainer.value) {
           messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
@@ -150,30 +175,69 @@ export default {
       });
     };
     
+    const appendMsg = (msg) => {
+      messages.value.push(msg);
+      scrollToBottom();
+    };
+    
     const toggleMascot = () => {
+      const wasExpanded = isExpanded.value;
       isExpanded.value = !isExpanded.value;
+      
       // 如果关闭动画，同时关闭聊天
       if (!isExpanded.value) {
         isChatOpen.value = false;
+        // 清除提示文字
+        if (tipTimer) {
+          clearTimeout(tipTimer);
+          tipTimer = null;
+        }
+        showTip.value = false;
+      } else {
+        // 动画刚出来时，等动画完全显示后再显示提示文字
+        if (!wasExpanded) {
+          // 先隐藏提示文字
+          showTip.value = false;
+          // 等动画完成（0.4s）后再显示提示文字
+          setTimeout(() => {
+            showTip.value = true;
+            if (tipTimer) {
+              clearTimeout(tipTimer);
+            }
+            tipTimer = setTimeout(() => {
+              showTip.value = false;
+              tipTimer = null;
+            }, 3000);
+          }, 400); // 等待动画完成
+        }
       }
     };
     
     const handleMascotClick = () => {
-      // 点击已展开的 GIF 打开/关闭聊天
-      toggleChat();
+      // 点击已展开的 GIF 打开聊天
+      if (isExpanded.value && !isChatOpen.value) {
+        isChatOpen.value = true;
+        scrollToBottom();
+      }
     };
     
     const toggleChat = () => {
       isChatOpen.value = !isChatOpen.value;
-      
-      if (isChatOpen.value && messages.value.length === 0) {
-        const welcomeMsg = '你好！我是智能助手，有什么可以帮助你的吗？';
-        addMessage({
-          text: welcomeMsg,
-          isUser: false,
-          time: formatTime()
-        });
+      if (isChatOpen.value) {
+        scrollToBottom();
       }
+    };
+    
+    const renderMessageContent = (msg) => {
+      if (msg.type === 'text') {
+        try {
+          const processedText = msg.content.text.replace(/\\n/g, '\n');
+          return marked.parse(processedText, markedOptions);
+        } catch (error) {
+          return msg.content.text;
+        }
+      }
+      return '';
     };
     
     const sendQuestionToAI = async (question) => {
@@ -187,12 +251,6 @@ export default {
           headers.Authorization = `Bearer ${token}`;
         }
         
-        addMessage({
-          text: '',
-          isUser: false,
-          time: formatTime()
-        });
-        
         const response = await axios.post('/api/question', {
           question: question
         }, { headers });
@@ -204,35 +262,44 @@ export default {
             requestId = idMatch[1];
           } else {
             isTyping.value = false;
-            const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-            if (lastIndex >= 0) {
-              messages.value[lastIndex].text = "抱歉，处理请求时出现问题，请稍后再试。";
-            }
+            appendMsg({
+              type: 'text',
+              content: { text: '抱歉，处理请求时出现问题，请稍后再试。' },
+              position: 'left',
+            });
             return;
           }
           
           const answer = await pollForAnswer(requestId, headers);
+          isTyping.value = false;
           if (answer) {
-            await simulateStreamingResponse(answer);
+            appendMsg({
+              type: 'text',
+              content: { text: answer },
+              position: 'left',
+            });
           } else {
-            const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-            if (lastIndex >= 0) {
-              messages.value[lastIndex].text = "抱歉，无法获取回答，请稍后再试。";
-            }
+            appendMsg({
+              type: 'text',
+              content: { text: '抱歉，无法获取回答，请稍后再试。' },
+              position: 'left',
+            });
           }
         } else {
-          const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-          if (lastIndex >= 0) {
-            messages.value[lastIndex].text = "抱歉，我暂时无法回答您的问题，请稍后再试。";
-          }
+          isTyping.value = false;
+          appendMsg({
+            type: 'text',
+            content: { text: '抱歉，我暂时无法回答您的问题，请稍后再试。' },
+            position: 'left',
+          });
         }
       } catch (error) {
-        const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-        if (lastIndex >= 0) {
-          messages.value[lastIndex].text = "抱歉，我暂时无法回答您的问题，请稍后再试。";
-        }
-      } finally {
         isTyping.value = false;
+        appendMsg({
+          type: 'text',
+          content: { text: '抱歉，我暂时无法回答您的问题，请稍后再试。' },
+          position: 'left',
+        });
       }
     };
     
@@ -240,11 +307,6 @@ export default {
       const maxAttempts = 30;
       const interval = 1000;
       let attempts = 0;
-      
-      const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-      if (lastIndex >= 0) {
-        messages.value[lastIndex].text = "正在思考中，请稍候...";
-      }
       
       while (attempts < maxAttempts) {
         try {
@@ -256,10 +318,6 @@ export default {
             return response;
           }
           if (statusResponse.data.code === 0 && statusResponse.data.msg === "问题结果没有得到，请继续轮询") {
-            if (lastIndex >= 0 && attempts % 3 === 0) {
-              const dots = '.'.repeat((attempts / 3) % 4);
-              messages.value[lastIndex].text = `正在思考中，请稍候${dots}`;
-            }
             await new Promise(resolve => setTimeout(resolve, interval));
             continue;
           }
@@ -271,40 +329,28 @@ export default {
       return null;
     };
     
-    const simulateStreamingResponse = async (text) => {
-      const lastIndex = messages.value.map(m => !m.isUser).lastIndexOf(true);
-      if (lastIndex < 0) return;
+    const handleSend = (type = 'text', val = null) => {
+      const text = val || userMessage.value.trim();
+      if (!text) return;
       
-      try {
-        const processedText = text.replace(/\\n/g, '\n');
-        const htmlText = marked.parse(processedText, markedOptions);
-        messages.value[lastIndex].text = htmlText;
-      } catch (error) {
-        messages.value[lastIndex].text = text;
-      }
-    };
-    
-    const sendMessage = async () => {
-      if (!userMessage.value.trim()) return;
-      addMessage({
-        text: userMessage.value,
-        isUser: true,
-        time: formatTime()
+      appendMsg({
+        type: 'text',
+        content: { text: text },
+        position: 'right',
       });
       
-      const question = userMessage.value;
       userMessage.value = '';
-      await sendQuestionToAI(question);
+      sendQuestionToAI(text);
     };
     
-    const quickReply = (action) => {
-      addMessage({
-        text: action,
-        isUser: true,
-        time: formatTime()
-      });
-      sendQuestionToAI(action);
+    const handleQuickReplyClick = (item) => {
+      handleSend('text', item.name);
     };
+    
+    onMounted(() => {
+      messages.value = [...initialMessages];
+      scrollToBottom();
+    });
     
     return {
       sanbikongGif,
@@ -315,11 +361,13 @@ export default {
       isTyping,
       messagesContainer,
       quickActions,
+      showTip,
       toggleMascot,
       handleMascotClick,
       toggleChat,
-      sendMessage,
-      quickReply
+      handleSend,
+      handleQuickReplyClick,
+      renderMessageContent
     };
   }
 };
@@ -331,41 +379,55 @@ export default {
   bottom: 0;
   right: 0;
   z-index: 999999;
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: flex-end;
-  gap: 0;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-/* 右侧边栏按钮 */
+/* 右侧边栏按钮 - 纵向排列的"三鼻孔" */
 .sidebar-toggle {
   position: fixed;
   right: 0;
   bottom: 200px;
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px 0 0 8px;
+  /* width: 40px; */
+  /* height: 120px; */
+  padding: 6px;
+  background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
+  border-radius: 4px 0 0 4px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   color: #fff;
-  font-size: 18px;
+  font-size: 12px;
   font-weight: bold;
-  box-shadow: -2px 2px 12px rgba(0, 0, 0, 0.15);
+  /* box-shadow: -2px 2px 12px rgba(0, 0, 0, 0.15); */
   transition: all 0.3s ease;
   z-index: 1000000;
   user-select: none;
+  overflow: hidden;
+}
+
+/* 左右隐藏：当collapsed时，收缩进去隐藏右半部分 */
+.sidebar-toggle.collapsed {
+  transition: all 0.5s ease;
+  transform: translateX(50%);
 }
 
 .sidebar-toggle:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  transform: translateX(-2px);
+  /* background: linear-gradient(135deg, #764ba2 0%, #667eea 100%); */
   box-shadow: -4px 4px 16px rgba(0, 0, 0, 0.2);
 }
 
+.sidebar-toggle:not(.collapsed):hover {
+  transform: translateX(-2px);
+}
+
+.text-char {
+  line-height: 1.2;
+  display: block;
+}
+
+/* GIF 动画容器 */
 .mascot-image-wrapper {
   position: fixed;
   right: 0;
@@ -397,130 +459,148 @@ export default {
   pointer-events: auto;
   user-select: none;
   object-fit: contain;
-  transform: translateY(0);
-  transition: transform 0.3s ease;
 }
 
-.mascot-image-wrapper:hover .mascot-image {
-  transform: scale(1.05);
+/* 提示文字 */
+.mascot-tip {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  white-space: nowrap;
+  z-index: 999999;
+  pointer-events: none;
+  opacity: 0;
+  animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  15% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
 }
 
 /* 聊天容器 */
 .chat-container {
-  width: 380px;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 360px;
   height: 600px;
   background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
+  z-index: 999999;
   overflow: hidden;
-  animation: slideIn 0.3s ease-out;
+  animation: slideUp 0.3s ease-out;
 }
 
-@keyframes slideIn {
+@keyframes slideUp {
   from {
-    opacity: 0;
-    transform: translateX(20px);
+    transform: translateY(100%);
   }
   to {
-    opacity: 1;
-    transform: translateX(0);
+    transform: translateY(0);
   }
 }
 
+/* 聊天头部 */
 .chat-header {
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.chat-navbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
+  justify-content: center;
+  padding: 12px 16px;
 }
 
 .chat-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  
 }
 
-.avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #fff;
+.collapse-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.2s;
 }
 
-.avatar-gif {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.collapse-btn:hover {
+  color: #667eea;
 }
 
-.title-text {
+/* 消息列表 */
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: #f7f7f7;
+}
+
+.message-item {
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
 }
 
-.name {
-  font-size: 16px;
-  font-weight: 600;
+.message-item.message-right {
+  align-items: flex-end;
 }
 
-.status {
+/* 系统消息 */
+.system-message {
+  text-align: center;
   font-size: 12px;
-  opacity: 0.9;
+  color: #999;
+  padding: 8px 0;
+  margin: 8px 0;
 }
 
-.chat-actions {
+/* 消息气泡包装器 */
+.message-bubble-wrapper {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
+  max-width: 80%;
 }
 
-.close-btn {
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  border-radius: 8px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #fff;
-  transition: background 0.2s;
-}
-
-.close-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  background: #f5f5f5;
-}
-
-.message-wrapper {
-  display: flex;
-  margin-bottom: 16px;
-  gap: 8px;
-}
-
-.user-wrapper {
-  flex-direction: row-reverse;
-}
-
-.assistant-wrapper {
+.message-right .message-bubble-wrapper {
   flex-direction: row;
 }
 
-.assistant-avatar {
+.message-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -529,188 +609,166 @@ export default {
   background: #fff;
 }
 
-.avatar-gif-small {
+.message-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
 
-.avatar-mini {
+.avatar-icon {
   font-size: 18px;
 }
 
-.message {
-  max-width: 70%;
-  padding: 12px 16px;
-  border-radius: 12px;
+/* 消息气泡 */
+.message-bubble {
+  padding: 10px 14px;
+  border-radius: 6px;
+  line-height: 1.5;
   word-wrap: break-word;
+  font-size: 14px;
+  max-width: 100%;
 }
 
-.user-message {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-
-.assistant-message {
+.bubble-left {
   background: #fff;
   color: #333;
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* border-bottom-left-radius: 4px; */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.message-content {
+.bubble-right {
+  background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
+  color: #fff;
+  /* border-bottom-right-radius: 4px; */
+}
+
+.bubble-content {
   line-height: 1.5;
-  font-size: 14px;
 }
 
-.message-content :deep(p) {
+.bubble-content :deep(p) {
   margin: 0 0 8px 0;
 }
 
-.message-content :deep(p:last-child) {
+.bubble-content :deep(p:last-child) {
   margin-bottom: 0;
 }
 
-.message-time {
-  font-size: 11px;
-  color: #999;
-  margin-top: 4px;
+.bubble-content :deep(a) {
+  color: #667eea;
+  text-decoration: underline;
 }
 
-.typing {
+.message-image {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* 打字指示器 */
+.typing-indicator {
   display: flex;
-  gap: 4px;
   align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
 }
 
-.dot {
+.typing-indicator span {
   width: 6px;
   height: 6px;
+  background-color: #999;
   border-radius: 50%;
-  background: #999;
-  animation: typing 1.4s infinite;
+  animation: bounce 1.4s infinite ease-in-out;
 }
 
-.dot:nth-child(2) {
-  animation-delay: 0.2s;
+.typing-indicator span:nth-child(2) {
+  animation-delay: -1.1s;
 }
 
-.dot:nth-child(3) {
-  animation-delay: 0.4s;
+.typing-indicator span:nth-child(3) {
+  animation-delay: -0.9s;
 }
 
-@keyframes typing {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.5;
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
   }
-  30% {
-    transform: translateY(-10px);
-    opacity: 1;
+  40% {
+    transform: scale(1);
   }
 }
 
-.chat-input-container {
+/* 快捷回复 */
+.quick-replies {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 16px;
+  padding: 12px 16px;
+  background: #f7f7f7;
+  /* border-top: 1px solid #eee; */
+}
+
+.quick-reply-btn {
+  position: relative;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.quick-reply-btn:hover {
+  /* background: #f5f5f5;
+  border-color: #ccc; */
+  border: 1px solid rgb(212,184,224);
+  color: rgb(204, 134, 235);
+}
+
+
+/* 输入区域 */
+.input-area {
+  padding: 12px 16px;
   background: #fff;
   border-top: 1px solid #eee;
 }
 
-.input-wrapper {
-  flex: 1;
-}
-
-.chat-input {
+.message-input {
   width: 100%;
-  padding: 10px 16px;
   border: 1px solid #ddd;
   border-radius: 20px;
+  padding: 8px 16px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s;
 }
 
-.chat-input:focus {
-  border-color: #667eea;
-}
-
-.send-btn {
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s;
-}
-
-.send-btn:hover {
-  transform: scale(1.1);
-}
-
-.quick-actions {
-  display: flex;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #fff;
-  border-top: 1px solid #eee;
-  flex-wrap: wrap;
-}
-
-.quick-action-btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 16px;
-  background: #fff;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.quick-action-btn:hover {
-  background: #f0f0f0;
-  border-color: #667eea;
-  color: #667eea;
+.message-input:focus {
+  border-color: rgb(120,93,148);
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
   .chat-container {
-    width: calc(100vw - 40px);
-    height: calc(100vh - 120px);
-    max-height: 600px;
+    width: calc(100vw - 20px);
+    height: calc(100vh - 100px);
+    max-height: 500px;
   }
   
   .mascot-image-wrapper {
     width: 200px;
-    height: 60px;
-  }
-  
-  .mascot-image-wrapper.expanded {
-    width: 200px;
     height: 200px;
-  }
-  
-  .mascot-image {
-    width: 200px;
   }
 }
 </style>
