@@ -63,8 +63,14 @@
       </div>
     </nav>
     
-    <!-- 个人主页对话框 -->
-    <el-dialog v-model="profileDialogVisible" title="个人主页" width="600px" :close-on-click-modal="false">
+    <!-- 个人主页对话框（自定义弹窗） -->
+    <div v-if="profileDialogVisible" class="personal-modal-overlay">
+      <div class="personal-modal" role="dialog" aria-modal="true" aria-labelledby="personal-modal-title">
+        <div class="personal-modal-header">
+          <div id="personal-modal-title" class="personal-modal-title">个人主页</div>
+          <button class="personal-modal-close" @click="profileDialogVisible = false" aria-label="关闭">✕</button>
+        </div>
+        <div class="personal-modal-body">
       <el-form :model="profileForm" label-width="100px" ref="profileFormRef">
         <el-form-item label="头像">
           <el-upload
@@ -118,11 +124,13 @@
           />
         </el-form-item>
       </el-form>
-      <template #footer>
+        </div>
+        <div class="personal-modal-footer">
         <el-button @click="profileDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="saveProfile">保存</el-button>
-      </template>
-    </el-dialog>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -130,6 +138,7 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { uploadUserAvatar, updateMyProfile } from '../api/user'
 import { Plus } from '@element-plus/icons-vue'
 
 // 获取当前路由
@@ -166,6 +175,7 @@ const profileForm = ref({
   school: '',
   bio: ''
 })
+const selectedAvatarFile = ref(null)
 
 // 用户信息
 const userAvatar = ref('')
@@ -245,6 +255,8 @@ const beforeAvatarUpload = (file) => {
 
 // 头像文件变化处理
 const handleAvatarChange = (file) => {
+  // 保存原始文件用于上传，并设置预览
+  selectedAvatarFile.value = file.raw
   const reader = new FileReader()
   reader.onload = (e) => {
     profileForm.value.avatar = e.target.result
@@ -255,27 +267,51 @@ const handleAvatarChange = (file) => {
 // 保存个人资料
 const saveProfile = async () => {
   try {
-    // 保存到localStorage
-    localStorage.setItem('userProfile', JSON.stringify(profileForm.value))
-    
-    // 更新用户信息显示
-    userAvatar.value = profileForm.value.avatar
+    // 1) 若选择了新头像文件，先上传以获取URL
+    let avatarUrl = profileForm.value.avatar
+    if (selectedAvatarFile.value) {
+      const url = await uploadUserAvatar(selectedAvatarFile.value)
+      if (url) {
+        avatarUrl = url
+        profileForm.value.avatar = url
+      }
+    }
+    // 2) 调用后端更新接口
+    await updateMyProfile({
+      userName: profileForm.value.nickname || '',
+      userAvatar: avatarUrl || '',
+      userProfile: profileForm.value.bio || '',
+      gender: profileForm.value.gender || '保密',
+      grade: profileForm.value.grade || '',
+      major: profileForm.value.major || '',
+      school: profileForm.value.school || ''
+    })
+    // 3) 本地存储，供其它模块(如聊天)读取
+    localStorage.setItem('userProfile', JSON.stringify({
+      avatar: avatarUrl || '',
+      nickname: profileForm.value.nickname || '',
+      gender: profileForm.value.gender || '保密',
+      grade: profileForm.value.grade || '',
+      major: profileForm.value.major || '',
+      school: profileForm.value.school || '',
+      bio: profileForm.value.bio || ''
+    }))
+    // 4) 更新导航栏显示
+    userAvatar.value = avatarUrl || ''
     userDisplayName.value = profileForm.value.nickname || 'U'
-    
-    // 更新userAccount显示
     if (userAccount.value) {
       if (userAvatar.value) {
-        // 如果有头像，显示头像
         userAccount.value.style.display = 'none'
       } else {
-        // 如果没有头像，显示昵称或U
         userAccount.value.textContent = userDisplayName.value
         userAccount.value.style.display = 'flex'
       }
     }
-    
     ElMessage.success('保存成功!')
     profileDialogVisible.value = false
+    // 5) 通知聊天组件更新头像
+    window.dispatchEvent(new StorageEvent('storage', { key: 'userProfile' }))
+    window.dispatchEvent(new CustomEvent('user-avatar-updated', { detail: avatarUrl }))
   } catch (error) {
     console.error('保存失败:', error)
     ElMessage.error('保存失败，请重试')
@@ -419,6 +455,24 @@ const updateActiveLink = () => {
     }
   }
   
+  // 兼容“竞赛详情”页：当路径属于竞赛模块但未匹配具体下拉项时，激活“竞赛活动”父链接
+  if (!parentLink) {
+    const isCompetitionDetail =
+      currentPath.startsWith('/competition') ||
+      currentPath.startsWith('/contest')
+    if (isCompetitionDetail && navLinksRef.value) {
+      // 第一个包含“竞赛活动”的下拉父项
+      const dropdowns = navLinksRef.value.querySelectorAll('.nav-dropdown')
+      for (const dropdown of dropdowns) {
+        const parentSpan = dropdown.querySelector('.nav-link')
+        if (parentSpan && parentSpan.textContent && parentSpan.textContent.includes('竞赛活动')) {
+          parentLink = parentSpan
+          break
+        }
+      }
+    }
+  }
+  
   // 如果找到了父级链接，激活它
   if (parentLink && activatedDropdownItem) {
     parentLink.classList.add('active')
@@ -431,6 +485,11 @@ const updateActiveLink = () => {
       activeLink.value = newActiveLink
       newActiveLink.classList.add('active')
       moveIndicator(newActiveLink)
+    } else if (parentLink) {
+      // 无精确匹配，但识别为竞赛模块时，仅激活父链接并移动指示器
+      parentLink.classList.add('active')
+      activeLink.value = parentLink
+      moveIndicator(parentLink)
     }
   }
 }
@@ -782,6 +841,8 @@ body {
   overflow: visible;
 }
 
+/* 占位类由 :deep 规则使用，这里不需要局部样式，删除空规则 */
+
 .user-avatar {
   width: 40px;
   height: 40px;
@@ -881,6 +942,70 @@ body {
   color: #d946ef !important;
 }
 
+/* 自定义个人主页弹窗样式 */
+.personal-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2001;
+}
+
+.personal-modal {
+  width: 600px;
+  max-width: calc(100vw - 32px);
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.personal-modal-header {
+  position: relative;
+  padding: 20px 24px 8px 24px;
+  text-align: center;
+}
+
+.personal-modal-title {
+  color: #8f7aa4;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.personal-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 32px;
+}
+
+.personal-modal-close:hover {
+  background: #f2f2f2;
+  color: #666;
+}
+
+.personal-modal-body {
+  padding: 8px 24px 0 24px;
+}
+
+.personal-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px 20px 24px;
+}
+
 /* 导航栏下拉菜单样式 */
 .nav-dropdown {
   position: relative;
@@ -978,16 +1103,25 @@ body {
   }
 }
 
-/* 个人主页对话框样式 */
-:deep(.el-dialog__header) {
-  padding: 20px;
-  margin-bottom: 20px;
-  text-align: center;
+/* 个人主页对话框样式（通过传入的 class 提高命中率） */
+::deep(.personal-dialog .el-dialog__header) {
+  background: transparent !important;
+  padding: 16px 20px 8px 20px !important;
+  margin: 0 !important;
+  text-align: center !important;
+  border-bottom: none !important;
 }
 
-:deep(.el-dialog__title) {
-  color: #7d5196;
-  font-weight: 800;
+::deep(.personal-dialog .el-dialog__title) {
+  color: #8f7aa4 !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+}
+
+::deep(.personal-dialog .el-dialog__headerbtn),
+::deep(.personal-dialog .el-dialog__close) {
+  display: inline-flex !important;
+  opacity: 1 !important;
 }
 
 .avatar-uploader {

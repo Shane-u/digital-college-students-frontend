@@ -86,13 +86,13 @@
       </div>
       
       <el-form :model="recordForm" label-width="100px">
-        <el-form-item label="事件描述">
+        <el-form-item label="事件名称">
           <el-input
             v-model="recordForm.description"
             type="text"
             maxlength="30"
             show-word-limit
-            placeholder="请输入事件描述（最多30字）"
+            placeholder="请输入事件名称（最多30字）"
           />
         </el-form-item>
 
@@ -143,6 +143,7 @@
             text-color="#ff9900"
           />
         </el-form-item>
+        <div class="importance-hint">重要程度为4及以上的事件将被列入里程碑中</div>
       </el-form>
 
       <template #footer>
@@ -162,7 +163,7 @@ import NavBar from '../components/NavBar.vue'
 import SidebarMenu from '../components/SidebarMenu.vue'
 import CalendarComponent from '../components/CalendarComponent.vue'
 import SearchBar from '../components/SearchBar.vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   uploadImage,
   uploadFile,
@@ -356,74 +357,36 @@ const handlePreviewRecord = (dateStr) => {
   }
 }
 
-// 删除记录
-const handleDeleteRecord = (dateStr) => {
-  ElMessage({
-    type: 'warning',
-    message: '确定要删除这条记录吗？',
-    showClose: true,
-    duration: 0,
-    customClass: 'delete-confirm-message',
-    dangerouslyUseHTMLString: true,
-    message: `
-      <div style="margin-bottom: 12px;">确定要删除这条记录吗？</div>
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="cancel-delete" style="padding: 5px 15px; border: 1px solid #dcdfe6; border-radius: 4px; background: white; cursor: pointer;">取消</button>
-        <button id="confirm-delete" style="padding: 5px 15px; border: none; border-radius: 4px; background: #f56c6c; color: white; cursor: pointer;">确定</button>
-      </div>
-    `,
-    onClose: () => {
-      // 移除事件监听器
-      document.removeEventListener('click', handleDeleteClick)
-    }
-  })
-  
-  const handleDeleteClick = async (e) => {
-    if (e.target.id === 'confirm-delete') {
-      // 确认删除
-      const record = records.value.find(r => {
-        const recordDate = r.recordTime ? r.recordTime.split('T')[0] : r.recordTime
-        return recordDate === dateStr
-      })
-      
-      if (record && record.id) {
-        try {
-          await deleteGrowthRecord(record.id)
-          ElMessage.success('删除成功')
-          
-          // 重新加载数据
-          await loadRecords()
-          await loadStatistics()
-          
-          // 关闭消息框
-          const messageBoxes = document.querySelectorAll('.el-message')
-          messageBoxes.forEach(box => {
-            if (box.querySelector('#confirm-delete')) {
-              box.remove()
-            }
-          })
-        } catch (error) {
-          console.error('删除失败:', error)
-          ElMessage.error('删除失败，请重试')
-        }
+// 删除记录（使用居中弹窗）
+const handleDeleteRecord = async (dateStr) => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除这条记录吗？删除后不可恢复。',
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+        center: true,
+        autofocus: false,
+        closeOnClickModal: false,
       }
-      document.removeEventListener('click', handleDeleteClick)
-    } else if (e.target.id === 'cancel-delete') {
-      // 取消删除，关闭消息框
-      const messageBoxes = document.querySelectorAll('.el-message')
-      messageBoxes.forEach(box => {
-        if (box.querySelector('#cancel-delete')) {
-          box.remove()
-        }
-      })
-      document.removeEventListener('click', handleDeleteClick)
+    )
+    const record = records.value.find(r => {
+      const recordDate = r.recordTime ? r.recordTime.split('T')[0] : r.recordTime
+      return recordDate === dateStr
+    })
+    if (record && record.id) {
+      await deleteGrowthRecord(record.id)
+      ElMessage.success('删除成功')
+      await loadRecords()
+      await loadStatistics()
+    } else {
+      ElMessage.warning('未找到要删除的记录')
     }
+  } catch {
+    // 用户取消
   }
-  
-  // 添加事件监听器
-  setTimeout(() => {
-    document.addEventListener('click', handleDeleteClick)
-  }, 100)
 }
 
 // 处理图片上传
@@ -752,6 +715,14 @@ watch(() => route.query.date, (newDate) => {
   color: white;
   font-weight: 600;
   text-align: center;
+}
+
+/* Added: small helper text under importance */
+.importance-hint {
+  margin-top: -8px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #8f7aa4;
 }
 
 :deep(.el-dialog__close) {

@@ -127,7 +127,6 @@ import { useRoute, useRouter } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import { ElMessage } from 'element-plus'
 import { getGrowthRecordList, getGrowthRecord } from '../api/growthRecord'
-import request from '../api/request'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,7 +138,7 @@ const filePreviewVisible = ref(false)
 const previewFileUrl = ref('')
 const previewFileName = ref('')
 const printArea = ref(null)
-let currentBlobUrl = null // 保存当前的blob URL，用于清理
+// 采用浏览器内置预览/下载，不再创建blob
 
 // 格式化日期
 const formattedDate = computed(() => {
@@ -200,63 +199,20 @@ const canPreviewFile = (fileName) => {
   return ext === 'pdf'
 }
 
-// 预览文件（只支持PDF）
+// 预览文件（使用浏览器PDF查看器）
 const previewFile = async (file) => {
   const fileName = file.fileName || file.name
   const ext = fileName.split('.').pop().toLowerCase()
   
   if (ext === 'pdf') {
-    // PDF 文件使用浏览器自带的PDF查看器预览
-    previewFileName.value = fileName
     const fileUrl = file.fileUrl || file.url
     if (!fileUrl) {
       ElMessage.error('文件URL不存在，无法预览')
       return
     }
-    
-    try {
-      ElMessage.info('正在加载PDF文件...')
-      
-      // 判断fileUrl是完整URL还是相对路径
-      let requestUrl = fileUrl
-      if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-        // 相对路径，需要拼接baseURL
-        // 如果fileUrl以/开头，去掉开头的/，因为baseURL已经包含/api
-        requestUrl = fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`
-      }
-      
-      // 使用axios获取PDF文件（会自动携带认证token）
-      const response = await request({
-        url: requestUrl,
-        method: 'GET',
-        responseType: 'blob', // 重要：指定响应类型为blob
-        headers: {
-          'Accept': 'application/pdf'
-        }
-      })
-      
-      // 清理之前的blob URL（如果存在）
-      if (currentBlobUrl) {
-        URL.revokeObjectURL(currentBlobUrl)
-      }
-      
-      // 创建blob URL
-      const blob = new Blob([response], { type: 'application/pdf' })
-      const blobUrl = URL.createObjectURL(blob)
-      currentBlobUrl = blobUrl
-      previewFileUrl.value = blobUrl
-      filePreviewVisible.value = true
-      ElMessage.success('PDF加载成功')
-    } catch (error) {
-      console.error('加载PDF失败:', error)
-      if (error.response) {
-        ElMessage.error(`加载PDF失败: ${error.response.status} ${error.response.statusText}`)
-      } else if (error.request) {
-        ElMessage.error('无法连接到服务器，请检查网络连接')
-      } else {
-        ElMessage.error('加载PDF文件失败，请稍后重试')
-      }
-    }
+    previewFileName.value = fileName
+    // 直接使用浏览器内置PDF查看器在新标签打开
+    window.open(fileUrl, '_blank', 'noopener,noreferrer')
   } else {
     // 其他文件类型只支持下载
     downloadFile(file)
@@ -327,23 +283,7 @@ onMounted(async () => {
   }
 })
 
-// 监听预览对话框关闭，清理blob URL
-watch(filePreviewVisible, (newVal) => {
-  if (!newVal && currentBlobUrl) {
-    // 对话框关闭时，释放blob URL
-    URL.revokeObjectURL(currentBlobUrl)
-    currentBlobUrl = null
-    previewFileUrl.value = ''
-  }
-})
-
-// 组件卸载时清理blob URL
-onUnmounted(() => {
-  if (currentBlobUrl) {
-    URL.revokeObjectURL(currentBlobUrl)
-    currentBlobUrl = null
-  }
-})
+// 不再需要blob URL的清理逻辑
 </script>
 
 <style scoped>

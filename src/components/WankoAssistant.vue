@@ -7,9 +7,9 @@
       :class="{ 'collapsed': !isExpanded }"
       @click="toggleMascot"
     >
-      <span class="text-char">三</span>
-      <span class="text-char">鼻</span>
-      <span class="text-char">孔</span>
+      <span class="text-char">孪</span>
+      <span class="text-char">孪</span>
+      <!-- <span class="text-char">孔</span> -->
     </div>
     
     <!-- GIF 动画容器 - 聊天框打开时隐藏 -->
@@ -57,7 +57,8 @@
           </div>
           
           <!-- 普通消息 -->
-          <div v-else class="message-bubble-wrapper">
+          <template v-else>
+            <div v-if="shouldRenderMessage(msg)" class="message-bubble-wrapper">
             <div v-if="msg.position !== 'right'" class="message-avatar">
               <img :src="sanbikongGif" alt="助手头像" />
             </div>
@@ -70,17 +71,31 @@
             >
               <!-- 思考过程 -->
               <div v-if="msg.reasoning && msg.position !== 'right'" class="reasoning-content">
-                <div class="reasoning-label">💭 思考中...</div>
-                <div class="reasoning-text" v-html="renderReasoningContent(msg.reasoning)"></div>
+                <div class="reasoning-label">
+                  <span v-if="!msg.reasoningDone">💭 思考中...</span>
+                  <span v-else>✅ 已完成思考</span>
+                  <button
+                    v-if="msg.reasoningDone"
+                    class="reasoning-toggle"
+                    @click="toggleReasoning(index)"
+                  >{{ msg.reasoningCollapsed ? '展开' : '收起' }}</button>
+                </div>
+                <div
+                  class="reasoning-text"
+                  :class="{ done: msg.reasoningDone && msg.reasoningCollapsed }"
+                  v-html="renderReasoningContent(msg.reasoning)"
+                ></div>
               </div>
               <!-- 消息内容 -->
               <div v-if="msg.type === 'text'" class="bubble-content" v-html="renderMessageContent(msg)"></div>
               <img v-else-if="msg.type === 'image'" :src="msg.content.picUrl" alt="图片" class="message-image" />
             </div>
             <div v-if="msg.position === 'right'" class="message-avatar user-avatar">
-              <div class="avatar-icon">👤</div>
+              <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="用户头像" class="user-avatar-img" />
+              <div v-else class="avatar-icon">👤</div>
             </div>
-          </div>
+            </div>
+          </template>
         </div>
         
         <!-- 打字指示器 -->
@@ -147,6 +162,7 @@ export default {
     let tipTimer = null;
     let abortController = null; // 用于取消流式请求
     let currentSessionId = ref(''); // 当前会话ID
+    const userAvatarUrl = ref('');
     
     const markedOptions = {
       gfm: true, 
@@ -220,6 +236,15 @@ export default {
         }
       }
     };
+  
+  // 切换当前消息的思考折叠状态
+  const toggleReasoning = (msgIndex) => {
+    const msg = messages.value[msgIndex];
+    if (!msg) return;
+    if (!msg.reasoningDone) return; // 仅当思考完成后允许切换
+    msg.reasoningCollapsed = !msg.reasoningCollapsed;
+    scrollToBottom();
+  };
     
     const handleMascotClick = () => {
       // 点击已展开的 GIF 打开聊天
@@ -257,6 +282,18 @@ export default {
       } catch (error) {
         return reasoning;
       }
+    };
+    
+    // 避免思考时出现一个空助手气泡与打字指示器并存
+    const shouldRenderMessage = (msg) => {
+      if (!msg || msg.type !== 'text') return true;
+      const isAssistant = msg.position !== 'right';
+      const hasText = !!(msg.content && msg.content.text && msg.content.text.length > 0);
+      const hasReasoning = !!(msg.reasoning && msg.reasoning.length > 0);
+      if (isAssistant && isTyping.value && !hasText && !hasReasoning) {
+        return false;
+      }
+      return true;
     };
     
     // 构建消息历史
@@ -340,7 +377,9 @@ export default {
           type: 'text',
           content: { text: '' },
           position: 'left',
-          reasoning: ''
+          reasoning: '',
+          reasoningDone: false,
+          reasoningCollapsed: false
         });
         
         // 流式输出处理
@@ -390,6 +429,9 @@ export default {
               if (reasoning) {
                 reasoningQueue.value += '';
               }
+              // 兜底：完成时确保思考标记为已完成
+              messages.value[assistantMsgIndex].reasoningDone = true;
+              messages.value[assistantMsgIndex].reasoningCollapsed = true;
             }
             scrollToBottom();
             abortController = null;
@@ -428,6 +470,33 @@ export default {
     onMounted(() => {
       messages.value = [...initialMessages];
       scrollToBottom();
+      // 读取用户头像
+      try {
+        const profile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+        if (profile && profile.avatar) {
+          userAvatarUrl.value = profile.avatar;
+        }
+      } catch {}
+      // 监听 storage 事件以便头像更新后即刻生效
+      const updateAvatarFromStorage = () => {
+        try {
+          const profile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+          userAvatarUrl.value = profile?.avatar || '';
+        } catch {
+          userAvatarUrl.value = '';
+        }
+      };
+      window.addEventListener('storage', updateAvatarFromStorage);
+      // 监听自定义事件（同页内更新）
+      const onAvatarUpdated = (e) => {
+        userAvatarUrl.value = e?.detail || userAvatarUrl.value;
+      };
+      window.addEventListener('user-avatar-updated', onAvatarUpdated);
+      // 在卸载时移除
+      onUnmounted(() => {
+        window.removeEventListener('storage', updateAvatarFromStorage);
+        window.removeEventListener('user-avatar-updated', onAvatarUpdated);
+      });
     });
     
     // 组件卸载时取消请求
@@ -456,7 +525,10 @@ export default {
       handleSend,
       handleQuickReplyClick,
       renderMessageContent,
-      renderReasoningContent
+      renderReasoningContent,
+      toggleReasoning,
+      shouldRenderMessage,
+      userAvatarUrl
     };
   }
 };
@@ -592,8 +664,8 @@ export default {
   position: fixed;
   bottom: 0;
   right: 0;
-  width: 1200px;
-  height: 600px;
+  width: 500px;
+  height: 700px;
   background: #fff;
   border-radius: 12px 12px 0 0;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
@@ -778,6 +850,29 @@ export default {
   font-size: 13px;
   color: #666;
   line-height: 1.6;
+}
+
+/* 思考完成后折叠为两行展示（仍可看到最新片段） */
+.reasoning-text.done {
+  display: -webkit-box;
+  /* 兼容属性 */
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reasoning-toggle {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #667eea;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.reasoning-toggle:hover {
+  text-decoration: underline;
 }
 
 .reasoning-text :deep(p) {

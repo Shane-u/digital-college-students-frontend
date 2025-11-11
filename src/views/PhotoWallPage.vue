@@ -245,7 +245,9 @@ import {
   getGrowthRecordList,
   getPhotoWallStatistics,
   searchGrowthRecords,
-  deleteImage
+  deleteImage,
+  getPhotoWallList,
+  batchDeleteImages
 } from '../api/growthRecord'
 import trashIcon from '../assets/chengzhang_icon/trash.png'
 
@@ -267,62 +269,37 @@ const uploadForm = ref({
   description: '',
   reflection: '',
   images: [],
-  syncToGrowthRecord: true
+  syncToGrowthRecord: false
 })
 
-// 从后端加载照片
+// 从后端加载照片（照片墙接口，包含 type=1 与 type=2）
 const loadPhotosFromRecords = async () => {
   try {
-    const photos = []
-    
-    // 从成长记录中加载所有照片（包括type=1和type=2）
-    const recordsData = await getGrowthRecordList({
-      current: 1,
-      pageSize: 1000,
-      sortField: 'recordTime',
-      sortOrder: 'descend'
-    })
-    
-    if (recordsData && recordsData.records) {
-      recordsData.records.forEach(record => {
-        // 检查记录中是否有图片
-        if (record.images && record.images.length > 0) {
-          record.images.forEach((image, index) => {
-            // 加载所有类型的图片（type=1和type=2都显示在照片墙）
-            if (image.imageUrl) {
-              // 使用uploadTime作为日期，如果没有则使用recordTime
-              const photoDate = image.uploadTime 
-                ? image.uploadTime.split('T')[0] 
-                : (record.recordTime ? record.recordTime.split('T')[0] : '')
-              
-              photos.push({
-                id: `growth-${record.id}-${image.id}`,
-                imageId: image.id, // 保存图片ID用于删除
-                title: record.eventDesc || image.imageName || '照片',
-                url: image.imageUrl,
-                date: photoDate,
-                description: record.eventDesc || '',
-                reflection: record.reflection || '',
-                importance: record.importance || 0,
-                source: 'growth',
-                recordId: record.id,
-                imageType: image.type // 保存图片类型
-              })
+    const list = await getPhotoWallList()
+    const photos = (list || []).map(img => {
+      const date = img.uploadTime ? img.uploadTime.split('T')[0] : ''
+      return {
+        id: img.id,
+        imageId: img.id,
+        title: img.imageName || '照片',
+        url: img.imageUrl,
+        date,
+        description: '',
+        reflection: '',
+        importance: 0,
+        source: 'photoWall',
+        recordId: null,
+        imageType: img.type
             }
           })
-        }
-      })
-    }
-    
-    // 按日期降序排序（使用uploadTime或recordTime）
+    // 按日期降序
     photos.sort((a, b) => {
       const dateA = a.date ? new Date(a.date) : new Date(0)
       const dateB = b.date ? new Date(b.date) : new Date(0)
       return dateB - dateA
     })
-    
     allPhotos.value = photos
-    console.log('加载照片完成，共', photos.length, '张照片')
+    console.log('加载照片完成，共', photos.length, '张')
   } catch (error) {
     console.error('加载照片失败:', error)
     allPhotos.value = []
@@ -437,7 +414,7 @@ const showUploadDialog = () => {
     description: '',
     reflection: '',
     images: [],
-    syncToGrowthRecord: true
+    syncToGrowthRecord: false
   }
   uploadDialogVisible.value = true
 }
@@ -499,19 +476,7 @@ const savePhotos = async () => {
       
       ElMessage.success('照片上传成功，已同步到成长记录')
     } else {
-      // 只保存到照片墙：type=1的图片已经上传，但需要创建记录关联这些照片
-      // 创建一个成长记录来关联这些照片，这样它们才能显示在照片墙中
-      // 记录的事件描述使用照片标题，这样用户可以在照片墙中看到
-      const recordTime = `${todayStr}T12:00:00`
-      await addGrowthRecord({
-        eventDesc: uploadForm.value.title || '照片墙照片',
-        reflection: uploadForm.value.reflection || uploadForm.value.description || '',
-        importance: 0,
-        recordTime: recordTime,
-        imageIds: imageIds, // 关联type=1的图片
-        fileIds: []
-      })
-      
+      // 只保存到照片墙：type=1 的图片已上传到照片墙接口，无需创建成长记录
       ElMessage.success('照片上传成功，已保存到照片墙')
     }
     
@@ -651,16 +616,19 @@ const confirmBatchDelete = () => {
     if (e.target.id === 'confirm-batch-delete') {
       // 执行批量删除
       try {
-        const deletePromises = selectedPhotos.value
-          .filter(photo => photo.imageId)
-          .map(photo => deleteImage(photo.imageId))
-        
-        await Promise.all(deletePromises)
+        const ids = selectedPhotos.value
+          .filter(photo => photo.imageId || photo.id)
+          .map(photo => photo.imageId || photo.id)
+        if (ids.length === 0) {
+          ElMessage.error('未找到可删除的图片ID')
+          return
+        }
+        await batchDeleteImages(ids)
         
         // 退出批量删除模式
         cancelBatchDelete()
         
-        ElMessage.success(`已成功删除 ${selectedPhotos.value.length} 张照片`)
+        ElMessage.success(`已成功删除 ${ids.length} 张照片`)
         
         // 重新加载照片和统计信息
         await loadPhotosFromRecords()

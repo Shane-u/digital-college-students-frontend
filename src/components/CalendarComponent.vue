@@ -36,6 +36,22 @@
         <div v-if="day.hasRecord && day.recordDescription" class="day-description">
           {{ day.recordDescription }}
         </div>
+        <div v-if="day.hasRecord" class="day-actions">
+          <img
+            class="action-icon preview-icon"
+            :src="previewIcon"
+            alt="预览"
+            title="预览"
+            @click.stop="emit('previewRecord', day.dateStr)"
+          />
+          <img
+            class="action-icon delete-icon"
+            :src="trashIcon"
+            alt="删除"
+            title="删除"
+            @click.stop="emit('deleteRecord', day.dateStr)"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -43,6 +59,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import previewIcon from '../assets/chengzhang_icon/preview.png'
+import trashIcon from '../assets/chengzhang_icon/trash.png'
 
 const props = defineProps({
   records: {
@@ -55,7 +73,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['selectDate'])
+const emit = defineEmits(['selectDate', 'previewRecord', 'deleteRecord'])
 
 // 当前显示的年月
 const today = new Date()
@@ -335,8 +353,34 @@ watch(() => props.selectedDate, (newVal) => {
   box-shadow: inset 0 0 0 3px #b8a0c8;
 }
 
-.calendar-day.has-record {
-  background: rgba(184, 160, 200, 0.08);
+/* .calendar-day.has-record {
+  background: transparent;
+} */
+
+.day-actions {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  gap: 8px;
+  opacity: 0.0;
+  transition: opacity 0.15s ease;
+}
+
+.calendar-day.has-record:hover .day-actions,
+.calendar-day.selected .day-actions {
+  opacity: 1;
+}
+
+.action-icon {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.15));
+}
+
+.action-icon:hover {
+  transform: scale(1.05);
 }
 
 .day-number {
@@ -349,7 +393,7 @@ watch(() => props.selectedDate, (newVal) => {
 
 .day-description {
   font-size: 12px;
-  color: #666;
+  color: #6b5b7a;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -359,6 +403,10 @@ watch(() => props.selectedDate, (newVal) => {
   -webkit-box-orient: vertical;
   word-break: break-all;
   width: 100%;
+  background: #f3ecf8;
+  border: 1px solid #e6d8f0;
+  border-radius: 6px;
+  padding: 6px 8px;
 }
 
 .calendar-day.today .day-weight {
@@ -367,7 +415,8 @@ watch(() => props.selectedDate, (newVal) => {
 }
 
 .calendar-day.today .day-description {
-  color: rgba(255, 255, 255, 0.9);
+  /* 与其他日期保持一致的文本颜色与样式 */
+  color: #6b5b7a;
 }
 
 /* 响应式调整 */

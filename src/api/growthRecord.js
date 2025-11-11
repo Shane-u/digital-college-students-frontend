@@ -169,6 +169,17 @@ export function getPhotoWallStatistics() {
 }
 
 /**
+ * 获取照片墙全部图片（type=1 与 type=2，按上传时间倒序）
+ * @returns {Promise<Array>} GrowthImageVO[]
+ */
+export function getPhotoWallList() {
+  return request({
+    url: '/growth-record/photo-wall/list',
+    method: 'get'
+  })
+}
+
+/**
  * 删除图片
  * @param {number} id - 图片ID
  * @returns {Promise}
@@ -178,6 +189,19 @@ export function deleteImage(id) {
     url: '/growth-record/image/delete',
     method: 'post',
     params: { id }
+  })
+}
+
+/**
+ * 批量删除图片
+ * @param {number[]} ids - 图片ID列表
+ * @returns {Promise<number>} 删除数量或状态
+ */
+export function batchDeleteImages(ids = []) {
+  return request({
+    url: '/growth-record/image/batch-delete',
+    method: 'post',
+    data: { ids }
   })
 }
 

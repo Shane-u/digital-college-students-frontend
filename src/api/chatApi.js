@@ -1,4 +1,5 @@
 import { ElMessage } from 'element-plus'
+import { fetchEventSource } from '@microsoft/fetch-event-source'
 import axios from 'axios'
 
 // 创建 axios 实例
@@ -262,123 +263,13 @@ export const streamChat = async (params = {}, onMessage, onError, onComplete) =>
   const abortController = new AbortController()
   
   try {
-    // 流式接口必须使用 fetch API（axios 不支持 SSE 流式响应）
-    // 关键：使用相对路径 '/chat/completions/stream'，getRequestConfig 会自动加上 baseURL '/api'
-    // 最终 URL 是 '/api/chat/completions/stream'
-    // vite.config.js 中配置了 '/api' 全局代理，会拦截此请求并转发到后端服务器
+    // 使用 @microsoft/fetch-event-source 以获得更快的事件分发
     const { url: apiUrl, options: fetchOptions } = getRequestConfig('/chat/completions/stream', requestBody)
-    
-    // 添加 signal 到 fetchOptions（用于取消请求）
-    fetchOptions.signal = abortController.signal
-    
-    console.log('发送流式聊天请求到:', apiUrl)
-    console.log('完整请求配置:', { url: apiUrl, method: fetchOptions.method, headers: fetchOptions.headers })
-    console.log('请求体:', JSON.stringify(requestBody, null, 2))
-    
-    // 使用 fetch 发送请求
-    // 相对路径 '/api/chat/completions/stream' 会被 vite 开发服务器的代理拦截
-    // 代理会将请求转发到 vite.config.js 中配置的后端地址
-    const response = await fetch(apiUrl, fetchOptions)
-    
-    console.log('响应状态:', response.status, response.statusText)
-    console.log('响应头:', response.headers.get('Content-Type'))
-    
-    // 应用响应拦截器的错误处理逻辑
-    if (!response.ok) {
-      await handleResponseError(response, onError)
-      return abortController
-    }
-    
-    // 检查 Content-Type 是否是 SSE 格式
-    const contentType = response.headers.get('Content-Type') || ''
-    if (!contentType.includes('text/event-stream') && !contentType.includes('text/plain')) {
-      console.warn('响应Content-Type不是SSE格式:', contentType)
-    }
-    
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
+    console.log('发送流式聊天请求到(ES):', apiUrl)
+    let finished = false
     let reasoningContent = ''
     let content = ''
-    let hasReceivedData = false
-    let currentEvent = null // 当前事件类型
-    
-    /**
-     * 解析 SSE 数据行
-     * 支持格式：
-     * - data: {...}
-     * - data:data: {...} (重复的 data 前缀)
-     * - event:message
-     * - event:done
-     */
-    const parseSSELine = (line) => {
-      const trimmedLine = line.trim()
-      if (!trimmedLine) return null
-      
-      // 处理事件类型: event:message, event:done
-      if (trimmedLine.startsWith('event: ')) {
-        currentEvent = trimmedLine.slice(7).trim()
-        console.log('收到事件:', currentEvent)
-        // 如果是 done 事件，返回完成标记
-        if (currentEvent === 'done') {
-          return { type: 'done' }
-        }
-        return null
-      }
-      
-      // 处理 data 行
-      if (trimmedLine.startsWith('data:')) {
-        // 处理重复的 data: 前缀，如 data:data: {...}
-        let dataStr = trimmedLine
-        while (dataStr.startsWith('data:')) {
-          dataStr = dataStr.slice(5).trim()
-          if (dataStr.startsWith(':')) {
-            dataStr = dataStr.slice(1).trim()
-          }
-        }
-        
-        // 空 data 行：跳过，不作为结束
-        if (dataStr === '') {
-          return null
-        }
-        
-        // 处理 [DONE] 标记
-        if (dataStr === '[DONE]') {
-          console.log('收到结束标记 [DONE]')
-          return { type: 'done' }
-        }
-        
-        // 解析 JSON 数据
-        try {
-          const json = JSON.parse(dataStr)
-          return { type: 'data', data: json }
-        } catch (e) {
-          // 如果解析失败，记录警告但继续处理
-          if (dataStr && dataStr !== '[DONE]') {
-            console.warn('解析SSE数据失败:', e, '原始数据:', dataStr)
-          }
-          return null
-        }
-      }
-      
-      // 忽略其他 SSE 字段（id, retry 等）
-      if (trimmedLine.startsWith('id: ') || trimmedLine.startsWith('retry: ')) {
-        return null
-      }
-      
-      // 如果不是标准 SSE 格式，尝试直接解析为 JSON
-      try {
-        const json = JSON.parse(trimmedLine)
-        return { type: 'data', data: json }
-      } catch (e) {
-        // 不是 JSON，忽略
-        return null
-      }
-    }
-    
-    /**
-     * 处理解析后的数据
-     */
+    // 处理解析后的数据
     const processData = (jsonData) => {
       // 处理 choices[0].delta 结构（兼容多种格式）
       let delta = null
@@ -447,76 +338,59 @@ export const streamChat = async (params = {}, onMessage, onError, onComplete) =>
       return false // 表示未完成
     }
     
-    const processStream = async () => {
-      try {
-        let yieldCounter = 0
-        while (true) {
-          const { done, value } = await reader.read()
-          
-          if (done) {
-            console.log('流式输出完成, reasoning:', reasoningContent.length, 'content:', content.length)
-            if (onComplete) {
-              onComplete(reasoningContent, content)
-            }
-            break
-          }
-          
-          hasReceivedData = true
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 保留最后一个不完整的行
-          
-          for (const line of lines) {
-            const parsed = parseSSELine(line)
-            
-            if (!parsed) continue
-            
-            // 处理完成标记
-            if (parsed.type === 'done') {
-              if (onComplete) {
-                onComplete(reasoningContent, content)
-              }
-              return
-            }
-            
-            // 处理数据
-            if (parsed.type === 'data' && parsed.data) {
-              const isFinished = processData(parsed.data)
-              if (isFinished) {
-                return
-              }
-              // 定期让出事件循环，避免长时间占用导致 UI 不刷新
-              yieldCounter++
-              if (yieldCounter % 20 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 0))
-              }
-            }
-          }
+    await fetchEventSource(apiUrl, {
+      method: fetchOptions.method,
+      headers: fetchOptions.headers,
+      body: fetchOptions.body,
+      signal: abortController.signal,
+      openWhenHidden: true,
+      async onopen(response) {
+        if (!response.ok) {
+          await handleResponseError(response, onError)
+          throw new Error(`连接SSE失败: ${response.status}`)
         }
-        
-        // 如果流结束但没有收到数据，可能是错误
-        if (!hasReceivedData && !content && !reasoningContent) {
-          console.warn('流式输出完成但没有收到任何数据')
-          if (onError) {
-            onError(new Error('流式输出完成但没有收到任何数据'))
-          }
-        }
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          console.log('请求已取消')
+      },
+      onmessage(ev) {
+        if (finished) return
+        const evt = ev.event || 'message'
+        let dataStr = (ev.data || '').trim()
+        if (!dataStr) return
+        // 兼容后端发送 data:data: {...} 的格式，反复去掉前缀
+        // 以及 data: 前可能跟着一个冒号（某些实现会写成 data:: {...}）
+        while (dataStr.startsWith('data:')) {
+          dataStr = dataStr.slice(5).trim()
+          if (dataStr.startsWith(':')) {
+            dataStr = dataStr.slice(1).trim()
+              }
+            }
+        if (!dataStr) return
+        if (evt === 'done' || dataStr === '[DONE]') {
+          finished = true
+          if (onComplete) onComplete(reasoningContent, content)
           return
         }
-        console.error('处理流式输出时出错:', error)
-        if (onError) {
-          onError(error)
-        } else {
-          throw error
+        try {
+          const json = JSON.parse(dataStr)
+          const isFinished = processData(json)
+          if (isFinished) {
+            finished = true
+          }
+        } catch (e) {
+          // 非JSON的数据行，忽略
         }
+      },
+      onclose() {
+        if (!finished) {
+          finished = true
+          if (onComplete) onComplete(reasoningContent, content)
+        }
+      },
+      onerror(err) {
+        if (err?.name === 'AbortError') return
+        if (onError) onError(err)
+        throw err
       }
-    }
-    
-    // 异步处理流
-    processStream()
+    })
     
     return abortController
   } catch (error) {

@@ -490,6 +490,15 @@ onMounted(async () => {
   justify-content: space-evenly;
 }
 
+/* 仅里程碑页生效：将上方连线高度调为 124px */
+::deep(.long-line .top-line) {
+  height: 124px !important;
+}
+/* 提高选择器优先级，确保覆盖组件内部样式 */
+.milestone-page :deep(.long-line .top-line) {
+  height: 124px !important;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   .main-content {
