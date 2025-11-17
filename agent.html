@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>职业与竞赛规划 - 多Agent工作流演示</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- 引入 GitHub 风格的 Markdown 样式 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.5.1/github-markdown.min.css">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin: 0; padding: 24px; background: #f7f7fb; }
+        h1 { margin-top: 0; }
+        .card { background: #fff; border: 1px solid #e9e9ef; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+        label { display: block; font-weight: 600; margin: 8px 0 4px; }
+        input, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d9d9e3; border-radius: 8px; outline: none; }
+        input:focus, textarea:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(124,58,237,.15); }
+        button { background: #7c3aed; color: #fff; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+        button[disabled] { opacity: .6; cursor: not-allowed; }
+        pre { white-space: pre-wrap; word-break: break-word; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 12px; margin-right: 6px; }
+        #workflowGraph { min-height: 500px; position: relative; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 8px; padding: 20px; overflow: auto; }
+        .workflow-svg { width: 100%; height: 100%; min-height: 500px; }
+        .workflow-node { cursor: pointer; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); z-index: 2; position: relative; }
+        /* 为每个节点设置专属基础色（pending状态） */
+        .workflow-node.pending { stroke-width: 2; opacity: 0.8; }
+        .workflow-node.pending.coordinator { fill: #ffe0e9; stroke: #ff8fab; }
+        .workflow-node.pending.planner { fill: #e0f7fa; stroke: #80deea; }
+        .workflow-node.pending.supervisor { fill: #f3e5f5; stroke: #ce93d8; }
+        .workflow-node.pending.researcher { fill: #e8f5e9; stroke: #a5d6a7; }
+        .workflow-node.pending.browser { fill: #fff3e0; stroke: #ffcc80; }
+        .workflow-node.pending.coder { fill: #fce4ec; stroke: #f48fb1; }
+        .workflow-node.pending.reporter { fill: #e0f2f1; stroke: #80cbc4; }
+        .workflow-node.pending.start,
+        .workflow-node.pending.end { fill: #e5e7eb; stroke: #9ca3af; }
+
+        /* 运行中状态：保留蓝色渐变+动画，叠加基础色亮度提升 */
+        .workflow-node.running { fill: url(#runningGradient); stroke: #3b82f6; stroke-width: 3; filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6)); animation: pulseGlow 2s ease-in-out infinite; }
+        .node-group.running { transform-origin: center; }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        .node-group.running .workflow-node { animation: bounce 1.5s ease-in-out infinite; }
+
+        /* 完成状态：绿色渐变+基础色融合 */
+        .workflow-node.completed { fill: url(#completedGradient); stroke: #10b981; stroke-width: 2.5; filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.4)); animation: completedGlow 2s ease-in-out infinite; }
+
+        /* 失败状态：红色渐变+基础色融合 */
+        .workflow-node.failed { fill: url(#failedGradient); stroke: #ef4444; stroke-width: 2.5; filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.4)); animation: shake 0.5s ease-in-out; }
+
+        /* 文本颜色适配：根据节点背景自动调整 */
+        .workflow-node-text { font-size: 13px; font-weight: 600; text-anchor: middle; pointer-events: none; transition: all 0.3s; z-index: 3; position: relative; }
+        .workflow-node.pending .workflow-node-text { fill: #4b5563; }
+        .workflow-node.running .workflow-node-text { fill: #ffffff; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,0.2); animation: textPulse 1.5s ease-in-out infinite; }
+        .workflow-node.completed .workflow-node-text { fill: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .workflow-node.failed .workflow-node-text { fill: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+
+        .workflow-edge { stroke: #9ca3af; stroke-width: 2; fill: none; marker-end: url(#arrowhead); transition: all 0.3s; opacity: 0.7; z-index: 1; position: relative; }
+        .workflow-edge.dashed { stroke-dasharray: 5,5; }
+        .workflow-edge.active { stroke: #3b82f6; stroke-width: 3; opacity: 1; filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6)); animation: edgeFlow 2s linear infinite; }
+
+        /* 动画保持不变 */
+        @keyframes pulseGlow { 0%, 100% { filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6)); } 50% { filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.9)); } }
+        @keyframes scalePulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+        @keyframes scalePulseNode {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        @keyframes completedGlow { 0%, 100% { filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.4)); } 50% { filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.6)); } }
+        @keyframes textPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.9; } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+        @keyframes edgeFlow { 0% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -20; } }
+        .workflow-container { position: relative; }
+        /* 修复箭头样式 */
+        .arrowhead-active { fill: #3b82f6; }
+
+        /* Markdown 容器样式调整 */
+        .markdown-body {
+            padding: 16px;
+            border-radius: 8px;
+            max-height: 600px; /* 限制最大高度，超出滚动 */
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        /* 加载中/暂无数据样式 */
+        .empty-state {
+            color: #6b7280;
+            text-align: center;
+            padding: 40px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<h1>职业与竞赛规划 - 多Agent工作流演示</h1>
+
+<div class="card">
+    <div class="row">
+        <div>
+            <label>用户ID</label>
+            <input id="userId" type="text" placeholder="例如 1986990047206002690" value="1986990047206002690"/>
+        </div>
+        <div>
+            <label>输入</label>
+            <input id="userInput" type="text" value="我想咨询一下未来的我的竞赛和职业规划怎么样规划"/>
+        </div>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="startBtn">启动工作流</button>
+        <span id="runInfo" class="badge"></span>
+    </div>
+</div>
+
+<div class="card">
+    <h3>进度</h3>
+    <pre id="progressBox">尚未开始</pre>
+</div>
+
+<div class="row">
+    <div class="card">
+        <h3>报告</h3>
+        <!-- 替换 pre 为 div，添加 markdown-body 类用于渲染 -->
+        <div id="reportBox" class="markdown-body">
+            <div class="empty-state">暂无报告</div>
+        </div>
+        <div id="linksBox" style="margin-top: 16px;"></div>
+    </div>
+    <div class="card">
+        <h3>工作流状态</h3>
+        <div id="workflowGraph" class="workflow-container">
+            <svg id="workflowSvg" class="workflow-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- 箭头标记 - 优化样式和尺寸 -->
+                    <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0 0, 8 3, 0 6" fill="#9ca3af" stroke-width="0" />
+                    </marker>
+                    <marker id="arrowheadActive" markerWidth="10" markerHeight="10" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" stroke-width="0" class="arrowhead-active" />
+                    </marker>
+                    <!-- 运行中节点的渐变（叠加基础色） -->
+                    <linearGradient id="runningGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:0.9" />
+                        <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.9" />
+                    </linearGradient>
+                    <!-- 完成节点的渐变（叠加基础色） -->
+                    <linearGradient id="completedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#34d399;stop-opacity:0.9" />
+                        <stop offset="100%" style="stop-color:#10b981;stop-opacity:0.9" />
+                    </linearGradient>
+                    <!-- 失败节点的渐变（叠加基础色） -->
+                    <linearGradient id="failedGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#f87171;stop-opacity:0.9" />
+                        <stop offset="100%" style="stop-color:#ef4444;stop-opacity:0.9" />
+                    </linearGradient>
+                </defs>
+                <!-- 确保连线在节点下方：先绘制连线组，再绘制节点组 -->
+                <g id="edgesGroup" style="z-index: 1;"></g>
+                <g id="nodesGroup" style="z-index: 2;"></g>
+            </svg>
+        </div>
+        <details style="margin-top: 16px;">
+            <summary style="cursor: pointer; color: #7c3aed; font-weight: 600;">查看 PlantUML 图</summary>
+            <pre id="graphBox" style="margin-top: 8px;">加载中...</pre>
+        </details>
+    </div>
+</div>
+
+<!-- 引入 Markdown 解析库 marked -->
+<script src="https://cdn.jsdelivr.net/npm/marked@14.1.3/lib/marked.umd.min.js"></script>
+<script>
+    const startBtn = document.getElementById('startBtn');
+    const runInfo = document.getElementById('runInfo');
+    const progressBox = document.getElementById('progressBox');
+    const reportBox = document.getElementById('reportBox');
+    const linksBox = document.getElementById('linksBox');
+    const graphBox = document.getElementById('graphBox');
+    const workflowSvg = document.getElementById('workflowSvg');
+    const edgesGroup = document.getElementById('edgesGroup');
+    const nodesGroup = document.getElementById('nodesGroup');
+
+    let es = null;
+    let runId = null;
+    let pollTimer = null;
+
+    // 配置 marked（可选：自定义渲染规则）
+    marked.setOptions({
+        breaks: true, // 支持换行符
+        gfm: true,    // 支持 GitHub Flavored Markdown
+        tables: true, // 支持表格
+        headerIds: false, // 禁用自动生成 header id
+        mangle: false // 禁用邮箱地址混淆
+    });
+
+    // 定义所有节点及其位置（微调位置使连线更美观）
+    const nodePositions = {
+        start: { x: 370, y: 30, width: 60, height: 30 }, // 圆形
+        coordinator: { x: 340, y: 100, width: 120, height: 50 },
+        planner: { x: 340, y: 180, width: 120, height: 50 },
+        supervisor: { x: 340, y: 260, width: 120, height: 50 },
+        researcher: { x: 180, y: 360, width: 140, height: 50 },
+        browser: { x: 40, y: 460, width: 140, height: 50 },
+        coder: { x: 260, y: 460, width: 140, height: 50 },
+        reporter: { x: 480, y: 460, width: 140, height: 50 },
+        end: { x: 360, y: 580, width: 60, height: 30 } // 圆形
+    };
+
+    const nodeLabels = {
+        start: '开始',
+        coordinator: '调度器',
+        planner: '规划器',
+        supervisor: '监督器',
+        researcher: '研究员',
+        browser: '浏览器',
+        coder: '分析器',
+        reporter: '报告生成',
+        end: '结束'
+    };
+
+    // 定义连线（优化连线逻辑）
+    const edges = [
+        { from: 'start', to: 'coordinator', type: 'solid', id: 'edge-start-coordinator' },
+        { from: 'coordinator', to: 'planner', type: 'solid', id: 'edge-coordinator-planner' },
+        { from: 'planner', to: 'supervisor', type: 'solid', id: 'edge-planner-supervisor' },
+        { from: 'supervisor', to: 'researcher', type: 'dashed', id: 'edge-supervisor-researcher' },
+        { from: 'supervisor', to: 'browser', type: 'dashed', id: 'edge-supervisor-browser' },
+        { from: 'supervisor', to: 'coder', type: 'dashed', id: 'edge-supervisor-coder' },
+        { from: 'supervisor', to: 'reporter', type: 'dashed', id: 'edge-supervisor-reporter' },
+        { from: 'researcher', to: 'supervisor', type: 'solid', id: 'edge-researcher-supervisor' },
+        { from: 'browser', to: 'supervisor', type: 'solid', id: 'edge-browser-supervisor' },
+        { from: 'coder', to: 'supervisor', type: 'solid', id: 'edge-coder-supervisor' },
+        { from: 'reporter', to: 'end', type: 'solid', id: 'edge-reporter-end' }
+    ];
+
+    // 初始化工作流图 - 重点：为节点添加专属类名，绑定基础色
+    function initWorkflowGraph() {
+        // 清空现有内容
+        edgesGroup.innerHTML = '';
+        nodesGroup.innerHTML = '';
+
+        // 绘制连线（保持不变）
+        edges.forEach(edge => {
+            const fromNode = nodePositions[edge.from];
+            const toNode = nodePositions[edge.to];
+            if (!fromNode || !toNode) return;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const fromIsCircle = edge.from === 'start' || edge.from === 'end';
+            const toIsCircle = edge.to === 'start' || edge.to === 'end';
+
+            // 计算节点中心点
+            const fromCenterX = fromNode.x + fromNode.width / 2;
+            const fromCenterY = fromNode.y + fromNode.height / 2;
+            const toCenterX = toNode.x + toNode.width / 2;
+            const toCenterY = toNode.y + toNode.height / 2;
+
+            // 计算连线起点和终点（精准连接到节点边缘，避免穿入节点内部）
+            let startX, startY, endX, endY;
+
+            // 处理起点
+            if (fromIsCircle) {
+                // 圆形节点：从圆心到边缘的连线
+                const angle = Math.atan2(toCenterY - fromCenterY, toCenterX - fromCenterX);
+                startX = fromCenterX + (fromNode.width / 2) * Math.cos(angle);
+                startY = fromCenterY + (fromNode.height / 2) * Math.sin(angle);
+            } else if (edge.from === 'supervisor' && ['researcher', 'browser', 'coder', 'reporter'].includes(edge.to)) {
+                // 监督器向下连接：从底部边缘中间出发
+                startX = fromCenterX;
+                startY = fromNode.y + fromNode.height;
+            } else if (['researcher', 'browser', 'coder'].includes(edge.from) && edge.to === 'supervisor') {
+                // 向上连接到监督器：从顶部边缘中间出发
+                startX = fromCenterX;
+                startY = fromNode.y;
+            } else if (edge.from === 'reporter' && edge.to === 'end') {
+                // 报告生成到结束：从底部边缘中间出发
+                startX = fromCenterX;
+                startY = fromNode.y + fromNode.height;
+            } else {
+                // 垂直连接：从底部边缘中间出发
+                startX = fromCenterX;
+                startY = fromNode.y + fromNode.height;
+            }
+
+            // 处理终点
+            if (toIsCircle) {
+                // 圆形节点：连接到边缘
+                const angle = Math.atan2(fromCenterY - toCenterY, fromCenterX - toCenterX);
+                endX = toCenterX + (toNode.width / 2) * Math.cos(angle);
+                endY = toCenterY + (toNode.height / 2) * Math.sin(angle);
+            } else if (edge.to === 'supervisor' && ['researcher', 'browser', 'coder'].includes(edge.from)) {
+                // 连接到监督器底部边缘
+                endX = toCenterX;
+                endY = toNode.y + toNode.height;
+            } else {
+                // 垂直连接：连接到顶部边缘中间
+                endX = toCenterX;
+                endY = toNode.y;
+            }
+
+            // 计算路径（优化曲线平滑度）
+            let d = '';
+            const dx = Math.abs(toCenterX - fromCenterX);
+            const dy = Math.abs(toCenterY - fromCenterY);
+
+            if (edge.from === 'supervisor' && ['researcher', 'browser', 'coder', 'reporter'].includes(edge.to)) {
+                // 监督器到子节点：使用平滑曲线，避免交叉
+                const controlOffsetX = dx > 100 ? dx / 2 : 50;
+                const controlY = fromCenterY + (toCenterY - fromCenterY) / 3;
+
+                if (toCenterX < fromCenterX) {
+                    // 向左连接（研究员、浏览器）
+                    d = `M ${startX} ${startY} C ${fromCenterX - controlOffsetX} ${controlY}, ${toCenterX + controlOffsetX} ${controlY}, ${endX} ${endY}`;
+                } else {
+                    // 向右连接（报告生成）
+                    d = `M ${startX} ${startY} C ${fromCenterX + controlOffsetX} ${controlY}, ${toCenterX - controlOffsetX} ${controlY}, ${endX} ${endY}`;
+                }
+            } else if (['researcher', 'browser', 'coder'].includes(edge.from) && edge.to === 'supervisor') {
+                // 子节点回到监督器：反向平滑曲线
+                const controlOffsetX = dx > 100 ? dx / 2 : 50;
+                const controlY = toCenterY + (fromCenterY - toCenterY) / 3;
+
+                if (fromCenterX < toCenterX) {
+                    // 从左向右连接
+                    d = `M ${startX} ${startY} C ${fromCenterX + controlOffsetX} ${controlY}, ${toCenterX - controlOffsetX} ${controlY}, ${endX} ${endY}`;
+                } else {
+                    // 从右向左连接
+                    d = `M ${startX} ${startY} C ${fromCenterX - controlOffsetX} ${controlY}, ${toCenterX + controlOffsetX} ${controlY}, ${endX} ${endY}`;
+                }
+            } else if (dx > 20) {
+                // 水平距离较大的连接：使用轻微曲线
+                const controlOffset = dx / 3;
+                d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
+            } else {
+                // 垂直连接或短距离连接：直线
+                d = `M ${startX} ${startY} L ${endX} ${endY}`;
+            }
+
+            // 设置路径属性
+            path.setAttribute('d', d);
+            path.setAttribute('id', edge.id);
+            path.setAttribute('class', `workflow-edge ${edge.type === 'dashed' ? 'dashed' : ''}`);
+
+            // 为虚线设置合适的dasharray
+            if (edge.type === 'dashed') {
+                path.setAttribute('stroke-dasharray', '6,3');
+                path.setAttribute('stroke-linecap', 'round');
+            }
+
+            // 设置连线末端箭头
+            path.setAttribute('marker-end', 'url(#arrowhead)');
+
+            edgesGroup.appendChild(path);
+        });
+
+        // 绘制节点 - 重点：为每个节点添加专属类名（如 .coordinator、.planner）
+        Object.keys(nodePositions).forEach(nodeName => {
+            const pos = nodePositions[nodeName];
+            const isCircle = nodeName === 'start' || nodeName === 'end';
+
+            // 创建节点组，方便整体动画
+            const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            nodeGroup.setAttribute('data-node', nodeName);
+            nodeGroup.setAttribute('class', 'node-group');
+            nodeGroup.style.zIndex = 2; // 确保节点在连线上方
+
+            let shape;
+            if (isCircle) {
+                shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                shape.setAttribute('cx', pos.x + pos.width / 2);
+                shape.setAttribute('cy', pos.y + pos.height / 2);
+                shape.setAttribute('r', pos.width / 2);
+            } else {
+                shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                shape.setAttribute('x', pos.x);
+                shape.setAttribute('y', pos.y);
+                shape.setAttribute('width', pos.width);
+                shape.setAttribute('height', pos.height);
+                shape.setAttribute('rx', 8);
+            }
+
+            // 关键：添加状态类 + 节点专属类名（用于绑定基础色）
+            shape.setAttribute('class', `workflow-node pending ${nodeName}`);
+            nodeGroup.appendChild(shape);
+
+            // 添加文本
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', pos.x + pos.width / 2);
+            text.setAttribute('y', pos.y + pos.height / 2 + (isCircle ? 0 : 5));
+            text.setAttribute('class', 'workflow-node-text');
+            text.setAttribute('dominant-baseline', 'middle');
+            text.textContent = nodeLabels[nodeName] || nodeName;
+            nodeGroup.appendChild(text);
+
+            nodesGroup.appendChild(nodeGroup);
+        });
+    }
+
+    function getBase() {
+        // 取当前路径的目录部分作为 context-path（例如 /api）
+        const path = window.location.pathname;
+        return path.replace(/\/[^\/]*$/, '');
+    }
+
+    async function fetchGraph() {
+        try {
+            const res = await fetch(getBase() + '/agent/career/graph');
+            const text = await res.text();
+            graphBox.textContent = text;
+        } catch (e) {
+            graphBox.textContent = '获取拓扑失败：' + e.message;
+        }
+    }
+
+    function subscribe(runId) {
+        if (es) { es.close(); es = null; }
+        es = new EventSource(getBase() + '/agent/career/stream?runId=' + encodeURIComponent(runId));
+        es.onmessage = (evt) => {
+            if (evt.data) {
+                try {
+                    const arr = JSON.parse(evt.data);
+                    progressBox.textContent = JSON.stringify(arr, null, 2);
+                } catch (_) {
+                    progressBox.textContent = evt.data;
+                }
+            }
+        };
+        es.onerror = () => {
+            // SSE 不可靠时忽略
+        };
+    }
+
+    function updateWorkflowGraph(nodeStatus, currentNode) {
+        // 更新所有节点的状态
+        Object.keys(nodePositions).forEach(nodeName => {
+            const nodeGroup = workflowSvg.querySelector(`[data-node="${nodeName}"]`);
+            if (!nodeGroup) return;
+
+            const nodeEl = nodeGroup.querySelector('.workflow-node');
+            if (!nodeEl) return;
+
+            let status = 'pending';
+            if (nodeName === 'start') {
+                status = nodeStatus && Object.values(nodeStatus).some(s => s !== 'pending') ? 'completed' : 'pending';
+            } else if (nodeName === 'end') {
+                status = nodeStatus?.reporter === 'completed' ? 'completed' : 'pending';
+            } else {
+                status = nodeStatus?.[nodeName] || 'pending';
+            }
+
+            // 如果是当前节点且状态是 pending，设置为 running
+            if (currentNode === nodeName && status === 'pending') {
+                status = 'running';
+            }
+
+            // 更新节点样式：保留专属类名，切换状态类
+            nodeEl.className = `workflow-node ${status} ${nodeName}`;
+
+            // 为运行中的节点添加动画类和高亮效果
+            if (status === 'running') {
+                nodeGroup.classList.add('running');
+                nodeEl.style.filter = 'drop-shadow(0 0 12px rgba(59, 130, 246, 0.6))';
+            } else {
+                nodeGroup.classList.remove('running');
+                if (status === 'completed') {
+                    nodeEl.style.filter = 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.4))';
+                } else if (status === 'failed') {
+                    nodeEl.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.4))';
+                } else {
+                    nodeEl.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))';
+                }
+            }
+        });
+
+        // 更新连线状态（高亮当前执行路径的连线）
+        edges.forEach(edge => {
+            const path = document.getElementById(edge.id);
+            if (!path) return;
+
+            // 高亮当前节点相关的连线
+            const isActive = currentNode === edge.from || currentNode === edge.to ||
+                (nodeStatus?.[edge.from] === 'running' && nodeStatus?.[edge.to] === 'pending') ||
+                (nodeStatus?.[edge.from] === 'completed' && nodeStatus?.[edge.to] === 'running');
+
+            if (isActive) {
+                path.classList.add('active');
+                path.setAttribute('marker-end', 'url(#arrowheadActive)');
+                // 为虚线添加流动动画
+                if (edge.type === 'dashed') {
+                    path.setAttribute('stroke-dasharray', '6,3');
+                }
+            } else {
+                path.classList.remove('active');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
+            }
+        });
+    }
+
+    async function pollResult() {
+        if (!runId) return;
+        try {
+            const res = await fetch(getBase() + '/agent/career/result?runId=' + encodeURIComponent(runId));
+            const ct = res.headers.get('Content-Type') || '';
+            const data = ct.includes('application/json') ? await res.json() : { error: await res.text() };
+            if (data.status) {
+                runInfo.textContent = '状态：' + data.status;
+            }
+            if (data.currentNode || data.nodeStatus) {
+                updateWorkflowGraph(data.nodeStatus, data.currentNode);
+            }
+
+            // 只在报告生成完成（success）或失败时才显示报告和链接
+            if (data.status === 'success' || data.status === 'failed') {
+                if (data.report) {
+                    // 使用 marked 解析 Markdown 并渲染为 HTML
+                    const markdownHtml = marked.parse(data.report);
+                    reportBox.innerHTML = markdownHtml;
+                } else {
+                    reportBox.innerHTML = '<div class="empty-state">无报告内容</div>';
+                }
+                if (data.links && data.links.length > 0) {
+                    linksBox.innerHTML = '<h4 style="margin-bottom: 8px; font-size: 14px;">相关链接</h4>';
+                    data.links.forEach(link => {
+                        const a = document.createElement('a');
+                        a.href = link;
+                        a.target = '_blank';
+                        a.textContent = link;
+                        a.style.display = 'block';
+                        a.style.marginBottom = '4px';
+                        a.style.color = '#7c3aed';
+                        a.style.textDecoration = 'underline';
+                        linksBox.appendChild(a);
+                    });
+                } else {
+                    linksBox.innerHTML = '';
+                }
+                clearInterval(pollTimer);
+                startBtn.disabled = false;
+            } else {
+                // 报告生成中，显示加载状态
+                if (data.status === 'running') {
+                    reportBox.innerHTML = '<div class="empty-state">报告生成中...</div>';
+                    linksBox.innerHTML = '';
+                }
+            }
+        } catch (e) {
+            reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">报告加载失败：${e.message}</div>`;
+            // 忽略临时错误
+        }
+    }
+
+    startBtn.onclick = async () => {
+        const userId = document.getElementById('userId').value || '';
+        const input = document.getElementById('userInput').value || '';
+        startBtn.disabled = true;
+        runInfo.textContent = '启动中...';
+        progressBox.textContent = '等待事件...';
+        // 重置报告容器为加载状态
+        reportBox.innerHTML = '<div class="empty-state">报告生成中...</div>';
+        linksBox.innerHTML = '';
+        // 重置工作流图状态
+        updateWorkflowGraph({}, null);
+        try {
+            const res = await fetch(getBase() + '/agent/career/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // 确保 userId 作为字符串发送，避免大整数精度丢失
+                body: JSON.stringify({ userId: String(userId), input })
+            });
+            const ct = res.headers.get('Content-Type') || '';
+            const data = ct.includes('application/json') ? await res.json() : { error: await res.text() };
+            if (data.error) {
+                runInfo.textContent = '错误：' + (data.message || data.error);
+                reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">${data.message || data.error}</div>`;
+                startBtn.disabled = false;
+                return;
+            }
+            runId = data.runId;
+            runInfo.textContent = '运行ID：' + runId;
+            subscribe(runId);
+            clearInterval(pollTimer);
+            pollTimer = setInterval(pollResult, 1200);
+        } catch (e) {
+            runInfo.textContent = '启动失败：' + e.message;
+            reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">启动失败：${e.message}</div>`;
+            startBtn.disabled = false;
+        }
+    };
+
+    fetchGraph();
+    initWorkflowGraph();
+</script>
+</body>
+</html>

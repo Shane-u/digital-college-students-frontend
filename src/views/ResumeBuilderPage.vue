@@ -102,12 +102,34 @@
                   />
                 </el-form-item>
                 <el-form-item label="描述">
-                  <el-input
-                    v-model="edu.description"
-                    type="textarea"
-                    :rows="3"
-                    placeholder="请输入教育经历描述（支持Markdown）"
-                  />
+                  <div class="textarea-wrapper">
+                    <el-input
+                      v-model="edu.description"
+                      type="textarea"
+                      :rows="3"
+                      placeholder="请输入教育经历描述（支持Markdown）"
+                      @focus="handleTextareaFocus('edu', index)"
+                      @blur="handleTextareaBlur('edu', index)"
+                      :ref="el => setTextareaRef('edu', index, el)"
+                    />
+                    <button
+                      v-if="focusedTextarea === `edu-${index}`"
+                      class="ai-polish-btn"
+                      @click="handlePolish('edu', index, edu.description)"
+                      title="AI润色"
+                    >
+                      <img src="../assets/robot.png" alt="AI润色" class="polish-icon">
+                    </button>
+                  </div>
+                  <div v-if="polishStates[`edu-${index}`]" class="polish-status">
+                    <span v-if="polishStates[`edu-${index}`].polishing" class="polish-status-text">润色中……</span>
+                    <div v-else-if="polishStates[`edu-${index}`].result" class="polish-result">
+                      <div class="polish-actions">
+                        <el-button size="small" type="primary" @click="applyPolish('edu', index)">应用</el-button>
+                        <el-button size="small" @click="cancelPolish('edu', index)">取消</el-button>
+                      </div>
+                    </div>
+                  </div>
                 </el-form-item>
                 <el-button type="danger" size="small" @click="removeEducation(index)">删除</el-button>
               </div>
@@ -131,12 +153,34 @@
                   />
                 </el-form-item>
                 <el-form-item label="项目描述">
-                  <el-input
-                    v-model="project.description"
-                    type="textarea"
-                    :rows="4"
-                    placeholder="请输入项目描述（支持Markdown）"
-                  />
+                  <div class="textarea-wrapper">
+                    <el-input
+                      v-model="project.description"
+                      type="textarea"
+                      :rows="4"
+                      placeholder="请输入项目描述（支持Markdown）"
+                      @focus="handleTextareaFocus('project', index)"
+                      @blur="handleTextareaBlur('project', index)"
+                      :ref="el => setTextareaRef('project', index, el)"
+                    />
+                    <button
+                      v-if="focusedTextarea === `project-${index}`"
+                      class="ai-polish-btn"
+                      @click="handlePolish('project', index, project.description)"
+                      title="AI润色"
+                    >
+                      <img src="../assets/robot.png" alt="AI润色" class="polish-icon">
+                    </button>
+                  </div>
+                  <div v-if="polishStates[`project-${index}`]" class="polish-status">
+                    <span v-if="polishStates[`project-${index}`].polishing" class="polish-status-text">润色中……</span>
+                    <div v-else-if="polishStates[`project-${index}`].result" class="polish-result">
+                      <div class="polish-actions">
+                        <el-button size="small" type="primary" @click="applyPolish('project', index)">应用</el-button>
+                        <el-button size="small" @click="cancelPolish('project', index)">取消</el-button>
+                      </div>
+                    </div>
+                  </div>
                 </el-form-item>
                 <el-form-item label="技术栈">
                   <el-input v-model="project.techStack" placeholder="请输入技术栈，用逗号分隔" />
@@ -166,12 +210,34 @@
                   />
                 </el-form-item>
                 <el-form-item label="工作描述">
-                  <el-input
-                    v-model="work.description"
-                    type="textarea"
-                    :rows="4"
-                    placeholder="请输入工作描述（支持Markdown）"
-                  />
+                  <div class="textarea-wrapper">
+                    <el-input
+                      v-model="work.description"
+                      type="textarea"
+                      :rows="4"
+                      placeholder="请输入工作描述（支持Markdown）"
+                      @focus="handleTextareaFocus('work', index)"
+                      @blur="handleTextareaBlur('work', index)"
+                      :ref="el => setTextareaRef('work', index, el)"
+                    />
+                    <button
+                      v-if="focusedTextarea === `work-${index}`"
+                      class="ai-polish-btn"
+                      @click="handlePolish('work', index, work.description)"
+                      title="AI润色"
+                    >
+                      <img src="../assets/robot.png" alt="AI润色" class="polish-icon">
+                    </button>
+                  </div>
+                  <div v-if="polishStates[`work-${index}`]" class="polish-status">
+                    <span v-if="polishStates[`work-${index}`].polishing" class="polish-status-text">润色中……</span>
+                    <div v-else-if="polishStates[`work-${index}`].result" class="polish-result">
+                      <div class="polish-actions">
+                        <el-button size="small" type="primary" @click="applyPolish('work', index)">应用</el-button>
+                        <el-button size="small" @click="cancelPolish('work', index)">取消</el-button>
+                      </div>
+                    </div>
+                  </div>
                 </el-form-item>
                 <el-button type="danger" size="small" @click="removeWork(index)">删除</el-button>
               </div>
@@ -181,24 +247,68 @@
             <!-- 技能特长 -->
             <el-collapse-item name="skills" title="技能特长">
               <el-form-item label="技能描述">
-                <el-input
-                  v-model="resumeData.skills"
-                  type="textarea"
-                  :rows="5"
-                  placeholder="请输入技能描述（支持Markdown，如：**前端**: Vue, React, TypeScript）"
-                />
+                <div class="textarea-wrapper">
+                  <el-input
+                    v-model="resumeData.skills"
+                    type="textarea"
+                    :rows="5"
+                    placeholder="请输入技能描述（支持Markdown，如：**前端**: Vue, React, TypeScript）"
+                    @focus="handleTextareaFocus('skills')"
+                    @blur="handleTextareaBlur('skills')"
+                    :ref="el => setTextareaRef('skills', 0, el)"
+                  />
+                  <button
+                    v-if="focusedTextarea === 'skills'"
+                    class="ai-polish-btn"
+                    @click="handlePolish('skills', undefined, resumeData.skills)"
+                    title="AI润色"
+                  >
+                    <img src="../assets/robot.png" alt="AI润色" class="polish-icon">
+                  </button>
+                </div>
+                <div v-if="polishStates.skills" class="polish-status">
+                  <span v-if="polishStates.skills.polishing" class="polish-status-text">润色中……</span>
+                  <div v-else-if="polishStates.skills.result" class="polish-result">
+                    <div class="polish-actions">
+                      <el-button size="small" type="primary" @click="applyPolish('skills', undefined)">应用</el-button>
+                      <el-button size="small" @click="cancelPolish('skills', undefined)">取消</el-button>
+                    </div>
+                  </div>
+                </div>
               </el-form-item>
             </el-collapse-item>
 
             <!-- 荣誉奖项 -->
             <el-collapse-item name="awards" title="荣誉奖项">
               <el-form-item label="奖项描述">
-                <el-input
-                  v-model="resumeData.awards"
-                  type="textarea"
-                  :rows="5"
-                  placeholder="请输入荣誉奖项（支持Markdown）"
-                />
+                <div class="textarea-wrapper">
+                  <el-input
+                    v-model="resumeData.awards"
+                    type="textarea"
+                    :rows="5"
+                    placeholder="请输入荣誉奖项（支持Markdown）"
+                    @focus="handleTextareaFocus('awards')"
+                    @blur="handleTextareaBlur('awards')"
+                    :ref="el => setTextareaRef('awards', 0, el)"
+                  />
+                  <button
+                    v-if="focusedTextarea === 'awards'"
+                    class="ai-polish-btn"
+                    @click="handlePolish('awards', undefined, resumeData.awards)"
+                    title="AI润色"
+                  >
+                    <img src="../assets/robot.png" alt="AI润色" class="polish-icon">
+                  </button>
+                </div>
+                <div v-if="polishStates.awards" class="polish-status">
+                  <span v-if="polishStates.awards.polishing" class="polish-status-text">润色中……</span>
+                  <div v-else-if="polishStates.awards.result" class="polish-result">
+                    <div class="polish-actions">
+                      <el-button size="small" type="primary" @click="applyPolish('awards', undefined)">应用</el-button>
+                      <el-button size="small" @click="cancelPolish('awards', undefined)">取消</el-button>
+                    </div>
+                  </div>
+                </div>
               </el-form-item>
             </el-collapse-item>
           </el-collapse>
@@ -345,6 +455,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import NavBar from '../components/NavBar.vue'
+import { polishText } from '../api/chatApi'
 
 // 响应式数据
 const activeSections = ref(['personal', 'education', 'projects', 'work', 'skills', 'awards'])
@@ -352,6 +463,9 @@ const settingsVisible = ref(false)
 const previewContent = ref(null)
 const resumePreview = ref(null)
 const activeOutline = ref('projects')
+const focusedTextarea = ref(null)
+const polishing = ref(false)
+const polishStates = reactive({})
 
 // 拖拽相关
 const isDragging = ref(false)
@@ -401,7 +515,7 @@ const previewStyle = computed(() => {
 // 大纲导航
 const outlineSections = computed(() => {
   const sections = []
-  if (resumeData.projects.length > 0) sections.push({ key: 'projects', label: '项目经理' })
+  if (resumeData.projects.length > 0) sections.push({ key: 'projects', label: '项目经历' })
   if (resumeData.workExperience.length > 0) sections.push({ key: 'work', label: '工作/实习经历' })
   if (resumeData.skills) sections.push({ key: 'skills', label: '技能特长' })
   if (resumeData.awards) sections.push({ key: 'awards', label: '荣誉奖项' })
@@ -497,7 +611,7 @@ const clearData = async () => {
 // 导出JSON
 const exportJSON = () => {
   const dataStr = JSON.stringify(resumeData, null, 2)
-  const blob = new Blob([dataStr], { type: 'application/json' })
+  const blob = new Blob([dataStr], { type: 'application/json' }) 
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -785,6 +899,123 @@ onMounted(() => {
     }
   }
 })
+
+// AI润色相关函数
+const handleTextareaFocus = (type, index) => {
+  if (index !== undefined) {
+    focusedTextarea.value = `${type}-${index}`
+  } else {
+    focusedTextarea.value = type
+  }
+}
+
+const handleTextareaBlur = (type, index) => {
+  // 延迟隐藏，以便点击按钮
+  setTimeout(() => {
+    if (index !== undefined) {
+      if (focusedTextarea.value === `${type}-${index}`) {
+        focusedTextarea.value = null
+      }
+    } else {
+      if (focusedTextarea.value === type) {
+        focusedTextarea.value = null
+      }
+    }
+  }, 200)
+}
+
+const setTextareaRef = (type, index, el) => {
+  // 用于设置ref，这里暂时不需要存储
+}
+
+const getPolishState = (type, index) => {
+  const key = index !== undefined ? `${type}-${index}` : type
+  return polishStates[key] || null
+}
+
+const handlePolish = async (type, index, currentText) => {
+  if (!currentText || !currentText.trim()) {
+    ElMessage.warning('请先输入内容')
+    return
+  }
+  
+  const key = index !== undefined ? `${type}-${index}` : type
+  if (polishStates[key] && polishStates[key].polishing) {
+    ElMessage.warning('润色中，请稍候...')
+    return
+  }
+  
+  try {
+    // 保存原始内容，以便取消时恢复
+    const originalText = currentText
+    
+    // 初始化润色状态
+    polishStates[key] = {
+      polishing: true,
+      result: null,
+      original: originalText
+    }
+    
+    const polishedText = await polishText(currentText)
+    
+    // 润色完成后，直接更新到文本框（临时显示）
+    if (type === 'edu') {
+      resumeData.education[index].description = polishedText
+    } else if (type === 'project') {
+      resumeData.projects[index].description = polishedText
+    } else if (type === 'work') {
+      resumeData.workExperience[index].description = polishedText
+    } else if (type === 'skills') {
+      resumeData.skills = polishedText
+    } else if (type === 'awards') {
+      resumeData.awards = polishedText
+    }
+    
+    // 存储润色结果和原始内容，等待用户确认
+    polishStates[key] = {
+      polishing: false,
+      result: polishedText,
+      original: originalText
+    }
+  } catch (error) {
+    console.error('润色失败:', error)
+    // 清除润色状态
+    delete polishStates[key]
+    if (error.message === '请先输入内容') {
+      ElMessage.warning('请先输入内容')
+    } else {
+      ElMessage.error('润色失败，请稍后重试')
+    }
+  }
+}
+
+const applyPolish = (type, index) => {
+  const key = index !== undefined ? `${type}-${index}` : type
+  // 内容已经在文本框中，只需要清除润色状态即可
+  delete polishStates[key]
+}
+
+const cancelPolish = (type, index) => {
+  const key = index !== undefined ? `${type}-${index}` : type
+  const state = polishStates[key]
+  if (!state || !state.original) return
+  
+  // 恢复原始内容
+  if (type === 'edu') {
+    resumeData.education[index].description = state.original
+  } else if (type === 'project') {
+    resumeData.projects[index].description = state.original
+  } else if (type === 'work') {
+    resumeData.workExperience[index].description = state.original
+  } else if (type === 'skills') {
+    resumeData.skills = state.original
+  } else if (type === 'awards') {
+    resumeData.awards = state.original
+  }
+  
+  // 清除润色状态
+  delete polishStates[key]
+}
 
 // 组件卸载时清理事件监听器
 onUnmounted(() => {
@@ -1186,5 +1417,72 @@ onUnmounted(() => {
 /* 简历制作页面导航栏紫色下边框 */
 :deep(.navbar) {
   border-bottom: 2px solid #7d5196;
+}
+
+/* AI润色按钮样式 */
+.textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.ai-polish-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  /* background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%); */
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  /* box-shadow: 0 2px 6px rgba(118, 75, 162, 0.3); */
+}
+
+.ai-polish-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.4);
+}
+
+.ai-polish-btn:active {
+  transform: scale(0.95);
+}
+.polish-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* 润色状态提示样式 */
+.polish-status {
+  margin-top: 4px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: #666;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.polish-status-text {
+  color: #7d5196;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.polish-result {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.polish-actions {
+  display: flex;
+  gap: 8px;
 }
 </style>

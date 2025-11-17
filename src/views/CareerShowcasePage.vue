@@ -81,178 +81,164 @@
       <!-- 左侧侧边栏过滤器 -->
       <aside class="left-sidebar">
         <div class="sidebar-content">
-          <!-- 主题 -->
+          <!-- 城市 -->
           <div class="filter-section">
-            <div class="filter-header" @click="toggleSection('theme')">
-              <span>主题</span>
-              <svg
-                class="chevron-icon"
-                :class="{ 'expanded': expandedSections.theme }"
-                viewBox="0 0 12 8"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- 来源类别 -->
-          <div class="filter-section">
-            <div class="filter-header" @click="toggleSection('source')">
-              <span>来源类别</span>
-              <svg
-                class="chevron-icon"
-                :class="{ 'expanded': expandedSections.source }"
-                viewBox="0 0 12 8"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- 学科 -->
-          <div class="filter-section">
-            <div class="filter-header" @click="toggleSection('subject')">
-              <span>学科</span>
-              <svg
-                class="chevron-icon"
-                :class="{ 'expanded': expandedSections.subject }"
-                viewBox="0 0 12 8"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
-          </div>
-
-          <!-- 年度 -->
-          <div class="filter-section">
-            <div class="filter-header" @click="toggleSection('year')">
-              <span>年度</span>
-              <div class="sort-options">
-                <a href="#" class="sort-link">时间↓</a>
-                <a href="#" class="sort-link">文献量↓</a>
+            <div class="filter-header" @click="toggleSection('location')">
+              <div class="filter-title">
+                <svg class="location-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M8 1.333a4.667 4.667 0 0 0-4.667 4.667c0 3.5 4.667 8.667 4.667 8.667s4.667-5.167 4.667-8.667A4.667 4.667 0 0 0 8 1.333Zm0 6.334a1.667 1.667 0 1 1 0-3.334 1.667 1.667 0 0 1 0 3.334Z"
+                    fill="#13b0a6"
+                  />
+                </svg>
+                <span>成都</span>
               </div>
               <svg
                 class="chevron-icon"
-                :class="{ 'expanded': expandedSections.year }"
+                :class="{ 'expanded': expandedSections.location }"
                 viewBox="0 0 12 8"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
               >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.location">
+              <div class="simple-options">
+                <span
+                  v-for="option in locationOptions"
+                  :key="option"
+                  @click="selectFilter('location', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
             </div>
           </div>
 
-          <!-- 研究层次 - 展开状态 -->
-          <div class="filter-section expanded">
-            <div class="filter-header" @click="toggleSection('research')">
-              <svg
-                class="chart-icon"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M2 12V8M6 12V4M10 12V6M14 12V2"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
-              <span>研究层次</span>
-              <svg
-                class="chevron-icon expanded"
-                viewBox="0 0 12 8"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </div>
-            <div class="filter-options" v-show="expandedSections.research">
-              <label
-                v-for="option in researchLevels"
-                :key="option.value"
-                class="filter-option"
-              >
-                <input
-                  type="checkbox"
-                  :value="option.value"
-                  v-model="selectedResearchLevels"
-                />
-                <span>{{ option.label }} ({{ option.count }})</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- 文献类型 -->
+          <!-- 求职类型 -->
           <div class="filter-section">
-            <div class="filter-header" @click="toggleSection('document')">
-              <svg
-                class="chart-icon"
-                viewBox="0 0 16 16"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M2 12V8M6 12V4M10 12V6M14 12V2"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
+            <div class="filter-header" @click="toggleSection('jobType')">
+              <span>求职类型</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.jobType }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
-              <span>文献类型</span>
-              <svg
-                class="chevron-icon"
-                :class="{ 'expanded': expandedSections.document }"
-                viewBox="0 0 12 8"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M1 1L6 6L11 1"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
+            </div>
+            <div class="filter-options" v-show="expandedSections.jobType">
+              <div class="simple-options">
+                <span
+                  v-for="option in jobTypeOptions"
+                  :key="option"
+                  @click="selectFilter('jobType', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 薪资待遇 -->
+          <div class="filter-section">
+            <div class="filter-header" @click="toggleSection('salary')">
+              <span>薪资待遇</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.salary }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.salary">
+              <div class="simple-options">
+                <span
+                  v-for="option in salaryOptions"
+                  :key="option"
+                  @click="selectFilter('salary', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工作经验 -->
+          <div class="filter-section">
+            <div class="filter-header" @click="toggleSection('experience')">
+              <span>工作经验</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.experience }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.experience">
+              <div class="simple-options">
+                <span
+                  v-for="option in experienceOptions"
+                  :key="option"
+                  @click="selectFilter('experience', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 学历要求 -->
+          <div class="filter-section">
+            <div class="filter-header" @click="toggleSection('education')">
+              <span>学历要求</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.education }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.education">
+              <div class="simple-options">
+                <span
+                  v-for="option in educationOptions"
+                  :key="option"
+                  @click="selectFilter('education', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 公司行业 -->
+          <div class="filter-section">
+            <div class="filter-header" @click="toggleSection('industry')">
+              <span>公司行业</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.industry }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.industry">
+              <div class="industry-grid">
+                <span
+                  v-for="option in industryOptions"
+                  :key="option"
+                  @click="selectFilter('industry', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 公司规模 -->
+          <div class="filter-section">
+            <div class="filter-header" @click="toggleSection('size')">
+              <span>公司规模</span>
+              <svg class="chevron-icon" :class="{ 'expanded': expandedSections.size }" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1L6 6L11 1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </div>
+            <div class="filter-options" v-show="expandedSections.size">
+              <div class="simple-options">
+                <span
+                  v-for="option in sizeOptions"
+                  :key="option"
+                  @click="selectFilter('size', option)"
+                >
+                  {{ option }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -264,30 +250,41 @@
           <div
             v-for="career in displayedCareers"
             :key="career.id"
-            class="career-card"
+            class="career-card job-card"
           >
-            <div class="card-image-wrapper">
-              <img :src="career.image" :alt="career.title" class="card-image" />
+            <div class="job-header">
+              <div class="job-title">
+                <h3>{{ career.title }}</h3>
+              </div>
+              <div class="job-salary">{{ career.salary }}</div>
             </div>
-            <div class="card-content">
-              <div class="card-header">
-                <h3 class="card-title">{{ career.title }}</h3>
-                <span v-if="career.isHot" class="hot-badge">热门</span>
+            <div class="job-tags">
+              <span
+                v-for="tag in career.tags"
+                :key="tag"
+                class="job-tag"
+              >
+                {{ tag }}
+              </span>
+            </div>
+            <p class="job-description">
+              {{ career.description }}
+            </p>
+            <div class="job-footer">
+              <div class="job-company">
+                <div class="company-info">
+                  <span class="company-name">{{ career.company }}</span>
+                </div>
+                <span class="job-location">{{ career.location }}</span>
               </div>
-              <p class="card-description">{{ career.description }}</p>
-              <div class="card-skills">
-                <span
-                  v-for="skill in career.skills"
-                  :key="skill"
-                  class="skill-tag"
-                >
-                  {{ skill }}
-                </span>
-              </div>
-              <div class="card-footer">
-                <span class="card-salary">起薪:{{ career.salary }}/月</span>
-                <a href="#" class="card-link">了解详情 →</a>
-              </div>
+              <a
+                class="job-link"
+                :href="career.url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                了解详情 →
+              </a>
             </div>
           </div>
         </div>
@@ -308,9 +305,11 @@
 
 <script>
 import Footer from "../components/Footer.vue";
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import Pagination from "../components/Pagination.vue";
 import NavBar from "../components/NavBar.vue";
+import request from "../api/request";
 
 // 模拟数据 - 实际项目中应该从API获取
 const mockCareers = [
@@ -364,9 +363,12 @@ export default {
     Footer,
   },
   setup() {
-    const careers = ref(mockCareers);
+    const router = useRouter();
+    const route = useRoute();
+    const careers = ref([]);
     const currentPage = ref(1);
-    const itemsPerPage = 8;
+    const itemsPerPage = 9;
+    const total = ref(0);
 
     // 过滤器状态
     const searchQuery = ref("");
@@ -377,47 +379,210 @@ export default {
 
     // 侧边栏过滤器状态
     const expandedSections = ref({
-      theme: false,
-      source: false,
-      subject: false,
-      year: false,
-      research: true, // 默认展开
-      document: false,
+      location: false,
+      jobType: false,
+      salary: false,
+      experience: false,
+      education: false,
+      industry: false,
+      size: false
     });
 
-    const selectedResearchLevels = ref([]);
-
-    const researchLevels = [
-      { label: "应用研究", value: "applied", count: 197 },
-      { label: "开发研究", value: "development", count: 163 },
-      { label: "学科教育教学", value: "education", count: 25 },
-      { label: "高级科普", value: "popular", count: 19 },
-      { label: "开发研究-管理研究", value: "management", count: 15 },
-      { label: "开发研究-政策研究", value: "policy", count: 8 },
-      { label: "技术研究", value: "technical", count: 8 },
-      { label: "学科教育教学", value: "education2", count: 4 },
-      { label: "开发研究-行业研究", value: "industry", count: 1 },
-      { label: "技术开发", value: "techdev", count: 1 },
+    const locationOptions = ["成都", "北京", "上海", "深圳", "广州"];
+    const jobTypeOptions = ["不限", "全职", "兼职", "实习"];
+    const salaryOptions = ["不限", "3K以下", "3-5K", "5-10K", "10-20K", "20-50K", "50K以上"];
+    const experienceOptions = ["不限", "在校生", "应届生", "经验不限", "1年以内", "1-3年", "3-5年", "5-10年", "10年以上"];
+    const educationOptions = ["不限", "初中及以下", "中专/中技", "高中", "大专", "本科", "硕士", "博士"];
+    const industryOptions = [
+      "互联网/AI",
+      "互联网",
+      "电子商务",
+      "计算机软件",
+      "生活服务(O2O)",
+      "企业服务",
+      "医疗健康",
+      "游戏",
+      "社交网络与媒体",
+      "人工智能",
+      "云计算",
+      "在线教育",
+      "计算机服务",
+      "大数据",
+      "广告营销",
+      "物联网",
+      "新零售",
+      "信息安全",
+      "电子/通信/半导体",
+      "半导体芯片",
+      "电子/硬件开发",
+      "通信网络设备"
     ];
+    const sizeOptions = ["不限", "0-20人", "20-99人", "100-499人", "500-999人", "1000-9999人", "10000人以上"];
 
     const toggleSection = (section) => {
-      expandedSections.value[section] = !expandedSections.value[section];
+      const current = expandedSections.value[section];
+      Object.keys(expandedSections.value).forEach((key) => {
+        expandedSections.value[key] = false;
+      });
+      expandedSections.value[section] = !current;
+    };
+
+    const selectFilter = (type, value) => {
+      const newQuery = {
+        ...route.query,
+        [type]: value,
+      };
+      router.push({
+        path: route.path,
+        query: newQuery,
+      });
+      // 选择后收起当前菜单
+      if (expandedSections.value[type] !== undefined) {
+        expandedSections.value[type] = false;
+      }
     };
 
     const totalPages = computed(() =>
-      Math.ceil(careers.value.length / itemsPerPage)
+      Math.ceil(total.value / itemsPerPage)
     );
 
     const displayedCareers = computed(() => {
-      const start = (currentPage.value - 1) * itemsPerPage;
-      const end = start + itemsPerPage;
-      return careers.value.slice(start, end);
+      const {
+        location = "",
+        jobType = "",
+        salary = "",
+        experience = "",
+        education = "",
+        industry = "",
+        size = "",
+      } = route.query;
+
+      return careers.value.filter((career) => {
+        // 城市：如果职位有城市信息，则按包含关系过滤；否则不过滤该职位
+        if (
+          location &&
+          career.location &&
+          !career.location.includes(location)
+        ) {
+          return false;
+        }
+
+        // 求职类型：同理，只对有 jobType 的职位做过滤
+        if (
+          jobType &&
+          jobType !== "不限" &&
+          career.jobType &&
+          !career.jobType.includes(jobType)
+        ) {
+          return false;
+        }
+
+        // 薪资待遇：只对有 salary 的职位做过滤
+        if (
+          salary &&
+          salary !== "不限" &&
+          career.salary &&
+          !career.salary.includes(salary)
+        ) {
+          return false;
+        }
+
+        // 工作经验：只对有 experience 的职位做过滤
+        if (
+          experience &&
+          experience !== "不限" &&
+          career.experience &&
+          !career.experience.includes(experience)
+        ) {
+          return false;
+        }
+
+        // 学历要求：只对有 education 的职位做过滤
+        if (
+          education &&
+          education !== "不限" &&
+          career.education &&
+          !career.education.includes(education)
+        ) {
+          return false;
+        }
+
+        // 公司行业：只对有 industry 的职位做过滤
+        if (industry && career.industry && !career.industry.includes(industry)) {
+          return false;
+        }
+
+        // 公司规模：只对有 size 的职位做过滤
+        if (
+          size &&
+          size !== "不限" &&
+          career.size &&
+          !career.size.includes(size)
+        ) {
+          return false;
+        }
+
+        return true;
+      });
     });
 
-    const handlePageChange = (page) => {
+    const fetchCareers = async (page = 1) => {
+      try {
+        const data = await request.get("/crawler/job-info/list/page", {
+          params: {
+            current: page,
+            pageSize: itemsPerPage,
+          },
+        });
+        const records = (data && data.records) || [];
+        total.value = data?.total || records.length;
+        careers.value = records.map((job) => ({
+          id: job.id,
+          title: job.workName || "职位名称缺失",
+          description: job.workContent || "暂无岗位说明",
+          tags: [job.workYear, job.graduate].filter(Boolean),
+          salary: job.workSalary || "薪资面议",
+          company: job.companyName || "未知公司",
+          location: job.workAddress || "",
+          url: job.url || "#",
+          // 额外字段用于筛选
+          jobType: job.workType || job.jobType || "",
+          experience: job.workYear || "",
+          education: job.graduate || "",
+          industry: job.companyIndustry || "",
+          size: job.companySize || "",
+        }));
+      } catch (e) {
+        console.error("加载职业展示数据失败:", e);
+        // 回退到本地 mock 数据，保证页面可用
+        total.value = mockCareers.length;
+        careers.value = mockCareers.map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          tags: item.skills,
+          salary: item.salary,
+          company: item.title,
+          location: "未知",
+          url: "#",
+          jobType: "",
+          experience: "",
+          education: "",
+          industry: "",
+          size: "",
+        }));
+      }
+    };
+
+    const handlePageChange = async (page) => {
       currentPage.value = page;
+      await fetchCareers(page);
       window.scrollTo(0, 0);
     };
+
+    onMounted(() => {
+      fetchCareers(currentPage.value);
+    });
 
     return {
       careers,
@@ -431,9 +596,15 @@ export default {
       filterExperience,
       filterSalary,
       expandedSections,
-      selectedResearchLevels,
-      researchLevels,
+      locationOptions,
+      jobTypeOptions,
+      salaryOptions,
+      experienceOptions,
+      educationOptions,
+      industryOptions,
+      sizeOptions,
       toggleSection,
+      selectFilter,
     };
   },
 };
@@ -664,6 +835,17 @@ export default {
   background: #fafafa;
 }
 
+.filter-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .filter-header:hover {
   background: #f0f0f0;
 }
@@ -717,6 +899,30 @@ export default {
   max-height: 300px;
   overflow-y: auto;
   background: #ffffff;
+}
+
+.simple-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: #444;
+}
+
+.simple-options span {
+  cursor: pointer;
+}
+
+.simple-options span:hover {
+  color: #2563eb;
+}
+
+.industry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  font-size: 14px;
+  color: #444;
 }
 
 .filter-options::-webkit-scrollbar {
@@ -799,81 +1005,106 @@ export default {
   transform: scale(1.05);
 }
 
-.card-content {
-  padding: 20px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.card-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin: 0;
-}
-
-.hot-badge {
-  background: #87ceeb;
-  color: #ffffff;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.card-description {
-  font-size: 14px;
-  color: #666;
-  line-height: 1.6;
-  margin-bottom: 16px;
-}
-
-.card-skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.skill-tag {
-  background: #f0f0f0;
-  color: #555;
-  padding: 6px 12px;
+.job-card {
   border-radius: 16px;
-  font-size: 12px;
-}
-
-.card-footer {
+  border: 1px solid #09a6a7;
+  padding: 20px;
+  background: #fff;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-header {
+  display: flex;
   justify-content: space-between;
-  padding-top: 16px;
+  align-items: center;
+}
+
+.job-title {
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+}
+
+.job-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #069fad;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-salary {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ff6c5a;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.job-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.job-tag {
+  background: #f3f7f8;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: #555;
+  font-size: 13px;
+}
+
+.job-description {
+  font-size: 14px;
+  color: #444;
+  line-height: 1.6;
+  margin: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+}
+
+.job-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-top: 1px solid #f0f0f0;
+  padding-top: 12px;
 }
 
-.card-salary {
+.job-company {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #666;
   font-size: 14px;
-  color: #333;
-  font-weight: 500;
 }
 
-.card-link {
-  color: #3b82f6;
+.company-name {
+  font-weight: 600;
+  color: #222;
+}
+
+.job-location {
+  color: #999;
+  font-size: 13px;
+}
+
+.job-link {
+  color: #069fad;
   text-decoration: none;
-  font-size: 14px;
-  transition: color 0.2s;
+  font-weight: 600;
 }
 
-.card-link:hover {
-  color: #2563eb;
+.job-link:hover {
   text-decoration: underline;
 }
-
 /* 确保内容区域占据可用高度，Footer显示在底部 */
 .content-container {
   flex: 1;

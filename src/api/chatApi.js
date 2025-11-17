@@ -245,30 +245,39 @@ const handleResponseError = async (response, onError) => {
  */
 export const streamChat = async (params = {}, onMessage, onError, onComplete) => {
   const userId = getUserId()
-  
+
   const requestBody = {
     messages: params.messages || [],
     model: params.model || 'doubao-seed-1-6-251015',
     temperature: params.temperature !== undefined ? params.temperature : 0.7,
     stream: params.stream !== undefined ? params.stream : true,
     maxTokens: params.maxTokens || 2048,
-    userId: params.userId || userId
+    userId: params.userId || userId,
+    thinking: {
+      type: params.thinkingType || 'disabled'
+    }
   }
-  
+
   // 只有当 sessionId 存在且不为空时才添加
   if (params.sessionId) {
     requestBody.sessionId = params.sessionId
   }
-  
+
   const abortController = new AbortController()
-  
+
   try {
     // 使用 @microsoft/fetch-event-source 以获得更快的事件分发
-    const { url: apiUrl, options: fetchOptions } = getRequestConfig('/chat/completions/stream', requestBody)
-    console.log('发送流式聊天请求到(ES):', apiUrl)
+    const { url: apiUrl, options: fetchOptions } = getRequestConfig('/chat/stream/flux', requestBody)
+    console.log('发送流式聊天请求到(Flux):', apiUrl)
     let finished = false
     let reasoningContent = ''
     let content = ''
+    const decodeChunk = (text = '') => {
+      return text
+        .replace(/&#32;/g, ' ')
+        .replace(/&#92n/g, '\n')
+        .replace(/&#92;/g, '\\')
+    }
     // 处理解析后的数据
     const processData = (jsonData) => {
       // 处理 choices[0].delta 结构（兼容多种格式）
@@ -353,18 +362,29 @@ export const streamChat = async (params = {}, onMessage, onError, onComplete) =>
       onmessage(ev) {
         if (finished) return
         const evt = ev.event || 'message'
-        let dataStr = (ev.data || '').trim()
+        let dataStr = (ev.data || '')
+        if (!dataStr || !dataStr.trim()) return
+        dataStr = decodeChunk(dataStr.trim())
         if (!dataStr) return
-        // 兼容后端发送 data:data: {...} 的格式，反复去掉前缀
-        // 以及 data: 前可能跟着一个冒号（某些实现会写成 data:: {...}）
-        while (dataStr.startsWith('data:')) {
-          dataStr = dataStr.slice(5).trim()
-          if (dataStr.startsWith(':')) {
-            dataStr = dataStr.slice(1).trim()
-              }
+        if (evt === 'done') {
+          finished = true
+          if (onComplete) onComplete(reasoningContent, content)
+          return
+        }
+        if (evt === 'thinking' || evt === 'reasoning') {
+          if (dataStr === '[DONE]') {
+            if (onMessage) {
+              onMessage(reasoningContent, content, 'reasoning', '')
             }
-        if (!dataStr) return
-        if (evt === 'done' || dataStr === '[DONE]') {
+            return
+          }
+          reasoningContent += dataStr
+          if (onMessage) {
+            onMessage(reasoningContent, content, 'reasoning', dataStr)
+          }
+          return
+        }
+        if (dataStr === '[DONE]') {
           finished = true
           if (onComplete) onComplete(reasoningContent, content)
           return
@@ -376,7 +396,11 @@ export const streamChat = async (params = {}, onMessage, onError, onComplete) =>
             finished = true
           }
         } catch (e) {
-          // 非JSON的数据行，忽略
+          // 非JSON的纯文本内容，直接拼接
+          content += dataStr
+          if (onMessage) {
+            onMessage(reasoningContent, content, 'content', dataStr)
+          }
         }
       },
       onclose() {
@@ -489,6 +513,64 @@ export const deleteChatSession = async (params = {}) => {
     params: {
       userId: userId
     }
+  })
+}
+
+/**
+ * AI润色文本
+ * @param {string} text - 待润色的文本
+ * @returns {Promise<string>} 返回润色后的文本
+ */
+export const polishText = async (text) => {
+  if (!text || !text.trim()) {
+    throw new Error('请先输入内容')
+  }
+  
+  return new Promise((resolve, reject) => {
+    const userId = getUserId()
+    let polishedContent = ''
+    
+    streamChat(
+      {
+        messages: [
+          {
+            role: 'system',
+            content: '你现在只需要对用户输入的内容进行润色，要符合实际情况，如果用户输入的内容是markdown格式，那你给出的内容也是markdown格式。只输出你润色的内容，其他的都不要输出'
+          },
+          {
+            role: 'user',
+            content: text
+          }
+        ],
+        model: 'doubao-seed-1-6-251015',
+        stream: true,
+        maxTokens: 10000,
+        thinkingType: 'disabled'
+      },
+      // onMessage 回调 - 只处理content类型，忽略reasoning
+      (reasoning, content, type, delta) => {
+        // 只处理content类型的增量数据
+        if (type === 'content' && delta) {
+          polishedContent += delta
+        }
+      },
+      // onError 回调
+      (error) => {
+        console.error('AI润色失败:', error)
+        reject(error)
+      },
+      // onComplete 回调
+      (reasoning, content) => {
+        // 使用content参数或累积的polishedContent
+        const result = content || polishedContent
+        if (result && result.trim()) {
+          resolve(result.trim())
+        } else {
+          // 如果没有润色结果，返回原文本
+          resolve(text)
+        }
+      }
+    )
   })
 }
 

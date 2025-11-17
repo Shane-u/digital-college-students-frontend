@@ -59,58 +59,57 @@
           <!-- 普通消息 -->
           <template v-else>
             <div v-if="shouldRenderMessage(msg)" class="message-bubble-wrapper">
-            <div v-if="msg.position !== 'right'" class="message-avatar">
-              <img :src="sanbikongGif" alt="助手头像" />
-            </div>
-            <div 
-              class="message-bubble" 
-              :class="{ 
-                'bubble-left': msg.position !== 'right',
-                'bubble-right': msg.position === 'right'
-              }"
-            >
-              <!-- 思考过程 -->
-              <div v-if="msg.reasoning && msg.position !== 'right'" class="reasoning-content">
-                <div class="reasoning-label">
-                  <span v-if="!msg.reasoningDone">💭 思考中...</span>
-                  <span v-else>✅ 已完成思考</span>
-                  <button
-                    v-if="msg.reasoningDone"
-                    class="reasoning-toggle"
-                    @click="toggleReasoning(index)"
-                  >{{ msg.reasoningCollapsed ? '展开' : '收起' }}</button>
-                </div>
-                <div
-                  class="reasoning-text"
-                  :class="{ done: msg.reasoningDone && msg.reasoningCollapsed }"
-                  v-html="renderReasoningContent(msg.reasoning)"
-                ></div>
+              <div v-if="msg.position !== 'right'" class="message-avatar">
+                <img :src="sanbikongGif" alt="助手头像" />
               </div>
-              <!-- 消息内容 -->
-              <div v-if="msg.type === 'text'" class="bubble-content" v-html="renderMessageContent(msg)"></div>
-              <img v-else-if="msg.type === 'image'" :src="msg.content.picUrl" alt="图片" class="message-image" />
-            </div>
-            <div v-if="msg.position === 'right'" class="message-avatar user-avatar">
-              <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="用户头像" class="user-avatar-img" />
-              <div v-else class="avatar-icon">👤</div>
-            </div>
+              <div
+                class="message-stack"
+                :class="{ 'stack-right': msg.position === 'right' }"
+              >
+                <div
+                  v-if="msg.reasoning && msg.position !== 'right'"
+                  class="reasoning-content"
+                  :class="{ collapsed: msg.reasoningDone && msg.reasoningCollapsed }"
+                >
+                  <div class="reasoning-label">
+                    <span v-if="!msg.reasoningDone">🧠 孪孪正在头脑风暴中...</span>
+                    <span v-else>✅ 深度思考已完成</span>
+                    <button
+                      v-if="msg.reasoningDone"
+                      class="reasoning-toggle"
+                      @click="toggleReasoning(index)"
+                    >{{ msg.reasoningCollapsed ? '展开' : '收起' }}</button>
+                  </div>
+                  <div
+                    class="reasoning-text"
+                    v-show="!msg.reasoningDone || !msg.reasoningCollapsed"
+                    v-html="renderReasoningContent(msg.reasoning)"
+                  ></div>
+                  <div
+                    v-if="!msg.reasoningCollapsed || !msg.reasoningDone"
+                    class="reasoning-divider"
+                  ></div>
+                </div>
+                <div 
+                  v-if="hasVisibleContent(msg)"
+                  class="message-bubble" 
+                  :class="{ 
+                    'bubble-left': msg.position !== 'right',
+                    'bubble-right': msg.position === 'right'
+                  }"
+                >
+                  <div v-if="msg.type === 'text'" class="bubble-content" v-html="renderMessageContent(msg)"></div>
+                  <img v-else-if="msg.type === 'image'" :src="msg.content.picUrl" alt="图片" class="message-image" />
+                </div>
+              </div>
+              <div v-if="msg.position === 'right'" class="message-avatar user-avatar">
+                <img v-if="userAvatarUrl" :src="userAvatarUrl" alt="用户头像" class="user-avatar-img" />
+                <div v-else class="avatar-icon">👤</div>
+              </div>
             </div>
           </template>
         </div>
         
-        <!-- 打字指示器 -->
-        <div v-if="isTyping" class="message-item">
-          <div class="message-bubble-wrapper">
-            <div class="message-avatar">
-              <img :src="sanbikongGif" alt="助手头像" />
-            </div>
-            <div class="message-bubble bubble-left typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-        </div>
       </div>
       
       <!-- 快捷回复 -->
@@ -132,19 +131,40 @@
       
       <!-- 输入区域 -->
       <div class="input-area">
-        <input
-          v-model="userMessage"
-          @keyup.enter="handleSend"
-          placeholder="请输入..."
-          class="message-input"
-        />
+        <div class="mode-toggle">
+          <button
+            class="mode-btn"
+            :class="{ active: deepThinkingEnabled }"
+            type="button"
+            @click="toggleDeepThinking"
+          >
+            深度思考
+          </button>
+        </div>
+        <div class="input-row">
+          <input
+            v-model="userMessage"
+            @keyup.enter="handleEnterSend"
+            placeholder="有问题，尽管问，Shift+Enter换行"
+            class="message-input"
+          />
+          <button
+            class="send-btn"
+            type="button"
+            :class="sendButtonClass"
+            :disabled="sendButtonDisabled"
+            @click="handleSendButtonClick"
+          >
+            ↑
+          </button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
 import { streamChat } from '../api/chatApi';
 import sanbikongGif from '../assets/sanbikong.gif';
@@ -157,6 +177,7 @@ export default {
     const userMessage = ref('');
     const messages = ref([]);
     const isTyping = ref(false);
+    const deepThinkingEnabled = ref(false);
     const messagesContainer = ref(null);
     const showTip = ref(false);
     let tipTimer = null;
@@ -295,6 +316,18 @@ export default {
       }
       return true;
     };
+
+    const hasVisibleContent = (msg) => {
+      if (!msg) return false;
+      if (msg.type === 'image') {
+        return !!(msg.content && msg.content.picUrl);
+      }
+      if (msg.type === 'text') {
+        if (msg.position === 'right') return true;
+        return !!(msg.content && msg.content.text && msg.content.text.length > 0);
+      }
+      return false;
+    };
     
     // 构建消息历史
     const buildMessageHistory = () => {
@@ -318,7 +351,6 @@ export default {
       if (typingRaf) return;
       const step = () => {
         let didUpdate = false;
-        // 优先渲染思考内容
         if (reasoningQueue.value.length > 0 && messages.value[assistantIndex]) {
           const ch = reasoningQueue.value.slice(0, 1);
           reasoningQueue.value = reasoningQueue.value.slice(1);
@@ -353,13 +385,35 @@ export default {
       contentQueue.value = '';
     };
     
+    const cancelCurrentStream = () => {
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+      }
+      stopTyping();
+      isTyping.value = false;
+    };
+    
+    const sendButtonState = computed(() => {
+      if (isTyping.value) return 'streaming';
+      return userMessage.value.trim().length > 0 ? 'ready' : 'disabled';
+    });
+
+    const sendButtonDisabled = computed(() => sendButtonState.value === 'disabled');
+
+    const sendButtonClass = computed(() => {
+      return {
+        'state-disabled': sendButtonState.value === 'disabled',
+        'state-ready': sendButtonState.value === 'ready',
+        'state-streaming': sendButtonState.value === 'streaming'
+      };
+    });
+
     const sendQuestionToAI = async (question) => {
       try {
-        // 取消之前的请求（如果有）
         if (abortController) {
           abortController.abort();
         }
-        // 重置打字机状态
         stopTyping();
         
         isTyping.value = true;
@@ -390,7 +444,8 @@ export default {
             temperature: 0.7,
             stream: true,
             maxTokens: 2048,
-            sessionId: currentSessionId.value || undefined
+            sessionId: currentSessionId.value || undefined,
+            thinkingType: deepThinkingEnabled.value ? 'enabled' : 'disabled'
           },
           // onMessage 回调：delta 为本次新增片段，采用逐字拼接
           (reasoning, content, type, delta) => {
@@ -450,7 +505,8 @@ export default {
     };
     
     const handleSend = (type = 'text', val = null) => {
-      const text = val || userMessage.value.trim();
+      if (isTyping.value) return;
+      const text = (val !== null ? val : userMessage.value).trim();
       if (!text) return;
       
       appendMsg({
@@ -461,6 +517,27 @@ export default {
       
       userMessage.value = '';
       sendQuestionToAI(text);
+    };
+
+    const handleEnterSend = (event) => {
+      if (event.shiftKey) return;
+      if (isTyping.value) return;
+      event.preventDefault?.();
+      handleSend();
+    };
+
+    const handleSendButtonClick = () => {
+      if (sendButtonDisabled.value && !isTyping.value) return;
+      const state = sendButtonState.value;
+      if (state === 'ready') {
+        handleSend();
+      } else if (state === 'streaming') {
+        cancelCurrentStream();
+      }
+    };
+
+    const toggleDeepThinking = () => {
+      deepThinkingEnabled.value = !deepThinkingEnabled.value;
     };
     
     const handleQuickReplyClick = (item) => {
@@ -507,6 +584,8 @@ export default {
       if (tipTimer) {
         clearTimeout(tipTimer);
       }
+      stopTyping();
+      isTyping.value = false;
     });
     
     return {
@@ -516,6 +595,7 @@ export default {
       userMessage,
       messages,
       isTyping,
+      deepThinkingEnabled,
       messagesContainer,
       quickActions,
       showTip,
@@ -523,11 +603,18 @@ export default {
       handleMascotClick,
       toggleChat,
       handleSend,
+      handleEnterSend,
+      handleSendButtonClick,
+      sendButtonClass,
+      sendButtonState,
+      sendButtonDisabled,
+      toggleDeepThinking,
       handleQuickReplyClick,
       renderMessageContent,
       renderReasoningContent,
       toggleReasoning,
       shouldRenderMessage,
+      hasVisibleContent,
       userAvatarUrl
     };
   }
@@ -722,6 +809,38 @@ export default {
   color: #667eea;
 }
 
+/* 深度思考切换 */
+.mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mode-btn {
+  flex: 0 0 auto;
+  padding: 6px 14px;
+  border: 1px solid #dcdcdc;
+  border-radius: 18px;
+  background: #fff;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.mode-btn:hover {
+  border-color: rgb(120,93,148);
+  color: rgb(120,93,148);
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.25);
+}
+
 /* 消息列表 */
 .message-list {
   flex: 1;
@@ -759,6 +878,17 @@ export default {
 
 .message-right .message-bubble-wrapper {
   flex-direction: row;
+}
+
+.message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.message-stack.stack-right {
+  align-items: flex-end;
 }
 
 .message-avatar {
@@ -829,16 +959,26 @@ export default {
 
 /* 思考过程样式 */
 .reasoning-content {
-  margin-bottom: 12px;
-  padding: 12px;
-  background: rgba(102, 126, 234, 0.1);
-  border-left: 3px solid #667eea;
-  border-radius: 6px;
+  margin-bottom: 0;
+  padding: 12px 12px 8px 12px;
+  background: #e8f3ff;
+  border-left: 3px solid #5a8dee;
+  border-radius: 8px;
+  border: 1px solid rgba(90, 141, 238, 0.3);
+  box-shadow: 0 2px 6px rgba(90, 141, 238, 0.12);
+  transition: background 0.2s ease, padding 0.2s ease;
+}
+
+.reasoning-content.collapsed {
+  padding: 10px 12px 6px 12px;
+  background: rgba(232, 243, 255, 0.6);
+  border-color: rgba(90, 141, 238, 0.2);
+  box-shadow: none;
 }
 
 .reasoning-label {
   font-size: 12px;
-  color: #667eea;
+  color: #3a70c1;
   font-weight: 600;
   margin-bottom: 8px;
   display: flex;
@@ -852,20 +992,16 @@ export default {
   line-height: 1.6;
 }
 
-/* 思考完成后折叠为两行展示（仍可看到最新片段） */
-.reasoning-text.done {
-  display: -webkit-box;
-  /* 兼容属性 */
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.reasoning-divider {
+  height: 1px;
+  background: rgba(90, 141, 238, 0.25);
+  margin-top: 8px;
 }
 
 .reasoning-toggle {
   margin-left: 8px;
   font-size: 12px;
-  color: #667eea;
+  color: #3a70c1;
   background: transparent;
   border: none;
   cursor: pointer;
@@ -886,39 +1022,6 @@ export default {
 .message-image {
   max-width: 100%;
   border-radius: 8px;
-}
-
-/* 打字指示器 */
-.typing-indicator {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 14px;
-}
-
-.typing-indicator span {
-  width: 6px;
-  height: 6px;
-  background-color: #999;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out;
-}
-
-.typing-indicator span:nth-child(2) {
-  animation-delay: -1.1s;
-}
-
-.typing-indicator span:nth-child(3) {
-  animation-delay: -0.9s;
-}
-
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
 }
 
 /* 快捷回复 */
@@ -964,15 +1067,113 @@ export default {
 .message-input {
   width: 100%;
   border: 1px solid #ddd;
-  border-radius: 20px;
-  padding: 8px 16px;
+  border-radius: 24px;
+  padding: 10px 48px 10px 16px;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .message-input:focus {
   border-color: rgb(120,93,148);
+  box-shadow: 0 0 0 3px rgba(120,93,148,0.1);
+}
+
+.input-row {
+  position: relative;
+}
+
+.send-btn {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 1000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, box-shadow 0.2s ease, background 0.2s ease;
+  line-height: 32px;
+}
+
+.send-btn.state-ready:hover {
+  box-shadow: 0 6px 14px rgba(118, 75, 162, 0.25);
+}
+
+.send-btn:active {
+  transform: translateY(-50%) scale(0.94);
+}
+
+.send-btn.state-disabled {
+  background: #e5e5e5;
+  color: #bbb;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.send-btn.state-streaming {
+  background: linear-gradient(135deg, #b19cd9 0%, #8c73c3 100%);
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+
+.send-btn.state-streaming:hover {
+  box-shadow: 0 6px 14px rgba(140, 115, 195, 0.3);
+}
+
+@keyframes pulse {
+  from {
+    box-shadow: 0 0 0 rgba(140, 115, 195, 0.15);
+  }
+  to {
+    box-shadow: 0 0 12px rgba(140, 115, 195, 0.35);
+  }
+}
+
+.send-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  position: relative;
+  color: inherit;
+}
+
+.send-icon::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.send-icon.ready::before {
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 9px solid currentColor;
+}
+
+.send-icon.disabled {
+  color: #bbb;
+}
+
+.send-icon.disabled::before {
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 9px solid currentColor;
+}
+
+.send-icon.streaming::before {
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border-radius: 2px;
 }
 
 /* 响应式 */
