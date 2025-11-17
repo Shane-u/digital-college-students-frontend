@@ -245,7 +245,7 @@ const handleResponseError = async (response, onError) => {
  */
 export const streamChat = async (params = {}, onMessage, onError, onComplete) => {
   const userId = getUserId()
-
+  
   const requestBody = {
     messages: params.messages || [],
     model: params.model || 'doubao-seed-1-6-251015',
@@ -257,14 +257,14 @@ export const streamChat = async (params = {}, onMessage, onError, onComplete) =>
       type: params.thinkingType || 'disabled'
     }
   }
-
+  
   // 只有当 sessionId 存在且不为空时才添加
   if (params.sessionId) {
     requestBody.sessionId = params.sessionId
   }
-
+  
   const abortController = new AbortController()
-
+  
   try {
     // 使用 @microsoft/fetch-event-source 以获得更快的事件分发
     const { url: apiUrl, options: fetchOptions } = getRequestConfig('/chat/stream/flux', requestBody)

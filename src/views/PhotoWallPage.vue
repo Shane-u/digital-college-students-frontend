@@ -11,12 +11,12 @@
       <!-- 页面标题 -->
       <div class="page-header">
         <div class="header-left">
-          <h1 class="page-title">照片墙</h1>
+          <div class="title-row">
+            <h1 class="page-title">照片墙</h1>
+            <SearchBar class="inline-search" placeholder="搜索照片..." @search="handleSearch" />
+          </div>
           <p class="page-subtitle">记录大学生活的珍贵时刻</p>
           <button class="upload-photo-btn" @click="showUploadDialog">添加照片</button>
-        </div>
-        <div class="header-right">
-          <SearchBar placeholder="搜索照片..." @search="handleSearch" />
         </div>
       </div>
 
@@ -744,10 +744,20 @@ onMounted(async () => {
   flex: 1;
 }
 
-.header-right {
+.title-row {
   display: flex;
   align-items: center;
-  padding-top: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.title-row .page-title {
+  margin: 0;
+}
+
+.title-row :deep(.search-bar-container) {
+  margin: 0;
 }
 
 .page-title {

@@ -10,12 +10,12 @@
     <div class="main-content">
       <div class="page-header">
         <div class="header-left">
-          <h1 class="page-title">成长记录日历</h1>
+          <div class="title-row">
+            <h1 class="page-title">成长记录日历</h1>
+            <SearchBar class="inline-search" placeholder="搜索记录..." @search="handleSearch" />
+          </div>
           <p class="page-subtitle">点击日期添加或查看成长记录</p>
           <button class="add-today-btn" @click="addTodayRecord">添加今日记录</button>
-        </div>
-        <div class="header-right">
-          <SearchBar placeholder="搜索记录..." @search="handleSearch" />
         </div>
       </div>
 
@@ -569,10 +569,20 @@ watch(() => route.query.date, (newDate) => {
   flex: 1;
 }
 
-.header-right {
+.title-row {
   display: flex;
   align-items: center;
-  padding-top: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.title-row .page-title {
+  margin: 0;
+}
+
+.title-row :deep(.search-bar-container) {
+  margin: 0;
 }
 
 .page-title {

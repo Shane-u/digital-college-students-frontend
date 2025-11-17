@@ -83,6 +83,29 @@
               <div class="question-header">
                 <span class="question-label">第 {{ currentQuestionIndex + 1 }} 题</span>
                 <!-- <span class="question-group">当前组：第 {{ currentGroup || 1 }} 组</span> -->
+                <div class="question-actions">
+                  <button
+                    class="jump-end-btn"
+                    type="button"
+                    @click="handleJumpToEnd"
+                  >
+                    到最后一题
+                  </button>
+                  <button
+                    class="random-all-btn"
+                    type="button"
+                    @click="handleRandomAllChoices"
+                  >
+                    全部随机
+                  </button>
+                <button
+                  class="random-btn"
+                  type="button"
+                  @click="handleRandomChoice"
+                >
+                  随机选择
+                </button>
+                </div>
               </div>
               <div class="question-text">{{ currentQuestion.title }}</div>
               <div class="options">
@@ -117,23 +140,55 @@
     <!-- 多Agent工作流演示区域 -->
     <div class="agent-workflow-section">
       <div class="agent-content">
-        <h1 class="agent-title">职业与竞赛规划 - 多Agent工作流演示</h1>
+        <!-- <h1 class="agent-title">一键生成职业规划报告</h1> -->
 
         <div class="card">
           <div class="row">
-            <!-- <div>
+            <div style="display: none;">
               <label>用户ID</label>
-              <input v-model="userId" type="text" placeholder="例如 1986990047206002690" />
-            </div> -->
+              <input
+                v-model="userId"
+                type="text"
+                placeholder="例如 1986990047206002690"
+              />
+            </div>
+            <div>
+              <label>用户昵称</label>
+              <input
+                type="text"
+                placeholder="请输入昵称"
+                value="云深"
+              />
+            </div>
             <div>
               <label>输入</label>
-              <input v-model="userInput" type="text" value="我想咨询一下未来的我的竞赛和职业规划怎么样规划" />
+              <input
+                v-model="userInput"
+                type="text"
+                placeholder="我想咨询一下未来的竞赛和职业规划"
+              />
             </div>
           </div>
-          <div style="margin-top:12px; display:flex; gap:8px;">
-            <button id="startBtn" :disabled="startBtnDisabled" @click="handleStart">启动工作流</button>
-            <!-- <span id="runInfo" class="badge">{{ runInfo }}</span> -->
+          <div class="workflow-actions">
+            <button id="startBtn" :disabled="startBtnDisabled" @click="handleStart">
+              启动工作流
+            </button>
+            <span class="badge">{{ runInfo || '未运行' }}</span>
           </div>
+        </div>
+
+        <div class="card assessment-sync-card">
+          <div class="sync-header">
+            <h3>职业测评结果</h3>
+            <span class="status-pill" :class="{ synced: hasAssessmentResult, pending: !hasAssessmentResult }">
+              {{ hasAssessmentResult ? '已同步' : '待完成' }}
+            </span>
+          </div>
+          <p class="sync-desc">
+            完成上方职业测评后，系统会自动将问题与答案封装为 JSON，并传递给多 Agent 工作流。
+          </p>
+          <pre v-if="hasAssessmentResult" class="assessment-json">{{ assessmentResultJson }}</pre>
+          <div v-else class="assessment-json-empty">测评完成后，这里将展示同步到工作流的 JSON 数据。</div>
         </div>
 
         <!-- <div class="card">
@@ -149,6 +204,10 @@
           </div>
           <div class="card">
             <h3>工作流状态</h3>
+            <div v-if="currentStageText" class="workflow-status-banner">
+              <span class="status-pulse-dot"></span>
+              {{ currentStageText }}
+            </div>
             <div id="workflowGraph" class="workflow-container">
               <svg ref="workflowSvg" id="workflowSvg" class="workflow-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
                 <defs>
@@ -216,6 +275,7 @@ const userId = ref('1986990047206002690')
 const userInput = ref('我想咨询一下未来的我的竞赛和职业规划怎么样规划')
 const runInfo = ref('')
 const progressText = ref('尚未开始')
+const currentStageText = ref('')
 const reportHtml = ref('<div class="empty-state">暂无报告</div>')
 const linksHtml = ref('')
 const graphText = ref('加载中...')
@@ -227,6 +287,7 @@ const assessmentMode = ref(false)
 const assessmentCompleted = ref(false)
 const currentQuestionIndex = ref(0)
 const answers = ref({})
+const assessmentResult = ref(null)
 const questionsPerGroup = 8
 
 // SVG 引用
@@ -279,10 +340,73 @@ const edges = [
   { from: 'reporter', to: 'end', type: 'solid', id: 'edge-reporter-end' }
 ]
 
-// 获取基础路径
-function getBase() {
-  const path = window.location.pathname
-  return path.replace(/\/[^\/]*$/, '')
+const STATUS_PATTERNS = [
+  { pattern: /(失败|错误|异常)/, status: 'failed' },
+  { pattern: /(正在|处理中|运行中|检索|生成)/, status: 'running' },
+  { pattern: /(已完成|完成|成功)/, status: 'completed' },
+  { pattern: /(待处理|未开始|等待|排队)/, status: 'pending' }
+]
+
+const STATUS_FALLBACK_LABEL = {
+  running: '运行中',
+  completed: '已完成',
+  failed: '执行失败',
+  pending: '待处理'
+}
+
+function normalizeStatusValue(value) {
+  if (!value && value !== 0) return null
+  if (typeof value === 'string') {
+    const match = STATUS_PATTERNS.find(item => item.pattern.test(value))
+    return match ? match.status : null
+  }
+  if (typeof value === 'object' && value.status) {
+    return value.status
+  }
+  return null
+}
+
+function getStatusLabel(value, normalizedStatus) {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object') {
+    return value.label || value.status || ''
+  }
+  return STATUS_FALLBACK_LABEL[normalizedStatus] || ''
+}
+
+function isStatusDictionary(target) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) return false
+  const keys = Object.keys(target)
+  if (!keys.length) return false
+  return keys.every(key => {
+    const val = target[key]
+    return typeof val === 'string' || (val && typeof val === 'object' && (val.status || val.label))
+  })
+}
+
+const workflowDefaultBase = import.meta.env.DEV ? '/api' : ''
+const workflowApiBase = (import.meta.env.VITE_WORKFLOW_API_BASE || workflowDefaultBase || '').replace(/\/$/, '')
+const buildWorkflowUrl = (path = '') => `${workflowApiBase}${path}`
+
+function applyWorkflowStatusPayload(payload) {
+  if (!payload) return
+  if (Array.isArray(payload)) {
+    payload.forEach(item => applyWorkflowStatusPayload(item))
+    return
+  }
+
+  const normalizedPayload = payload.nodeStatus || payload.node_status || payload.statusMap || payload.status_map
+  const candidate = normalizedPayload && typeof normalizedPayload === 'object' ? normalizedPayload : null
+  const current = payload.currentNode || payload.current_node || null
+
+  if (candidate) {
+    updateWorkflowGraph(candidate, current)
+    return
+  }
+
+  if (isStatusDictionary(payload)) {
+    updateWorkflowGraph(payload, current)
+  }
 }
 
 // 初始化工作流图
@@ -424,7 +548,9 @@ function initWorkflowGraph() {
 // 获取拓扑图
 async function fetchGraph() {
   try {
-    const res = await fetch(getBase() + '/agent/career/graph')
+    const res = await fetch(buildWorkflowUrl('/agent/career/graph'), {
+      credentials: 'include'
+    })
     const text = await res.text()
     graphText.value = text
   } catch (e) {
@@ -438,12 +564,15 @@ function subscribe(runIdParam) {
     es.close()
     es = null
   }
-  es = new EventSource(getBase() + '/agent/career/stream?runId=' + encodeURIComponent(runIdParam))
+  es = new EventSource(buildWorkflowUrl('/agent/career/stream') + '?runId=' + encodeURIComponent(runIdParam), {
+    withCredentials: true
+  })
   es.onmessage = (evt) => {
     if (evt.data) {
       try {
         const arr = JSON.parse(evt.data)
         progressText.value = JSON.stringify(arr, null, 2)
+        applyWorkflowStatusPayload(arr)
       } catch (_) {
         progressText.value = evt.data
       }
@@ -458,6 +587,15 @@ function subscribe(runIdParam) {
 function updateWorkflowGraph(nodeStatus, currentNode) {
   if (!workflowSvg.value) return
 
+  let derivedCurrentNode = currentNode
+  if (!derivedCurrentNode && nodeStatus) {
+    derivedCurrentNode = Object.keys(nodeStatus).find((key) => {
+      const value = nodeStatus[key]
+      if (typeof value !== 'string') return false
+      return /(正在|处理中|运行中|检索|生成)/.test(value)
+    }) || null
+  }
+
   Object.keys(nodePositions).forEach(nodeName => {
     const nodeGroup = workflowSvg.value.querySelector(`[data-node="${nodeName}"]`)
     if (!nodeGroup) return
@@ -465,29 +603,36 @@ function updateWorkflowGraph(nodeStatus, currentNode) {
     const nodeEl = nodeGroup.querySelector('.workflow-node')
     if (!nodeEl) return
 
-    let status = 'pending'
+    const rawStatus = nodeStatus?.[nodeName]
+    const normalizedStatus = normalizeStatusValue(rawStatus)
+    let visualStatus = 'pending'
+
     if (nodeName === 'start') {
-      status = nodeStatus && Object.values(nodeStatus).some(s => s !== 'pending') ? 'completed' : 'pending'
+      const hasProgress = nodeStatus && Object.keys(nodeStatus).some((key) => {
+        const normalized = normalizeStatusValue(nodeStatus[key])
+        return normalized && normalized !== 'pending'
+      })
+      visualStatus = hasProgress ? 'completed' : 'pending'
     } else if (nodeName === 'end') {
-      status = nodeStatus?.reporter === 'completed' ? 'completed' : 'pending'
+      visualStatus = normalizedStatus || (nodeStatus?.reporter ? normalizeStatusValue(nodeStatus.reporter) : null) || 'pending'
     } else {
-      status = nodeStatus?.[nodeName] || 'pending'
+      visualStatus = normalizedStatus || 'pending'
     }
 
-    if (currentNode === nodeName && status === 'pending') {
-      status = 'running'
+    if (derivedCurrentNode === nodeName && visualStatus === 'pending') {
+      visualStatus = 'running'
     }
 
-    nodeEl.className = `workflow-node ${status} ${nodeName}`
+    nodeEl.setAttribute('class', `workflow-node ${visualStatus} ${nodeName}`)
 
-    if (status === 'running') {
+    if (visualStatus === 'running') {
       nodeGroup.classList.add('running')
       nodeEl.style.filter = 'drop-shadow(0 0 12px rgba(59, 130, 246, 0.6))'
     } else {
       nodeGroup.classList.remove('running')
-      if (status === 'completed') {
+      if (visualStatus === 'completed') {
         nodeEl.style.filter = 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.4))'
-      } else if (status === 'failed') {
+      } else if (visualStatus === 'failed') {
         nodeEl.style.filter = 'drop-shadow(0 0 8px rgba(239, 68, 68, 0.4))'
       } else {
         nodeEl.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
@@ -495,13 +640,17 @@ function updateWorkflowGraph(nodeStatus, currentNode) {
     }
   })
 
+  const activeNode = derivedCurrentNode
+
   edges.forEach(edge => {
     const path = document.getElementById(edge.id)
     if (!path) return
 
-    const isActive = currentNode === edge.from || currentNode === edge.to ||
-      (nodeStatus?.[edge.from] === 'running' && nodeStatus?.[edge.to] === 'pending') ||
-      (nodeStatus?.[edge.from] === 'completed' && nodeStatus?.[edge.to] === 'running')
+    const fromStatus = normalizeStatusValue(nodeStatus?.[edge.from])
+    const toStatus = normalizeStatusValue(nodeStatus?.[edge.to])
+    const isActive = activeNode === edge.from || activeNode === edge.to ||
+      (fromStatus === 'running' && (!toStatus || toStatus === 'pending')) ||
+      (fromStatus === 'completed' && toStatus === 'running')
 
     if (isActive) {
       path.classList.add('active')
@@ -514,21 +663,38 @@ function updateWorkflowGraph(nodeStatus, currentNode) {
       path.setAttribute('marker-end', 'url(#arrowhead)')
     }
   })
+
+  if (nodeStatus && Object.keys(nodeStatus).length) {
+    let displayNode = activeNode
+    if (!displayNode) {
+      displayNode = Object.keys(nodeStatus).find((key) => normalizeStatusValue(nodeStatus[key]) === 'running') ||
+        Object.keys(nodeStatus).find((key) => normalizeStatusValue(nodeStatus[key]) === 'completed')
+    }
+
+    if (displayNode) {
+      const label = getStatusLabel(nodeStatus[displayNode], normalizeStatusValue(nodeStatus[displayNode]))
+      currentStageText.value = `当前进度：${nodeLabels[displayNode] || displayNode}${label ? ' - ' + label : ''}`
+    } else {
+      currentStageText.value = ''
+    }
+  } else {
+    currentStageText.value = ''
+  }
 }
 
 // 轮询结果
 async function pollResult() {
   if (!runId) return
   try {
-    const res = await fetch(getBase() + '/agent/career/result?runId=' + encodeURIComponent(runId))
+    const res = await fetch(buildWorkflowUrl('/agent/career/result') + '?runId=' + encodeURIComponent(runId), {
+      credentials: 'include'
+    })
     const ct = res.headers.get('Content-Type') || ''
     const data = ct.includes('application/json') ? await res.json() : { error: await res.text() }
     if (data.status) {
       runInfo.value = '状态：' + data.status
     }
-    if (data.currentNode || data.nodeStatus) {
-      updateWorkflowGraph(data.nodeStatus, data.currentNode)
-    }
+    applyWorkflowStatusPayload(data)
 
     if (data.status === 'success' || data.status === 'failed') {
       if (data.report) {
@@ -597,6 +763,16 @@ const currentQuestionAnswer = computed(() => {
   if (!question) return null
   return answers.value[question.id]
 })
+const hasAssessmentResult = computed(() => {
+  return (
+    assessmentResult.value &&
+    Array.isArray(assessmentResult.value.questions) &&
+    assessmentResult.value.questions.length > 0
+  )
+})
+const assessmentResultJson = computed(() =>
+  hasAssessmentResult.value ? JSON.stringify(assessmentResult.value, null, 2) : ''
+)
 const groupTitles = computed(() => {
   if (!totalGroups.value) return []
   return Array.from({ length: totalGroups.value }, (_, index) => `第${index + 1}组`)
@@ -611,6 +787,71 @@ function selectAnswer(optionId) {
   }
 }
 
+function handleRandomChoice() {
+  if (!currentQuestion.value || !currentQuestion.value.options?.length) return
+  const randomIndex = Math.floor(Math.random() * currentQuestion.value.options.length)
+  const option = currentQuestion.value.options[randomIndex]
+  selectAnswer(option.id)
+}
+
+function handleRandomAllChoices() {
+  if (!assessmentQuestions.value.length) return
+  const newAnswers = {}
+  assessmentQuestions.value.forEach(question => {
+    if (!question.options || !question.options.length) {
+      return
+    }
+    const randomIndex = Math.floor(Math.random() * question.options.length)
+    const option = question.options[randomIndex]
+    newAnswers[question.id] = option.id
+  })
+  answers.value = newAnswers
+  if (totalQuestions.value) {
+    currentQuestionIndex.value = totalQuestions.value - 1
+  }
+  assessmentCompleted.value = true
+  syncAssessmentResult()
+}
+
+function handleJumpToEnd() {
+  if (!totalQuestions.value) return
+  currentQuestionIndex.value = totalQuestions.value - 1
+}
+
+function buildAssessmentResult() {
+  if (!assessmentQuestions.value.length) return null
+  const mapped = assessmentQuestions.value.map((question) => {
+    const selectedId = answers.value[question.id]
+    if (!selectedId) return null
+    const matchedOption =
+      question.options && question.options.find((item) => item.id === selectedId)
+    if (!matchedOption) return null
+    return {
+      id: question.id,
+      title: question.title,
+      selected_option_id: matchedOption.id,
+      selected_option: matchedOption.title
+    }
+  })
+  if (mapped.some((record) => !record)) {
+    return null
+  }
+  return {
+    questions: mapped
+  }
+}
+
+function syncAssessmentResult() {
+  const result = buildAssessmentResult()
+  if (result) {
+    assessmentResult.value = result
+    ElMessage.success('职业测评结果已同步至工作流')
+  } else {
+    assessmentResult.value = null
+    ElMessage.error('同步职业测评结果失败，请重试')
+  }
+}
+
 function handleNextQuestion() {
   if (!currentQuestion.value) return
   const selected = answers.value[currentQuestion.value.id]
@@ -622,6 +863,7 @@ function handleNextQuestion() {
     currentQuestionIndex.value += 1
   } else {
     assessmentCompleted.value = true
+    syncAssessmentResult()
   }
 }
 
@@ -637,6 +879,11 @@ function handleExitAssessment() {
 
 // 启动工作流
 async function handleStart() {
+  if (!hasAssessmentResult.value) {
+    runInfo.value = '请先完成职业测评并同步结果'
+    ElMessage.warning('请先完成职业测评，并确保结果已同步')
+    return
+  }
   const userIdValue = userId.value || ''
   const inputValue = userInput.value || ''
   startBtnDisabled.value = true
@@ -644,12 +891,18 @@ async function handleStart() {
   progressText.value = '等待事件...'
   reportHtml.value = '<div class="empty-state">报告生成中...</div>'
   linksHtml.value = ''
+  currentStageText.value = '当前进度：系统 - 正在初始化工作流...'
   updateWorkflowGraph({}, null)
   try {
-    const res = await fetch(getBase() + '/agent/career/start', {
+    const res = await fetch(buildWorkflowUrl('/agent/career/start'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: String(userIdValue), input: inputValue })
+      credentials: 'include',
+      body: JSON.stringify({
+        userId: String(userIdValue),
+        input: inputValue,
+        assessmentResult: assessmentResult.value
+      })
     })
     const ct = res.headers.get('Content-Type') || ''
     const data = ct.includes('application/json') ? await res.json() : { error: await res.text() }
@@ -944,6 +1197,63 @@ onUnmounted(() => {
   justify-content: space-between;
   font-size: 14px;
   color: #6b4ca6;
+  align-items: center;
+}
+
+.question-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.jump-end-btn {
+  border: 1px solid #c4d6ff;
+  background: rgba(255, 255, 255, 0.25);
+  color: #4a6ff0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.jump-end-btn:hover {
+  border-color: #5c7cfa;
+  color: #5c7cfa;
+  background: rgba(92, 124, 250, 0.12);
+}
+
+.random-btn {
+  border: 1px solid #dcd4f5;
+  background: rgba(255, 255, 255, 0.2);
+  color: #6b4ca6;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.random-btn:hover {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.random-all-btn {
+  border: 1px solid #f7c7e1;
+  background: rgba(255, 255, 255, 0.25);
+  color: #e94a8a;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.random-all-btn:hover {
+  border-color: #ff80c3;
+  color: #ff80c3;
+  background: rgba(255, 128, 195, 0.12);
 }
 
 .question-text {
@@ -1038,7 +1348,7 @@ onUnmounted(() => {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat; */
-  padding: 80px 20px;
+  padding: 20px 0;
   position: relative;
   overflow: hidden;
 }
@@ -1053,7 +1363,7 @@ onUnmounted(() => {
 .agent-title {
   font-size: 32px;
   font-weight: 700;
-  color: #ffffff;
+  color: #de94ef;
   margin: 0 0 40px 0;
   text-align: center;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -1065,6 +1375,66 @@ onUnmounted(() => {
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;
+}
+
+.workflow-actions {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.assessment-sync-card {
+  border: 1px solid #d9d9e3;
+}
+
+.sync-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.status-pill.synced {
+  background: #10b981;
+}
+
+.status-pill.pending {
+  background: #f59e0b;
+}
+
+.sync-desc {
+  margin: 0 0 12px;
+  color: #666;
+  font-size: 14px;
+}
+
+.assessment-json {
+  max-height: 240px;
+  overflow: auto;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.assessment-json-empty {
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 13px;
+  color: #6b7280;
 }
 
 .card h3 {
@@ -1124,7 +1494,7 @@ pre {
   font-size: 13px;
   line-height: 1.5;
   color: #333;
-  margin: 0;
+    margin: 0;
 }
 
 .row {
@@ -1152,13 +1522,13 @@ pre {
   overflow: auto;
 }
 
-.workflow-svg {
+.agent-workflow-section :deep(.workflow-svg) {
   width: 100%;
   height: 100%;
   min-height: 500px;
 }
 
-.workflow-node {
+.agent-workflow-section :deep(.workflow-node) {
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
@@ -1166,53 +1536,53 @@ pre {
   position: relative;
 }
 
-.workflow-node.pending {
+.agent-workflow-section :deep(.workflow-node.pending) {
   stroke-width: 2;
   opacity: 0.8;
 }
 
-.workflow-node.pending.coordinator {
+.agent-workflow-section :deep(.workflow-node.pending.coordinator) {
   fill: #ffe0e9;
   stroke: #ff8fab;
 }
 
-.workflow-node.pending.planner {
+.agent-workflow-section :deep(.workflow-node.pending.planner) {
   fill: #e0f7fa;
   stroke: #80deea;
 }
 
-.workflow-node.pending.supervisor {
+.agent-workflow-section :deep(.workflow-node.pending.supervisor) {
   fill: #f3e5f5;
   stroke: #ce93d8;
 }
 
-.workflow-node.pending.researcher {
+.agent-workflow-section :deep(.workflow-node.pending.researcher) {
   fill: #e8f5e9;
   stroke: #a5d6a7;
 }
 
-.workflow-node.pending.browser {
+.agent-workflow-section :deep(.workflow-node.pending.browser) {
   fill: #fff3e0;
   stroke: #ffcc80;
 }
 
-.workflow-node.pending.coder {
+.agent-workflow-section :deep(.workflow-node.pending.coder) {
   fill: #fce4ec;
   stroke: #f48fb1;
 }
 
-.workflow-node.pending.reporter {
+.agent-workflow-section :deep(.workflow-node.pending.reporter) {
   fill: #e0f2f1;
   stroke: #80cbc4;
 }
 
-.workflow-node.pending.start,
-.workflow-node.pending.end {
+.agent-workflow-section :deep(.workflow-node.pending.start),
+.agent-workflow-section :deep(.workflow-node.pending.end) {
   fill: #e5e7eb;
   stroke: #9ca3af;
 }
 
-.workflow-node.running {
+.agent-workflow-section :deep(.workflow-node.running) {
   fill: url(#runningGradient);
   stroke: #3b82f6;
   stroke-width: 3;
@@ -1220,7 +1590,7 @@ pre {
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
-.node-group.running {
+.agent-workflow-section :deep(.node-group.running) {
   transform-origin: center;
 }
 
@@ -1233,11 +1603,11 @@ pre {
   }
 }
 
-.node-group.running .workflow-node {
+.agent-workflow-section :deep(.node-group.running .workflow-node) {
   animation: bounce 1.5s ease-in-out infinite;
 }
 
-.workflow-node.completed {
+.agent-workflow-section :deep(.workflow-node.completed) {
   fill: url(#completedGradient);
   stroke: #10b981;
   stroke-width: 2.5;
@@ -1245,7 +1615,7 @@ pre {
   animation: completedGlow 2s ease-in-out infinite;
 }
 
-.workflow-node.failed {
+.agent-workflow-section :deep(.workflow-node.failed) {
   fill: url(#failedGradient);
   stroke: #ef4444;
   stroke-width: 2.5;
@@ -1253,7 +1623,7 @@ pre {
   animation: shake 0.5s ease-in-out;
 }
 
-.workflow-node-text {
+.agent-workflow-section :deep(.workflow-node-text) {
   font-size: 13px;
   font-weight: 600;
   text-anchor: middle;
@@ -1263,28 +1633,28 @@ pre {
   position: relative;
 }
 
-.workflow-node.pending .workflow-node-text {
+.agent-workflow-section :deep(.workflow-node.pending .workflow-node-text) {
   fill: #4b5563;
 }
 
-.workflow-node.running .workflow-node-text {
+.agent-workflow-section :deep(.workflow-node.running .workflow-node-text) {
   fill: #ffffff;
   font-weight: 700;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   animation: textPulse 1.5s ease-in-out infinite;
 }
 
-.workflow-node.completed .workflow-node-text {
+.agent-workflow-section :deep(.workflow-node.completed .workflow-node-text) {
   fill: #ffffff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.workflow-node.failed .workflow-node-text {
+.agent-workflow-section :deep(.workflow-node.failed .workflow-node-text) {
   fill: #ffffff;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.workflow-edge {
+.agent-workflow-section :deep(.workflow-edge) {
   stroke: #9ca3af;
   stroke-width: 2;
   fill: none;
@@ -1295,11 +1665,11 @@ pre {
   position: relative;
 }
 
-.workflow-edge.dashed {
+.agent-workflow-section :deep(.workflow-edge.dashed) {
   stroke-dasharray: 5, 5;
 }
 
-.workflow-edge.active {
+.agent-workflow-section :deep(.workflow-edge.active) {
   stroke: #3b82f6;
   stroke-width: 3;
   opacity: 1;
@@ -1359,7 +1729,52 @@ pre {
   position: relative;
 }
 
-.arrowhead-active {
+.workflow-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.08);
+  color: #4c1d95;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+
+.status-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #7c3aed;
+  position: relative;
+}
+
+.status-pulse-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(124, 58, 237, 0.4);
+  transform: translate(-50%, -50%);
+  animation: statusPulse 1.6s ease-out infinite;
+}
+
+@keyframes statusPulse {
+  0% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.6);
+  }
+}
+
+.agent-workflow-section :deep(.arrowhead-active) {
   fill: #3b82f6;
 }
 

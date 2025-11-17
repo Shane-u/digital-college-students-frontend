@@ -110,8 +110,19 @@
         </div>
     </div>
     <div style="margin-top:12px; display:flex; gap:8px;">
+        <button id="loadQuestionsBtn" style="background: #10b981;">加载职业测评题目</button>
         <button id="startBtn">启动工作流</button>
         <span id="runInfo" class="badge"></span>
+    </div>
+</div>
+
+<div class="card" id="questionsCard" style="display: none;">
+    <h3>职业测评问卷</h3>
+    <div id="questionsContainer" style="max-height: 500px; overflow-y: auto;"></div>
+    <div style="margin-top:16px; display:flex; gap:8px;">
+        <button id="submitQuestionsBtn" style="background: #10b981;">提交答题结果</button>
+        <button id="fillAllYesBtn" style="background: #f59e0b;">一键填充（全选是）</button>
+        <span id="questionsStatus" class="badge"></span>
     </div>
 </div>
 
@@ -173,7 +184,11 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@14.1.3/lib/marked.umd.min.js"></script>
 <script>
     const startBtn = document.getElementById('startBtn');
+    const loadQuestionsBtn = document.getElementById('loadQuestionsBtn');
+    const submitQuestionsBtn = document.getElementById('submitQuestionsBtn');
+    const fillAllYesBtn = document.getElementById('fillAllYesBtn');
     const runInfo = document.getElementById('runInfo');
+    const questionsStatus = document.getElementById('questionsStatus');
     const progressBox = document.getElementById('progressBox');
     const reportBox = document.getElementById('reportBox');
     const linksBox = document.getElementById('linksBox');
@@ -181,10 +196,15 @@
     const workflowSvg = document.getElementById('workflowSvg');
     const edgesGroup = document.getElementById('edgesGroup');
     const nodesGroup = document.getElementById('nodesGroup');
+    const questionsCard = document.getElementById('questionsCard');
+    const questionsContainer = document.getElementById('questionsContainer');
 
     let es = null;
     let runId = null;
     let pollTimer = null;
+    let reportEventSource = null;
+    let questions = []; // 存储题目列表
+    let userAnswers = {}; // 存储用户答题结果 {questionId: optionId}
 
     // 配置 marked（可选：自定义渲染规则）
     marked.setOptions({
@@ -551,10 +571,176 @@
         }
     }
 
+    // 加载职业测评题目
+    loadQuestionsBtn.onclick = async () => {
+        loadQuestionsBtn.disabled = true;
+        questionsStatus.textContent = '加载中...';
+        try {
+            const res = await fetch(getBase() + '/question/mbti');
+            const ct = res.headers.get('Content-Type') || '';
+            const data = ct.includes('application/json') ? await res.json() : { error: await res.text() };
+            
+            if (data.code === 0 && data.data) {
+                questions = data.data;
+                userAnswers = {};
+                renderQuestions();
+                questionsCard.style.display = 'block';
+                questionsStatus.textContent = `已加载 ${questions.length} 道题目`;
+            } else {
+                questionsStatus.textContent = '加载失败：' + (data.message || '未知错误');
+            }
+        } catch (e) {
+            questionsStatus.textContent = '加载失败：' + e.message;
+        } finally {
+            loadQuestionsBtn.disabled = false;
+        }
+    };
+
+    // 渲染题目
+    function renderQuestions() {
+        questionsContainer.innerHTML = '';
+        questions.forEach((q, idx) => {
+            const questionDiv = document.createElement('div');
+            questionDiv.style.marginBottom = '20px';
+            questionDiv.style.padding = '12px';
+            questionDiv.style.border = '1px solid #e9e9ef';
+            questionDiv.style.borderRadius = '8px';
+            questionDiv.style.backgroundColor = '#fafafa';
+            
+            let html = `<div style="font-weight: 600; margin-bottom: 8px;">第 ${idx + 1} 题：${q.title}</div>`;
+            html += '<div>';
+            
+            q.options.forEach(opt => {
+                html += `
+                    <label style="display: flex; align-items: center; margin-bottom: 8px; cursor: pointer;">
+                        <input type="radio" name="question_${q.id}" value="${opt.id}" style="margin-right: 8px; cursor: pointer;">
+                        <span>${opt.title}</span>
+                    </label>
+                `;
+            });
+            
+            html += '</div>';
+            questionDiv.innerHTML = html;
+            questionsContainer.appendChild(questionDiv);
+            
+            // 绑定事件
+            const radios = questionDiv.querySelectorAll(`input[name="question_${q.id}"]`);
+            radios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    userAnswers[q.id] = parseInt(e.target.value);
+                });
+            });
+        });
+    }
+
+    // 一键填充答案（全选是）
+    fillAllYesBtn.onclick = () => {
+        if (questions.length === 0) {
+            questionsStatus.textContent = '请先加载题目';
+            return;
+        }
+        
+        // 为每个题目选择第一个选项（通常是"是"）
+        questions.forEach(q => {
+            if (q.options && q.options.length > 0) {
+                const firstOption = q.options[0];
+                userAnswers[q.id] = firstOption.id;
+                
+                // 更新 UI 中的单选框
+                const radio = questionsContainer.querySelector(`input[name="question_${q.id}"][value="${firstOption.id}"]`);
+                if (radio) {
+                    radio.checked = true;
+                }
+            }
+        });
+        
+        questionsStatus.textContent = `✓ 已自动填充所有答案`;
+    };
+
+    // 提交答题结果
+    submitQuestionsBtn.onclick = () => {
+        const answeredCount = Object.keys(userAnswers).length;
+        if (answeredCount < questions.length) {
+            questionsStatus.textContent = `请完成所有题目 (${answeredCount}/${questions.length})`;
+            return;
+        }
+        
+        // 构建答题结果数据
+        const assessmentData = {
+            questions: questions.map(q => ({
+                id: q.id,
+                title: q.title,
+                selected_option_id: userAnswers[q.id],
+                selected_option: q.options.find(o => o.id === userAnswers[q.id])?.title
+            }))
+        };
+        
+        // 保存到 window 对象，供启动工作流时使用
+        window.assessmentData = assessmentData;
+        questionsStatus.textContent = `✓ 已提交 ${answeredCount} 道题目`;
+        questionsCard.style.display = 'none';
+        startBtn.disabled = false;
+    };
+
+    // 消费流式报告
+    function subscribeToReport(runId) {
+        if (reportEventSource) {
+            reportEventSource.close();
+            reportEventSource = null;
+        }
+
+        reportEventSource = new EventSource(getBase() + '/agent/career/report?runId=' + encodeURIComponent(runId));
+        let reportContent = '';
+
+        reportEventSource.addEventListener('content', (evt) => {
+            if (evt.data && evt.data !== '[DONE]') {
+                reportContent += evt.data + '\n';
+                // 实时更新报告显示
+                const markdownHtml = marked.parse(reportContent);
+                reportBox.innerHTML = markdownHtml;
+                // 自动滚动到底部
+                reportBox.scrollTop = reportBox.scrollHeight;
+            }
+        });
+
+        reportEventSource.addEventListener('done', (evt) => {
+            // 报告生成完成
+            const markdownHtml = marked.parse(reportContent);
+            reportBox.innerHTML = markdownHtml;
+            reportEventSource.close();
+            reportEventSource = null;
+        });
+
+        reportEventSource.addEventListener('error', (evt) => {
+            if (evt.data) {
+                reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">报告生成失败：${evt.data}</div>`;
+            }
+            reportEventSource.close();
+            reportEventSource = null;
+        });
+
+        reportEventSource.onerror = () => {
+            // 连接错误处理
+            if (reportEventSource && reportEventSource.readyState === EventSource.CLOSED) {
+                reportEventSource.close();
+                reportEventSource = null;
+            }
+        };
+    }
+
     startBtn.onclick = async () => {
         const userId = document.getElementById('userId').value || '';
         const input = document.getElementById('userInput').value || '';
+        
+        // 检查是否已提交答题结果
+        if (!window.assessmentData) {
+            runInfo.textContent = '错误：请先完成职业测评问卷';
+            reportBox.innerHTML = '<div class="empty-state" style="color: #ef4444;">请先加载并完成职业测评问卷</div>';
+            return;
+        }
+
         startBtn.disabled = true;
+        loadQuestionsBtn.disabled = true;
         runInfo.textContent = '启动中...';
         progressBox.textContent = '等待事件...';
         // 重置报告容器为加载状态
@@ -563,11 +749,17 @@
         // 重置工作流图状态
         updateWorkflowGraph({}, null);
         try {
+            const payload = { 
+                userId: String(userId), 
+                input,
+                assessmentResult: window.assessmentData // 使用用户的答题结果
+            };
+
             const res = await fetch(getBase() + '/agent/career/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 // 确保 userId 作为字符串发送，避免大整数精度丢失
-                body: JSON.stringify({ userId: String(userId), input })
+                body: JSON.stringify(payload)
             });
             const ct = res.headers.get('Content-Type') || '';
             const data = ct.includes('application/json') ? await res.json() : { error: await res.text() };
@@ -575,19 +767,27 @@
                 runInfo.textContent = '错误：' + (data.message || data.error);
                 reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">${data.message || data.error}</div>`;
                 startBtn.disabled = false;
+                loadQuestionsBtn.disabled = false;
                 return;
             }
             runId = data.runId;
             runInfo.textContent = '运行ID：' + runId;
             subscribe(runId);
+            // 订阅流式报告
+            subscribeToReport(runId);
             clearInterval(pollTimer);
             pollTimer = setInterval(pollResult, 1200);
         } catch (e) {
             runInfo.textContent = '启动失败：' + e.message;
             reportBox.innerHTML = `<div class="empty-state" style="color: #ef4444;">启动失败：${e.message}</div>`;
             startBtn.disabled = false;
+            loadQuestionsBtn.disabled = false;
         }
     };
+
+    // 初始化按钮状态
+    loadQuestionsBtn.disabled = false;
+    startBtn.disabled = true; // 启动工作流按钮初始禁用，需要先完成问卷
 
     fetchGraph();
     initWorkflowGraph();

@@ -49,7 +49,9 @@
             class="long-line"
             v-show="item.isShow"
             :style="`width:${
-              item.children ? (item.children.length + 1) * 100 : 1 * 100
+              item.children && item.children.length > 0
+                ? item.children.length * 260
+                : 260
             }px`"
           >
             <div
@@ -57,26 +59,97 @@
               :key="subItem.id"
               class="sub-item-box"
             >
-              <span class="sub-item-date" @click="handleSubDateClick(subItem)">{{ subItem.name}}</span>
-              <!-- 根据奇数偶数判断上下展示 -->
+              <!-- 时间轴上的小圆点，放在线上 -->
+              <div
+                class="sub-item-node"
+                @click="handleSubDateClick(subItem)"
+                title="查看该日期详情"
+              >
+                <span class="sub-item-dot"></span>
+              </div>
+
+              <!-- 奇数在上、偶数在下的卡片与连线 -->
               <div
                 :class="`sub-line-box ${
                   index % 2 === 0 ? 'top-line-box' : 'bottom-line-box'
                 }`"
                 v-show="subItem.content"
               >
-                <div
-                  :class="`children-line-box ${
-                    index % 2 === 0 ? 'top-line' : 'bottom-line'
-                  }`"
-                ></div>
-                <div
-                  :class="`children-box ${
-                    index % 2 === 0 ? 'top-children-box' : 'bottom-children-box'
-                  }`"
-                >
-                  {{ subItem.content }}
-                </div>
+                <!-- 上方卡片：先卡片再竖线 -->
+                <template v-if="index % 2 === 0">
+                  <div class="children-box top-children-box">
+                    <div
+                      class="timeline-card"
+                      @click="handleSubDateClick(subItem)"
+                    >
+                      <div class="card-year-badge">
+                        {{ formatYear(subItem.name) }}
+                      </div>
+                      <div
+                        v-if="getPhotoForSubItem(subItem)"
+                        class="card-image-wrapper"
+                      >
+                        <img
+                          :src="getPhotoForSubItem(subItem)"
+                          alt=""
+                          class="card-image"
+                        />
+                        <div class="card-image-overlay">
+                          <div class="card-title-text">
+                            {{ subItem.content }}
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="card-text-only">
+                        <div class="card-title-text">
+                          {{ subItem.content }}
+                        </div>
+                      </div>
+                      <div class="card-date-text">
+                        {{ formatDateLabel(subItem.name) }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="children-line-box top-line"></div>
+                </template>
+
+                <!-- 下方卡片：先竖线再卡片 -->
+                <template v-else>
+                  <div class="children-line-box bottom-line"></div>
+                  <div class="children-box bottom-children-box">
+                    <div
+                      class="timeline-card"
+                      @click="handleSubDateClick(subItem)"
+                    >
+                      <div class="card-year-badge">
+                        {{ formatYear(subItem.name) }}
+                      </div>
+                      <div
+                        v-if="getPhotoForSubItem(subItem)"
+                        class="card-image-wrapper"
+                      >
+                        <img
+                          :src="getPhotoForSubItem(subItem)"
+                          alt=""
+                          class="card-image"
+                        />
+                        <div class="card-image-overlay">
+                          <div class="card-title-text">
+                            {{ subItem.content }}
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="card-text-only">
+                        <div class="card-title-text">
+                          {{ subItem.content }}
+                        </div>
+                      </div>
+                      <div class="card-date-text">
+                        {{ formatDateLabel(subItem.name) }}
+                      </div>
+                    </div>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
@@ -86,13 +159,15 @@
   </div>
 </template>
   
-  <script setup>
+<script setup>
 import { ref, defineProps, defineEmits, onMounted, onUnmounted } from "vue";
 import Star from "./Star.vue";
 import { ElPopover } from "element-plus";
+import { getPhotoWallList } from "../api/growthRecord";
 
 const timelineWrapper = ref(null);
 const isMouseOverTimeline = ref(false);
+const photosByDate = ref({});
 
 const props = defineProps({
   timelineList: {
@@ -253,7 +328,12 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["scrollEvent", "handleBottomClick", "dateClick", "subDateClick"]);
+const emit = defineEmits([
+  "scrollEvent",
+  "handleBottomClick",
+  "dateClick",
+  "subDateClick",
+]);
 
 const scrollEvent = (e) => {
   emit("scrollEvent", e);
@@ -343,12 +423,77 @@ const handleWheel = (e) => {
   }
 };
 
-onMounted(() => {
+// 从照片墙加载图片，按日期分组
+const loadTimelinePhotos = async () => {
+  try {
+    const list = await getPhotoWallList();
+    const map = {};
+    (list || []).forEach((img) => {
+      if (!img.uploadTime || !img.imageUrl) return;
+      const dateStr = img.uploadTime.split("T")[0]; // YYYY-MM-DD
+      if (!map[dateStr]) {
+        map[dateStr] = [];
+      }
+      map[dateStr].push(img.imageUrl);
+    });
+    photosByDate.value = map;
+  } catch (error) {
+    console.error("加载成长轨迹照片失败:", error);
+  }
+};
+
+// 规范化子节点日期字符串，统一为 YYYY-MM-DD
+const normalizeDate = (raw) => {
+  if (!raw) return "";
+  if (raw.includes("T")) {
+    return raw.split("T")[0];
+  }
+  if (raw.includes("-")) {
+    return raw;
+  }
+  if (raw.includes(".")) {
+    const parts = raw.split(".");
+    if (parts.length >= 3) {
+      const [y, m, d] = parts;
+      return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(
+        2,
+        "0"
+      )}`;
+    }
+  }
+  return "";
+};
+
+// 为子节点找到一张对应日期的照片（若有）
+const getPhotoForSubItem = (subItem) => {
+  const dateKey = normalizeDate(subItem?.name);
+  if (!dateKey) return "";
+  const list = photosByDate.value[dateKey];
+  return list && list.length ? list[0] : "";
+};
+
+const formatYear = (raw) => {
+  const dateKey = normalizeDate(raw);
+  if (!dateKey) return "";
+  return dateKey.slice(0, 4);
+};
+
+const formatDateLabel = (raw) => {
+  const dateKey = normalizeDate(raw);
+  if (!dateKey) return raw || "";
+  const [y, m, d] = dateKey.split("-");
+  return `${y}.${m}.${d}`;
+};
+
+onMounted(async () => {
   // 确保时间轴可以横向滚动，并设置平滑滚动
   if (timelineWrapper.value) {
     timelineWrapper.value.style.overflowX = "scroll";
     timelineWrapper.value.style.scrollBehavior = "smooth";
   }
+
+  // 加载成长轨迹相关照片
+  await loadTimelinePhotos();
 });
 
 // 暴露 ref 给父组件
@@ -360,7 +505,7 @@ defineExpose({
   <style scoped>
 .chengzhang-guiji {
   width: 100%;
-  min-height: 600px;
+  min-height: 700px;
   position: relative;
   z-index: 3; /* 确保在紫色蒙层之上 */
 }
@@ -433,7 +578,7 @@ ul.timeline-wrapper {
   font-family: DS-Digital, sans-serif;
   list-style: none;
   margin: 0;
-  padding: 250px 20px 200px 20px;
+  padding: 250px 20px 260px 20px;
   white-space: nowrap;
   overflow-x: scroll;
   position: relative;
@@ -503,119 +648,185 @@ ul.timeline-wrapper {
 
 /* 长线条样式 */
 .long-line {
-  height: 3px; /* 增加线条厚度 */
+  height: 8px; /* 时间轴更粗一些，更接近参考图 */
   background: rgba(106, 76, 138, 0.9); /* 提高不透明度 */
   box-shadow: 0px 2px 8px 0px rgba(106, 76, 138, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.3); /* 增强阴影和光晕 */
   display: flex;
-  flex-direction: revert;
-  justify-content: space-around;
+  flex-direction: row;
+  justify-content: flex-start;
+  /* 左右间距再缩小 */
   position: relative;
   z-index: 6; /* 确保线条清晰可见 */
 }
 
 .long-line .sub-item-box {
-  margin-top: -20px;
+  margin-top: 0;
   position: relative;
   z-index: 8; /* 确保子元素在蒙层之上，比时间轴层级更高 */
+  width: 260px; /* 保持卡片宽度，避免图片被压缩 */
+  flex: 0 0 auto;
+  text-align: center;
 }
 
-.long-line .sub-item-box span {
-  color: #2c3e50; /* 深色文字 */
-  font-weight: 600;
-  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.95); /* 白色半透明背景 */
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
-}
-
-.sub-item-date {
+/* 时间轴子节点上的小圆点，居中在线上 */
+.sub-item-node {
+  position: absolute;
+  top: 50%;
+  left: 50%; /* 与竖线和卡片中心对齐（卡片宽 260px） */
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.sub-item-date:hover {
-  color: #7d5196;
-  background: rgba(184, 160, 200, 0.3) !important;
-  transform: scale(1.05);
+.sub-item-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #6a4c8a;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px rgba(106, 76, 138, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sub-item-node:hover .sub-item-dot {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px rgba(106, 76, 138, 0.45);
 }
 
 .long-line .sub-item-box .sub-line-box {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   position: relative;
+  width: 100%;
+  height: 230px; /* 统一高度，由内部 top/bottom 布局控制 */
 }
 
 .long-line .sub-item-box .sub-line-box .children-line-box {
-  width: 0px;
-  /* border-left 已移至 .top-line 和 .bottom-line 中 */
-  position: relative;
-  z-index: 8; /* 确保线条显示在最上层 */
+  position: absolute;
+  left: 50%; /* 与圆点和卡片中心对齐 */
+  width: 0;
+  z-index: 6; /* 在线条层级，低于卡片 */
 }
 
 .long-line .sub-item-box .sub-line-box .children-box {
   flex-wrap: wrap;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
-  border: 2px solid rgba(106, 76, 138, 0.9); /* 更深的边框 */
-  white-space: break-spaces;
-  text-align: center;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.98); /* 几乎不透明的白色背景 */
-  color: #2c3e50; /* 深色文字 */
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* 阴影增强立体感 */
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .long-line .top-line-box {
-  margin-top: -200px; /* 向上移动到合适位置，连接到时间轴圆点 */
-  height: 180px; /* 增加高度以正确连接到时间轴 */
+  margin-top: -230px; /* 上方卡片整体稍微靠近时间轴 */
+  height: 210px; /* 收紧高度，让布局更紧凑 */
   position: relative;
   z-index: 8;
 }
 
 .long-line .bottom-line-box {
-  margin-top: 5px;
-  height: 150px;
+  margin-top: 30px; /* 下方卡片距离时间轴稍微收紧 */
+  height: 210px; /* 与上方保持一致，避免重叠 */
 }
 
 .long-line .top-line {
-  height: 80px; /* 连接方框到时间轴的高度 */
-  /* position: relative;
-  z-index: 8; */
-  position: absolute;
-  bottom: 0px;
+  top: 150px; /* 从卡片下沿稍下方开始 */
+  bottom: 0; /* 连接到时间轴中心附近，不穿过卡片 */
   border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
-  /* margin-left: 50%; 居中显示 */
-  transform: translateX(-50%); /* 居中显示 */
 }
 
 .long-line .bottom-line {
-  height: 120px;
+  top: -18px; /* 从时间轴位置开始 */
+  bottom: 200px; /* 在卡片上沿稍上方结束，不穿过卡片 */
   border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
-  /* margin-left: 50%; 居中显示 */
-  transform: translateX(-50%); /* 居中显示 */
 }
 
 .long-line .top-children-box {
-  margin-top: -200px; /* 调整位置，确保线条从方框底部延伸到时间轴 */
-  background-color: #e2e2e2;
-  border-radius: 5px;
-  width: 100px;
-  position: relative;
+  position: absolute;
+  top: 0; /* 紧贴 sub-line-box 顶部 */
+  left: 0;
+  width: 260px;
   z-index: 8; /* 确保方框显示在最上层 */
-  margin-left: auto;
-  margin-right: auto;
 }
 
 .long-line .bottom-children-box {
-  background-color: #e2e2e2;
-  border-radius: 5px;
-  width: 150px;
+  position: absolute;
+  bottom: 0; /* 紧贴 sub-line-box 底部 */
+  left: 0;
+  width: 260px;
+}
+
+/* 时间轴卡片样式（参考示例图片布局） */
+.timeline-card {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+.card-year-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 6px 14px;
+  background: #ffffff;
+  color: #3366cc;
+  font-weight: 700;
+  font-size: 16px;
+  border-bottom-right-radius: 12px;
+  z-index: 2;
+}
+
+.card-image-wrapper {
+  position: relative;
+  height: 160px;
+  background: #f3f3f3;
+}
+
+.card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-image-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 14px;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.75),
+    rgba(0, 0, 0, 0.1)
+  );
+  color: #ffffff;
+}
+
+.card-text-only {
+  padding: 14px;
+  background: #f6f6f6;
+  color: #333333;
+}
+
+.card-title-text {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* 标题过长时使用省略号 */
+}
+
+.card-date-text {
+  padding: 8px 14px 12px;
+  font-size: 13px;
+  color: #3366cc;
 }
 
 /* 冗余样式清除（原代码未使用，避免干扰） */

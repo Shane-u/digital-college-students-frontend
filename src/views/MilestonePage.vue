@@ -11,14 +11,14 @@
       <!-- 页面标题 -->
       <div class="page-header">
         <div class="header-left">
-          <h1 class="page-title">发展里程碑</h1>
+          <div class="title-row">
+            <h1 class="page-title">发展里程碑</h1>
+            <SearchBar class="inline-search" placeholder="搜索里程碑..." @search="handleSearch" />
+          </div>
           <p class="page-subtitle">记录大学生活的重要时刻</p>
           <button class="add-milestone-btn" @click="addMilestone">
             添加里程碑
           </button>
-        </div>
-        <div class="header-right">
-          <SearchBar placeholder="搜索里程碑..." @search="handleSearch" />
         </div>
       </div>
 
@@ -384,10 +384,20 @@ onMounted(async () => {
   flex: 1;
 }
 
-.header-right {
+.title-row {
   display: flex;
   align-items: center;
-  padding-top: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.title-row .page-title {
+  margin: 0;
+}
+
+.title-row :deep(.search-bar-container) {
+  margin: 0;
 }
 
 .page-title {
@@ -483,6 +493,7 @@ onMounted(async () => {
   border-radius: 16px;
   padding: 40px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  min-height: 520px; /* 提高时间轴区域高度，确保内容完整显示 */
 }
 
 /* 覆盖 ChengzhangGuiji 组件样式 - 仅在里程碑页面生效 */
@@ -492,11 +503,11 @@ onMounted(async () => {
 
 /* 仅里程碑页生效：将上方连线高度调为 124px */
 ::deep(.long-line .top-line) {
-  height: 124px !important;
+  height: 77px !important;
 }
 /* 提高选择器优先级，确保覆盖组件内部样式 */
 .milestone-page :deep(.long-line .top-line) {
-  height: 124px !important;
+  height: 77px !important;
 }
 
 /* 响应式调整 */
