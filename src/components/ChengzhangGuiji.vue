@@ -50,8 +50,8 @@
             v-show="item.isShow"
             :style="`width:${
               item.children && item.children.length > 0
-                ? item.children.length * 260
-                : 260
+                ? item.children.length * SLOT_WIDTH
+                : SLOT_WIDTH
             }px`"
           >
             <div
@@ -168,6 +168,7 @@ import { getPhotoWallList } from "../api/growthRecord";
 const timelineWrapper = ref(null);
 const isMouseOverTimeline = ref(false);
 const photosByDate = ref({});
+const SLOT_WIDTH = 220;
 
 const props = defineProps({
   timelineList: {
@@ -664,7 +665,7 @@ ul.timeline-wrapper {
   margin-top: 0;
   position: relative;
   z-index: 8; /* 确保子元素在蒙层之上，比时间轴层级更高 */
-  width: 260px; /* 保持卡片宽度，避免图片被压缩 */
+  width: 220px; /* 收紧节点间距，提升紧凑度 */
   flex: 0 0 auto;
   text-align: center;
 }
@@ -743,19 +744,21 @@ ul.timeline-wrapper {
   border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
 }
 
-.long-line .top-children-box {
+.long-line .top-children-box,
+.long-line .bottom-children-box {
   position: absolute;
-  top: 0; /* 紧贴 sub-line-box 顶部 */
-  left: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 260px;
   z-index: 8; /* 确保方框显示在最上层 */
 }
 
+.long-line .top-children-box {
+  top: 0; /* 紧贴 sub-line-box 顶部 */
+}
+
 .long-line .bottom-children-box {
-  position: absolute;
   bottom: 0; /* 紧贴 sub-line-box 底部 */
-  left: 0;
-  width: 260px;
 }
 
 /* 时间轴卡片样式（参考示例图片布局） */

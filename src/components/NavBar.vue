@@ -24,7 +24,7 @@
             </div>
           </div>
           <div class="nav-dropdown">
-            <span class="nav-link bold">职业规划</span>
+            <span class="nav-link bold">职业发展</span>
             <div class="dropdown-menu">
               <router-link to="/career/showcase" class="dropdown-item" exact>职业展示</router-link>
               <router-link to="/career/planning" class="dropdown-item" exact>职业规划</router-link>
