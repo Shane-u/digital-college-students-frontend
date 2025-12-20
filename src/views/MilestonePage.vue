@@ -78,6 +78,7 @@ import {
   getMilestoneStatistics,
   searchGrowthRecords
 } from "../api/growthRecord";
+import { buildTimelineFromRecords } from "../utils/timeline";
 
 const router = useRouter();
 
@@ -186,120 +187,9 @@ const handleSubDateClick = (subItem) => {
 };
 
 // 成长轨迹时间线数据
-const milestoneTimeline = computed(() => {
-  // 使用从后端加载的里程碑数据
-  if (milestones.value.length === 0) {
-    return getDefaultTimeline();
-  }
-
-  // 按年份分组
-  const yearGroups = {};
-  milestones.value.forEach((record) => {
-    if (!record.recordTime) return; // 跳过没有recordTime的记录
-    const year = new Date(record.recordTime).getFullYear();
-    if (!yearGroups[year]) {
-      yearGroups[year] = [];
-    }
-    yearGroups[year].push(record);
-  });
-
-  // 转换为时间线格式
-  const timeline = [];
-  let id = 1;
-
-  Object.keys(yearGroups)
-    .sort()
-    .forEach((year) => {
-      const yearRecords = yearGroups[year];
-      yearRecords.sort((a, b) => {
-        if (!a.recordTime || !b.recordTime) return 0;
-        return new Date(a.recordTime) - new Date(b.recordTime);
-      });
-
-      timeline.push({
-        id: id++,
-        date: year,
-        title: `${year}年`,
-        content: `共${yearRecords.length}个重要里程碑`,
-        isShow: true,
-        children: yearRecords.map((record) => ({
-          name: record.recordTime ? record.recordTime.split('T')[0] : '', // 只取日期部分
-          content: record.eventDesc || record.reflection || "重要事件",
-        })),
-      });
-    });
-
-  return timeline;
-});
-
-// 默认时间线（如果没有记录）
-const getDefaultTimeline = () => {
-  return [
-    {
-      id: 1,
-      date: "2018",
-      title: "大一",
-      content: "探索方向，在新鲜与迷茫中锚定初心",
-      isShow: true,
-      children: [
-        {
-          name: "2018.9.15",
-          content: "加入校学生会文艺部，参与迎新晚会策划",
-        },
-        {
-          name: "2018.11.3",
-          content: "首次参加校级数学建模竞赛，获优秀奖",
-        },
-        {
-          name: "2018.12.20",
-          content: "加入英语角社团，坚持每周口语练习",
-        },
-      ],
-    },
-    {
-      id: 2,
-      date: "2019",
-      title: "大二",
-      content: "沉淀积累，用知识和实践搭建成长框架",
-      isShow: true,
-      children: [
-        {
-          name: "2019.3.10",
-          content: "组队参加'互联网+'创新创业大赛，进入校赛决赛",
-        },
-        {
-          name: "2019.5.25",
-          content: "通过大学英语六级考试，分数520分",
-        },
-        {
-          name: "2019.9.8",
-          content: "担任班级学习委员，组织专业课答疑小组",
-        },
-      ],
-    },
-    {
-      id: 3,
-      date: "2020",
-      title: "大三",
-      content: "突破边界，在挑战里找到专属竞争力",
-      isShow: true,
-      children: [
-        {
-          name: "2020.1.15",
-          content: "获得国家励志奖学金，专业排名前5%",
-        },
-        {
-          name: "2020.4.20",
-          content: "参与教师主持的科研项目，负责数据收集分析",
-        },
-        {
-          name: "2020.6.30",
-          content: "暑期在某科技公司实习，完成3个项目模块开发",
-        },
-      ],
-    },
-  ];
-};
+const milestoneTimeline = computed(() =>
+  buildTimelineFromRecords(milestones.value)
+);
 
 // 添加里程碑
 const addMilestone = () => {

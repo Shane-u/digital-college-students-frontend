@@ -493,6 +493,8 @@ import CaptchaComponent from "../components/CaptchaComponent.vue";
 import Checkbox from "../components/Checkbox.vue";
 import Bird from "../components/Bird.vue";
 import { userApi } from "../api/userApi";
+import { getMyProfile } from "../api/user";
+import { normalizeProfile } from "../utils/profile";
 
 export default {
   name: "LoginRegisterPage",
@@ -869,6 +871,26 @@ export default {
       return !hasError;
     };
 
+    const syncProfileFromServer = async (fallbackUser = {}) => {
+      try {
+        const profile = await getMyProfile()
+        if (profile) {
+          const normalized = normalizeProfile(profile, fallbackUser)
+          localStorage.setItem('userProfile', JSON.stringify(normalized))
+          return
+        }
+      } catch (error) {
+        console.error('获取个人信息失败:', error)
+      }
+
+      if (fallbackUser && Object.keys(fallbackUser).length > 0) {
+        const normalized = normalizeProfile({}, fallbackUser)
+        localStorage.setItem('userProfile', JSON.stringify(normalized))
+      } else {
+        localStorage.removeItem('userProfile')
+      }
+    }
+
     // 处理登录
     const handleLogin = async () => {
       if (!validateLogin()) return;
@@ -895,6 +917,7 @@ export default {
           // alert('登录成功');
           // 存储用户信息到localStorage
           localStorage.setItem('userInfo', JSON.stringify(response.data));
+          await syncProfileFromServer(response.data || {});
           // 跳转到首页，使用replace替代push，确保完全刷新页面
           window.location.href = '/home';
         } else {

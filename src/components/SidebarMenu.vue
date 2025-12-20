@@ -8,7 +8,6 @@
       <!-- 中心指示器（可点击收起、可拖拽） -->
       <button 
         class="center-indicator" 
-        @click="handleIndicatorClick"
         @mousedown="startDrag"
       >
         <div class="indicator-circle">
@@ -78,7 +77,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -89,6 +88,20 @@ const position = ref(null)
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 
+const SIDEBAR_EXPANDED_SIZE = 200
+const SIDEBAR_COLLAPSED_SIZE = 60
+
+const clampPositionToViewport = (pos, collapsedState = isCollapsed.value) => {
+  if (!pos) return null
+  const sidebarSize = collapsedState ? SIDEBAR_COLLAPSED_SIZE : SIDEBAR_EXPANDED_SIZE
+  const maxX = Math.max(0, window.innerWidth - sidebarSize)
+  const maxY = Math.max(0, window.innerHeight - sidebarSize)
+  return {
+    x: Math.max(0, Math.min(pos.x, maxX)),
+    y: Math.max(0, Math.min(pos.y, maxY))
+  }
+}
+
 // 从 localStorage 加载保存的位置
 const loadPosition = () => {
   const saved = localStorage.getItem('sidebarPosition')
@@ -97,7 +110,7 @@ const loadPosition = () => {
       const pos = JSON.parse(saved)
       // 检查是否是有效位置
       if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
-        position.value = pos
+        position.value = clampPositionToViewport(pos)
       }
     } catch (e) {
       console.error('Failed to load sidebar position:', e)
@@ -134,18 +147,11 @@ const wrapperStyle = computed(() => {
 
 const currentRoute = computed(() => route.path)
 
-// 处理指示器点击（区分点击和拖拽）
-let clickTimer = null
-const handleIndicatorClick = (e) => {
-  // 如果正在拖拽，不触发点击
-  if (isDragging.value) {
-    return
-  }
-  // 延迟执行，如果很快就开始拖拽则取消
-  clickTimer = setTimeout(() => {
-    toggleSidebar()
-  }, 100)
-}
+// 拖拽相关状态
+let hasDragged = false // 标记是否发生了拖拽
+let dragStartPos = { x: 0, y: 0 } // 拖拽开始时的鼠标位置
+let dragStartCollapsed = false // 拖拽开始时的折叠状态
+const DRAG_THRESHOLD = 5 // 拖拽阈值（像素），超过这个距离才认为是拖拽
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
@@ -153,12 +159,16 @@ const toggleSidebar = () => {
 
 // 开始拖拽
 const startDrag = (e) => {
-  if (clickTimer) {
-    clearTimeout(clickTimer)
-    clickTimer = null
+  hasDragged = false // 重置拖拽标志
+  isDragging.value = true
+  
+  // 记录拖拽开始时的状态
+  dragStartCollapsed = isCollapsed.value
+  dragStartPos = {
+    x: e.clientX,
+    y: e.clientY
   }
   
-  isDragging.value = true
   const wrapper = e.currentTarget.closest('.sidebar-wrapper')
   const rect = wrapper.getBoundingClientRect()
   
@@ -178,12 +188,22 @@ const startDrag = (e) => {
 const onDrag = (e) => {
   if (!isDragging.value) return
   
+  // 计算鼠标移动距离
+  const deltaX = Math.abs(e.clientX - dragStartPos.x)
+  const deltaY = Math.abs(e.clientY - dragStartPos.y)
+  const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+  
+  // 如果移动距离超过阈值，标记为拖拽
+  if (distance > DRAG_THRESHOLD) {
+    hasDragged = true
+  }
+  
   // 计算新位置（鼠标位置减去初始偏移）
   let newX = e.clientX - dragStart.value.x
   let newY = e.clientY - dragStart.value.y
   
-  // 限制在视口内（考虑侧边栏大小）
-  const sidebarSize = isCollapsed.value ? 60 : 200
+  // 限制在视口内（使用拖拽开始时的状态，而不是当前状态）
+  const sidebarSize = dragStartCollapsed ? 60 : 200
   const maxX = window.innerWidth - sidebarSize
   const maxY = window.innerHeight - sidebarSize
   
@@ -194,9 +214,22 @@ const onDrag = (e) => {
 }
 
 // 停止拖拽
-const stopDrag = () => {
+const stopDrag = (e) => {
   if (isDragging.value) {
+    // 如果确实发生了拖拽，确保状态恢复到拖拽开始时的状态
+    if (hasDragged) {
+      // 确保状态与拖拽开始时一致
+      if (isCollapsed.value !== dragStartCollapsed) {
+        isCollapsed.value = dragStartCollapsed
+      }
+    } else {
+      // 没有发生拖拽，这是点击操作，切换状态
+      toggleSidebar()
+    }
+    
+    // 重置状态
     isDragging.value = false
+    hasDragged = false
     savePosition()
   }
   document.removeEventListener('mousemove', onDrag)
@@ -221,15 +254,29 @@ const getMenuItemStyle = (index) => {
   }
 }
 
+const handleResize = () => {
+  if (!position.value) return
+  position.value = clampPositionToViewport(position.value)
+  savePosition()
+}
+
 // 初始化
 onMounted(() => {
   loadPosition()
+  window.addEventListener('resize', handleResize)
 })
 
 // 清理
 onUnmounted(() => {
   document.removeEventListener('mousemove', onDrag)
   document.removeEventListener('mouseup', stopDrag)
+  window.removeEventListener('resize', handleResize)
+})
+
+watch(isCollapsed, () => {
+  if (!position.value) return
+  position.value = clampPositionToViewport(position.value)
+  savePosition()
 })
 </script>
 

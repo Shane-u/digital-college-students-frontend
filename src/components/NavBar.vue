@@ -19,7 +19,7 @@
           <div class="nav-dropdown">
             <span class="nav-link bold">竞赛活动</span>
             <div class="dropdown-menu">
-              <router-link to="/competition/edu" class="dropdown-item" exact>教育部榜单竞赛</router-link>
+              <router-link to="/competition/edu" class="dropdown-item" exact>竞赛一览</router-link>
               <router-link to="/competition/subject" class="dropdown-item" exact>学科专业竞赛</router-link>
             </div>
           </div>
@@ -138,8 +138,9 @@
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { uploadUserAvatar, updateMyProfile } from '../api/user'
+import { uploadUserAvatar, updateMyProfile, getMyProfile } from '../api/user'
 import { Plus } from '@element-plus/icons-vue'
+import { normalizeProfile } from '../utils/profile'
 
 // 获取当前路由
 const route = useRoute()
@@ -222,16 +223,17 @@ const handleScroll = () => {
 const openProfileDialog = () => {
   // 从localStorage加载用户信息
   const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}')
-  const profile = JSON.parse(localStorage.getItem('userProfile') || '{}')
+  const storedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}')
+  const normalizedProfile = normalizeProfile(storedProfile, userInfo)
   
   profileForm.value = {
-    avatar: profile.avatar || userInfo.avatar || '',
-    nickname: profile.nickname || userInfo.nickname || userInfo.userAccount || '',
-    gender: profile.gender || '保密',
-    grade: profile.grade || '',
-    major: profile.major || '',
-    school: profile.school || '',
-    bio: profile.bio || ''
+    avatar: normalizedProfile.avatar,
+    nickname: normalizedProfile.nickname,
+    gender: normalizedProfile.gender,
+    grade: normalizedProfile.grade,
+    major: normalizedProfile.major,
+    school: normalizedProfile.school,
+    bio: normalizedProfile.bio
   }
   
   profileDialogVisible.value = true
@@ -518,33 +520,48 @@ const initializeIndicator = () => {
   }, 100)
 }
 
-// 初始化用户状态（保留原逻辑）
-const initUserStatus = () => {
-  const userInfo = localStorage.getItem('userInfo')
-  if (userInfo) {
-    const user = JSON.parse(userInfo)
-    const profile = JSON.parse(localStorage.getItem('userProfile') || '{}')
-    
-    // 设置用户头像和昵称
-    userAvatar.value = profile.avatar || user.avatar || ''
-    userDisplayName.value = profile.nickname || user.nickname || user.userAccount || 'U'
-    
-    // 显示用户名首字母或昵称
-    if (userAccount.value) {
-      if (userAvatar.value) {
-        // 如果有头像，隐藏文字
-        userAccount.value.style.display = 'none'
-      } else {
-        // 如果没有头像，显示昵称或用户名首字母
-        const displayText = userDisplayName.value.length > 1 
-          ? userDisplayName.value.charAt(0).toUpperCase()
-          : userDisplayName.value.toUpperCase()
-        userAccount.value.textContent = displayText
-        userAccount.value.style.display = 'flex'
-      }
+// 初始化用户状态
+const initUserStatus = async () => {
+  const userInfoStr = localStorage.getItem('userInfo')
+  if (!userInfoStr) return
+
+  const user = JSON.parse(userInfoStr)
+  let storedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}')
+
+  try {
+    const latestProfile = await getMyProfile()
+    if (latestProfile) {
+      storedProfile = normalizeProfile(latestProfile, user)
+      localStorage.setItem('userProfile', JSON.stringify(storedProfile))
+    } else {
+      storedProfile = normalizeProfile(storedProfile, user)
     }
-    
+  } catch (error) {
+    console.warn('获取个人信息失败:', error)
+    storedProfile = normalizeProfile(storedProfile, user)
+  }
+  
+  // 设置用户头像和昵称
+  userAvatar.value = storedProfile.avatar || user.userAvatar || ''
+  userDisplayName.value = storedProfile.nickname || 'U'
+  
+  // 显示用户名首字母或昵称
+  if (userAccount.value) {
+    if (userAvatar.value) {
+      userAccount.value.style.display = 'none'
+    } else {
+      const displayText = userDisplayName.value.length > 1 
+        ? userDisplayName.value.charAt(0).toUpperCase()
+        : userDisplayName.value.toUpperCase()
+      userAccount.value.textContent = displayText
+      userAccount.value.style.display = 'flex'
+    }
+  }
+  
+  if (loginLink.value) {
     loginLink.value.style.display = 'none'
+  }
+  if (userContainer.value) {
     userContainer.value.style.display = 'block'
   }
 }

@@ -38,5 +38,12 @@ export function updateMyProfile(data) {
   })
 }
 
+export function getMyProfile() {
+  return request({
+    url: '/user/get/login',
+    method: 'get'
+  })
+}
+
 
 

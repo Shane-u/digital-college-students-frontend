@@ -26,7 +26,7 @@
         <!-- 过滤器搜索栏 -->
         <div class="filter-bar">
           <div class="filter-left">
-            <span class="filter-label">过滤器</span>
+            <span class="filter-label">搜索</span>
             <button class="search-button">
               <svg
                 class="search-icon"
@@ -141,7 +141,7 @@
 
           <div class="intro-buttons">
             <router-link to="/competition/edu" class="intro-btn primary"
-              >教育部榜单竞赛</router-link
+              >竞赛一览</router-link
             >
             <router-link to="/home" class="intro-btn secondary">
               首页

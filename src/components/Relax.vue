@@ -21,9 +21,21 @@
           v-for="(photo, index) in photos" 
           :key="`photo-1-${index}`"
           class="photo-card"
+          @mouseenter="handleCardEnter"
+          @mouseleave="handleCardLeave"
         >
-          <div class="photo-frame">
-            <img :src="photo.image" :alt="photo.title" />
+          <div class="photo-inner">
+            <div class="photo-face photo-front">
+              <div class="photo-frame">
+                <img :src="photo.image" :alt="photo.title" />
+              </div>
+            </div>
+            <div class="photo-face photo-back">
+              <div class="back-content">
+                <p class="back-title">{{ photo.title }}</p>
+                <p class="back-desc">{{ photo.description }}</p>
+              </div>
+            </div>
           </div>
           <p class="photo-title">{{ photo.title }}</p>
         </div>
@@ -33,9 +45,21 @@
           v-for="(photo, index) in photos" 
           :key="`photo-2-${index}`"
           class="photo-card"
+          @mouseenter="handleCardEnter"
+          @mouseleave="handleCardLeave"
         >
-          <div class="photo-frame">
-            <img :src="photo.image" :alt="photo.title" />
+          <div class="photo-inner">
+            <div class="photo-face photo-front">
+              <div class="photo-frame">
+                <img :src="photo.image" :alt="photo.title" />
+              </div>
+            </div>
+            <div class="photo-face photo-back">
+              <div class="back-content">
+                <p class="back-title">{{ photo.title }}</p>
+                <p class="back-desc">{{ photo.description }}</p>
+              </div>
+            </div>
           </div>
           <p class="photo-title">{{ photo.title }}</p>
         </div>
@@ -49,15 +73,15 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import Star from './Star.vue';
 
 const photos = ref([
-  { image: new URL('../assets/relax/640.png', import.meta.url).href, title: '晨光漫步' },
-  { image: new URL('../assets/relax/640 (1).png', import.meta.url).href, title: '悦享时光' },
-  { image: new URL('../assets/relax/640 (2).png', import.meta.url).href, title: '静心阅读' },
-  { image: new URL('../assets/relax/640 (3).png', import.meta.url).href, title: '音乐相伴' },
-  { image: new URL('../assets/relax/640 (4).png', import.meta.url).href, title: '户外踏青' },
-  { image: new URL('../assets/relax/640 (5).png', import.meta.url).href, title: '品茗时刻' },
-  { image: new URL('../assets/relax/640 (6).png', import.meta.url).href, title: '艺术创作' },
-  { image: new URL('../assets/relax/640 (7).png', import.meta.url).href, title: '运动健身' },
-  { image: new URL('../assets/relax/640 (8).png', import.meta.url).href, title: '友聚欢笑' }
+  { image: new URL('../assets/relax/640.png', import.meta.url).href, title: '二仙桥公园', description: '“到二仙桥，走成华大道！”校园附近还有座二仙桥公园，这是一座由铁路遗址改造而来的现代公园，保留了铁轨、绿皮火车等工业符号，在这里随手一拍就是复古工业风大片！。' },
+  { image: new URL('../assets/relax/640 (1).png', import.meta.url).href, title: '春熙路', description: '春熙路的IFS、伊藤洋华堂、王府井百货、亨得利是成都最为繁华的商圈，春熙路可是剁手党的“购物天堂”呀！' },
+  { image: new URL('../assets/relax/640 (2).png', import.meta.url).href, title: '成都自然博物馆', description: '成都自然博物馆（成都理工大学博物馆）蔚然矗立，这是西南地区建筑体量最大的自然博物馆，藏品6万多件，数量种类均居中国各大学博物馆前列。' },
+  { image: new URL('../assets/relax/640 (3).png', import.meta.url).href, title: '东郊记忆', description: '东郊记忆，这处由工业遗址改造而成的潮流街区，如今成为了年轻人们的游乐天堂。一间间时尚品牌店铺，吸引着源源不断的人们到此触摸成都的潮流脉搏。' },
+  { image: new URL('../assets/relax/640 (4).png', import.meta.url).href, title: '成都东区音乐公园', description: '这里的建筑风格既保留了工业时代的传统，又增添了不一young的音乐时尚，不仅可以感受到音乐带给心灵的美好，也深深地被文化时代变迁所深深地震撼，这里的房屋结合了计划经济时代工业美学与现代商业建筑功能，兼容并蓄了20世纪50年代苏联援建的办公楼、21世纪初的办公楼、多层厂房和工业感十足的烟囱管道，营造了东郊记忆兼具怀旧和时尚气息的艺术氛围。' },
+  { image: new URL('../assets/relax/640 (5).png', import.meta.url).href, title: '音乐小酒馆（咖啡屋）', description: '有一个地方，一年四季都是一个温度，有一扇门，风吹日晒都为你敞开，东郊记忆的音乐小酒馆（咖啡屋），愿意成为你的避风塘~小青梅去过几家，每一家都是不一样的风格哦！有温馨甜蜜的漫画风，有神秘韵味的复古风，有潮牌流行的欧美风……在这里你一定可以找到属于自己的风格！' },
+  { image: new URL('../assets/relax/640 (6).png', import.meta.url).href, title: '建设路', description: '琳琅满目的小吃，巷子虽窄，香气却浓，都说真正好吃的地方都朴素，相比于宽窄巷子里的天价菜品，小吃一条街不仅价廉，味也更香，本地人谁去宽窄巷子吃饭啊，俗话说得好：“美食都在深巷里”' },
+  { image: new URL('../assets/relax/640 (7).png', import.meta.url).href, title: '理工东苑', description: '理工东苑永远飘着一股惹人嘴馋的味道，东苑离新教不远。从新教学楼一路走过来，你会看到茶百道，书亦烧仙草等奶茶店。每到饭点一定会满座的五谷渔粉，滋滋作响的纸包鱼，咕噜咕噜翻滚着的火锅串串鸡公煲，滋滋发出声响的烤肉,一滴热油顺着饱满的肉的纹路慢慢滑下,令人心醉，香气四溢的冒菜伴着满街的吆喝声，不停上菜的服务员的步伐，意外的和谐。东苑除了这些硬菜，还有良品铺子，前不久新开的面包店，里面的欧包真的可以和网红店媲美，东苑的超市总是人头攒动。' },
+  { image: new URL('../assets/relax/640 (8).png', import.meta.url).href, title: '铁建广场', description: '铁建广场是离成理最近的购物休闲一体化的服务型广场。入眼可见的网红书店当当书店，还有星巴克，屈臣氏，万达影院等休闲娱乐的地方。' }
 ]);
 
 const photoWall = ref(null);
@@ -71,12 +95,9 @@ let autoScrolling = true;
 // 开始拖拽
 const startDrag = (e) => {
   isDragging = true;
-  autoScrolling = false;
+  pauseAutoScrolling();
   startX = e.pageX;
   scrollLeft = scrollPosition;
-  if (animationId) {
-    cancelAnimationFrame(animationId);
-  }
 };
 
 // 拖拽中
@@ -102,8 +123,7 @@ const onDrag = (e) => {
 const stopDrag = () => {
   isDragging = false;
   setTimeout(() => {
-    autoScrolling = true;
-    animate();
+    resumeAutoScrolling();
   }, 500);
 };
 
@@ -135,6 +155,30 @@ onUnmounted(() => {
     cancelAnimationFrame(animationId);
   }
 });
+
+const pauseAutoScrolling = () => {
+  if (!autoScrolling) return;
+  autoScrolling = false;
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+};
+
+const resumeAutoScrolling = () => {
+  if (isDragging) return;
+  if (autoScrolling) return;
+  autoScrolling = true;
+  animate();
+};
+
+const handleCardEnter = () => {
+  pauseAutoScrolling();
+};
+
+const handleCardLeave = () => {
+  resumeAutoScrolling();
+};
 </script>
 
 <style scoped>
@@ -243,21 +287,46 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 290px;
   transition: transform 0.3s ease;
+  perspective: 1200px;
+  cursor: pointer;
 }
 
 .photo-card:hover {
   transform: translateY(-10px) scale(1.02);
 }
 
-.photo-frame {
+.photo-inner {
+  position: relative;
   width: 100%;
   height: 380px;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.photo-card:hover .photo-inner {
+  transform: rotateY(180deg);
+}
+
+.photo-face {
+  position: absolute;
+  inset: 0;
   border-radius: 16px;
   overflow: hidden;
+  backface-visibility: hidden;
   box-shadow: 0 8px 30px rgba(149, 117, 181, 0.25);
-  background: white;
   border: 3px solid rgba(255, 255, 255, 0.8);
+}
+
+.photo-front {
+  background: #fff;
+}
+
+.photo-frame {
+  width: 100%;
+  height: 100%;
   position: relative;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .photo-frame::before {
@@ -281,7 +350,33 @@ onUnmounted(() => {
 }
 
 .photo-card:hover .photo-frame img {
-  transform: scale(1.1);
+  transform: scale(1.05);
+}
+
+.photo-back {
+  background: #fff;
+  transform: rotateY(180deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.back-content {
+  text-align: center;
+  color: #2c3e50;
+  line-height: 1.6;
+}
+
+.back-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.back-desc {
+  font-size: 14px;
+  color: #5c6b7a;
 }
 
 .photo-title {

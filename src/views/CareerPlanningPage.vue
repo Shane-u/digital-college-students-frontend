@@ -271,7 +271,7 @@ marked.setOptions({
 })
 
 // 响应式数据
-const userId = ref('1986990047206002690')
+const userId = ref('')
 const userInput = ref('我想咨询一下未来的我的竞赛和职业规划怎么样规划')
 const runInfo = ref('')
 const progressText = ref('尚未开始')
@@ -885,6 +885,11 @@ async function handleStart() {
     return
   }
   const userIdValue = userId.value || ''
+  if (!userIdValue) {
+    ElMessage.warning('未获取到用户ID，请尝试重新登录')
+    return
+  }
+
   const inputValue = userInput.value || ''
   startBtnDisabled.value = true
   runInfo.value = '启动中...'
@@ -925,6 +930,20 @@ async function handleStart() {
 }
 
 onMounted(() => {
+  try {
+    const userInfoStr = localStorage.getItem('userInfo')
+    if (userInfoStr) {
+      const userInfo = JSON.parse(userInfoStr)
+      // 优先使用 id，其次 userId
+      const id = userInfo.id || userInfo.userId
+      if (id) {
+        userId.value = String(id)
+      }
+    }
+  } catch (e) {
+    console.error('解析用户信息失败', e)
+  }
+
   nextTick(() => {
     initWorkflowGraph()
     fetchGraph()

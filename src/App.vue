@@ -1,5 +1,6 @@
 <template>
   <div id="app">
+    <MouseFollower />
     <router-view v-slot="{ Component }">
       <transition name="page-fade" mode="out-in">
         <component :is="Component" />
@@ -12,11 +13,13 @@
 
 <script>
 import WankoAssistant from './components/WankoAssistant.vue';
+import MouseFollower from './components/MouseFollower.vue';
 
 export default {
   name: 'App',
   components: {
-    WankoAssistant
+    WankoAssistant,
+    MouseFollower
   }
 }
 </script>

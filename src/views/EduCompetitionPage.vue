@@ -10,7 +10,7 @@
         <span>&gt;&gt;</span>
         <span class="current-page">竞赛活动</span>
         <span>&gt;&gt;</span>
-        <span class="current-page">教育部榜单竞赛</span>
+        <span class="current-page">竞赛一览</span>
       </div>
       <div class="divider"></div>
     </div>
@@ -26,7 +26,7 @@
         <!-- 过滤器搜索栏 -->
         <div class="filter-bar">
           <div class="filter-left">
-            <span class="filter-label">过滤器</span>
+            <span class="filter-label">搜索</span>
             <button class="search-button">
               <svg
                 class="search-icon"
@@ -149,7 +149,7 @@
       <!-- 左侧介绍区 -->
       <aside class="left-intro">
         <div class="intro-content">
-          <h1 class="intro-title">教育部榜单竞赛</h1>
+          <h1 class="intro-title">竞赛一览</h1>
           <p class="intro-description">
             展示学科竞赛、创新创业类赛事基础信息，包含 “互联网
             +”“挑战杯”“学科专业赛”

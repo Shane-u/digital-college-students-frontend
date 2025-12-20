@@ -1,6 +1,5 @@
 <template>
   <div class="home-page">
-    <MouseFollower />
     <TriangleBackground class="triangle-background"/>
     <!-- 使用共享导航组件 -->
     <NavBar :transparent="true" />
@@ -98,7 +97,7 @@
       <!-- Knowledge Photo Section -->
       <section id="knowledge" class="section knowledge-section">
         <KnowledgePhoto ref="knowledgePhotoRef" />
-        <ChengzhangGuiji ref="chengzhangGuijiRef" />
+        <ChengzhangGuiji ref="chengzhangGuijiRef" :timelineList="timelineList" />
       </section>
 
       <!-- Relax Section -->
@@ -115,7 +114,6 @@
 import Footer from '../components/Footer.vue';
 import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRouter } from "vue-router";
-import MouseFollower from "../components/MouseFollower.vue";
 import Shalou from "../components/Shalou.vue";
 import pic1 from "../assets/lunbotu/1.png";
 import pic2 from "../assets/lunbotu/2.png";
@@ -132,11 +130,12 @@ import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
 import TriangleBackground from "../components/TriangleBackground.vue";
+import { getGrowthRecordList } from "../api/growthRecord";
+import { buildTimelineFromRecords } from "../utils/timeline";
 export default {
   name: "HomePage",
   components: {
     TriangleBackground,
-    MouseFollower,
     Competition,
     Shalou,
     KnowledgePhoto,
@@ -169,6 +168,23 @@ export default {
     // 厚积薄发和成长轨迹组件的引用
     const knowledgePhotoRef = ref(null);
     const chengzhangGuijiRef = ref(null);
+    const timelineList = ref(buildTimelineFromRecords());
+
+    const loadTimelineData = async () => {
+      try {
+        const data = await getGrowthRecordList({
+          current: 1,
+          pageSize: 1000,
+          minImportance: 4,
+          sortField: 'recordTime',
+          sortOrder: 'descend'
+        });
+        timelineList.value = buildTimelineFromRecords(data?.records || []);
+      } catch (error) {
+        console.error('加载时间轴失败:', error);
+        timelineList.value = buildTimelineFromRecords();
+      }
+    };
 
     const slides = [
       { 
@@ -280,7 +296,7 @@ export default {
       }
     };
 
-    onMounted(() => {
+    onMounted(async () => {
       // 检查登录状态
       const storedUserInfo = localStorage.getItem('userInfo');
       if (!storedUserInfo) {
@@ -298,6 +314,8 @@ export default {
         router.push('/login');
         return;
       }
+
+      await loadTimelineData();
 
       // 启动轮播
       startAutoSlide();
@@ -462,6 +480,7 @@ export default {
       userInfo,
       knowledgePhotoRef,
       chengzhangGuijiRef,
+      timelineList,
     };
   },
 };
