@@ -86,6 +86,11 @@ const routes = [
     name: 'ContestDetail',
     component: () => import('../views/ContestDetailPage.vue')
   },
+  {
+    path: '/twin-study',
+    name: 'TwinStudy',
+    component: () => import('../views/TwinStudyPage.vue')
+  },
 ]
 
 const router = createRouter({

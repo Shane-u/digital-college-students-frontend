@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 
 // 创建 axios 实例
 const request = axios.create({
-  // baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8101',
+  // baseURL: import.meta.env.VITE_API_BASE_URL || 'http://172.27.63.134:8101',
   baseURL: '/api',
   withCredentials: true,
   // credentials: 'include',

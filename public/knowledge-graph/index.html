@@ -4,7 +4,7 @@
 	<meta charset="UTF-8" />
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>知识图谱 (手绘版)</title>
+	<title>技能图谱 (手绘版)</title>
 	
 	<style>
 		:root {
@@ -660,7 +660,7 @@
 			// -----------------------------
 			// 1. 助手功能逻辑 (保持功能不变)
 			// -----------------------------
-			const TEXT2CYPHER_ENDPOINT = 'http://localhost:8121/api/mcp/text2cypher';
+			const TEXT2CYPHER_ENDPOINT = 'http://172.27.63.134:8121/api/mcp/text2cypher';
 			const assistantElements = {
 				form: document.getElementById('assistantForm'),
 				input: document.getElementById('assistantInput'),
@@ -1308,7 +1308,7 @@
 			});
 			
 			const NEO4J_CONFIG = {
-				url: "bolt://localhost:7687",
+				url: "bolt://172.27.63.134:7687",
 				user: "neo4j",
 				password: "12345678"
 			};

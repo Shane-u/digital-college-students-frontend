@@ -9,7 +9,7 @@
         src="/knowledge-graph/index.html"
         class="graph-iframe"
         frameborder="0"
-        title="知识图谱"
+        title="技能图谱"
         @load="onIframeLoad"
       ></iframe>
     </div>
@@ -83,7 +83,7 @@ const handleMessage = (event) => {
 // iframe 加载完成
 const onIframeLoad = () => {
   // iframe 加载完成后可以发送初始配置
-  console.log('知识图谱iframe加载完成')
+  console.log('技能图谱iframe加载完成')
   // 确保iframe加载完成后再发送消息
   setTimeout(() => {
     // 优先使用路由参数中的搜索关键词

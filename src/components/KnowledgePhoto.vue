@@ -33,16 +33,16 @@
         </div>
       </div>
 
-      <!-- 右侧：知识图谱 -->
+      <!-- 右侧：技能图谱 -->
       <div class="knowledge-left animate__animated" ref="knowledgeRightPart">
         <div class="knowledge-graph">
-          <!-- 交互式知识图谱 -->
+          <!-- 交互式技能图谱 -->
           <iframe
             src="/knowledge-graph/index.html"
             class="graph-iframe"
             frameborder="0"
             scrolling="no"
-            title="知识图谱"
+            title="技能图谱"
           ></iframe>
         </div>
       </div>
@@ -66,7 +66,7 @@ defineExpose({
 
 const router = useRouter();
 
-// 跳转到知识图谱页面并传递搜索关键词
+// 跳转到技能图谱页面并传递搜索关键词
 const navigateToKnowledgeGraph = (keyword) => {
   router.push({
     path: '/knowledge-graph',
@@ -163,7 +163,7 @@ const skills = ref([
   justify-items: stretch;
 }
 
-/* 右侧知识图谱 */
+/* 右侧技能图谱 */
 .knowledge-left {
   display: flex;
   justify-content: center;
