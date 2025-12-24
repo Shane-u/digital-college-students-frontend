@@ -42,20 +42,90 @@
       </div>
 
       <div class="sidebar-section">
-        <h3 class="sidebar-section-title">Chats</h3>
+        <div v-if="!isBatchMode" class="sidebar-section-header">
+          <h3 class="sidebar-section-title">最近对话</h3>
+          <button class="sidebar-refresh-btn" @click.stop>
+            <ClockIcon />
+          </button>
+        </div>
+        <div v-else class="sidebar-batch-header">
+          <button class="sidebar-batch-select-all" @click="toggleSelectAll">
+            <CheckSquareIcon v-if="selectedSessions.size === sessions.length" />
+            <SquareIcon v-else />
+            <span>全选</span>
+          </button>
+          <span class="sidebar-batch-count">已选{{ selectedSessions.size }}条</span>
+          <button class="sidebar-batch-cancel" @click="exitBatchMode">取消</button>
+          <button class="sidebar-batch-delete" @click="deleteSelected">删除</button>
+        </div>
         <div class="sidebar-chats">
           <div 
-            v-for="session in sessions"
+            v-for="session in sortedSessions"
             :key="session.id"
-            @click="() => onSelectSession(session.id)"
-            :class="['sidebar-chat-item', { 'active': currentSessionId === session.id }]"
+            @click="handleItemClick(session.id)"
+            :class="['sidebar-chat-item', { 
+              'active': currentSessionId === session.id && !isBatchMode,
+              'selected': isBatchMode && selectedSessions.has(session.id)
+            }]"
           >
-            <MessageSquareIcon />
+            <div v-if="isBatchMode" class="sidebar-chat-checkbox" @click.stop="toggleSelect(session.id)">
+              <CheckSquareIcon v-if="selectedSessions.has(session.id)" />
+              <SquareIcon v-else />
+            </div>
+            <MessageSquareIcon v-else />
             <span class="sidebar-chat-title">{{ session.title }}</span>
             <PinIcon v-if="session.isPinned" class="sidebar-pin" />
-            <button v-if="isOpen" class="sidebar-chat-more">
+            <button 
+              v-if="isOpen && !isBatchMode" 
+              class="sidebar-chat-more"
+              @click.stop="openMenu(session.id, $event)"
+            >
               <MoreVerticalIcon />
             </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 下拉菜单 -->
+      <div 
+        v-if="showMenu && menuPosition"
+        class="sidebar-menu"
+        :style="{ top: menuPosition.top + 'px', left: menuPosition.left + 'px' }"
+        @click.stop
+      >
+        <button class="sidebar-menu-item" @click="handlePin">
+          <PinMenuIcon />
+          <span>置顶</span>
+        </button>
+        <button class="sidebar-menu-item" @click="handleRename">
+          <PencilIcon />
+          <span>重命名</span>
+        </button>
+        <button class="sidebar-menu-item" @click="handleDelete">
+          <TrashIcon />
+          <span>删除</span>
+        </button>
+        <button class="sidebar-menu-item" @click="handleBatchOperation">
+          <LayersIcon />
+          <span>批量操作</span>
+        </button>
+      </div>
+      
+      <!-- 重命名对话框 -->
+      <div v-if="showRenameDialog" class="sidebar-rename-overlay" @click.stop="closeRenameDialog">
+        <div class="sidebar-rename-dialog" @click.stop>
+          <h3>重命名</h3>
+          <input 
+            v-model="renameValue" 
+            @keyup.enter="confirmRename"
+            @keyup.esc="closeRenameDialog"
+            class="sidebar-rename-input"
+            placeholder="请输入新名称"
+            ref="renameInputRef"
+          />
+          <div class="sidebar-rename-actions">
+            <button class="sidebar-rename-cancel" @click="closeRenameDialog">取消</button>
+            <button class="sidebar-rename-confirm" @click="confirmRename">确定</button>
           </div>
         </div>
       </div>
@@ -77,7 +147,17 @@
 </template>
 
 <script setup>
-import { h } from 'vue'
+import { h, ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+
+// 状态管理
+const showMenu = ref(false)
+const menuPosition = ref(null)
+const currentMenuSessionId = ref(null)
+const showRenameDialog = ref(false)
+const renameValue = ref('')
+const renameInputRef = ref(null)
+const isBatchMode = ref(false)
+const selectedSessions = ref(new Set())
 
 // 使用简单的 SVG 图标组件
 const MenuIcon = () => h('svg', { width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 1.5 }, [
@@ -126,7 +206,43 @@ const MoreVerticalIcon = () => h('svg', { width: 14, height: 14, viewBox: '0 0 2
   h('circle', { cx: 12, cy: 19, r: 1 })
 ])
 
-defineProps({
+const ClockIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('circle', { cx: 12, cy: 12, r: 10 }),
+  h('polyline', { points: '12 6 12 12 16 14' })
+])
+
+const PinMenuIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('line', { x1: 12, y1: 17, x2: 12, y2: 22 }),
+  h('path', { d: 'M5 17h14l-1-7H6z' }),
+  h('path', { d: 'M9 10V4h6v6' })
+])
+
+const PencilIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+  h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' })
+])
+
+const TrashIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('polyline', { points: '3 6 5 6 21 6' }),
+  h('path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' })
+])
+
+const LayersIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('polygon', { points: '12 2 2 7 12 12 22 7 12 2' }),
+  h('polyline', { points: '2 17 12 22 22 17' }),
+  h('polyline', { points: '2 12 12 17 22 12' })
+])
+
+const CheckSquareIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('polyline', { points: '9 11 12 14 22 4' }),
+  h('path', { d: 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' })
+])
+
+const SquareIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('rect', { x: 3, y: 3, width: 18, height: 18, rx: 2, ry: 2 })
+])
+
+const props = defineProps({
   isOpen: {
     type: Boolean,
     required: true
@@ -151,6 +267,153 @@ defineProps({
     type: Function,
     required: true
   }
+})
+
+const emit = defineEmits(['updateSession', 'deleteSession', 'deleteSessions'])
+
+// 计算属性：排序后的会话列表（置顶的在前）
+const sortedSessions = computed(() => {
+  return [...props.sessions].sort((a, b) => {
+    if (a.isPinned && !b.isPinned) return -1
+    if (!a.isPinned && b.isPinned) return 1
+    return new Date(b.updatedAt) - new Date(a.updatedAt)
+  })
+})
+
+// 打开菜单
+const openMenu = (sessionId, event) => {
+  currentMenuSessionId.value = sessionId
+  const rect = event.target.closest('.sidebar-chat-item').getBoundingClientRect()
+  const sidebarRect = event.target.closest('.sidebar').getBoundingClientRect()
+  menuPosition.value = {
+    top: rect.bottom - sidebarRect.top + 4,
+    left: rect.left - sidebarRect.left + rect.width - 120
+  }
+  showMenu.value = true
+}
+
+// 关闭菜单
+const closeMenu = () => {
+  showMenu.value = false
+  menuPosition.value = null
+  currentMenuSessionId.value = null
+}
+
+// 点击外部关闭菜单
+const handleClickOutside = (event) => {
+  if (showMenu.value && !event.target.closest('.sidebar-menu')) {
+    closeMenu()
+  }
+}
+
+// 置顶
+const handlePin = () => {
+  const session = props.sessions.find(s => s.id === currentMenuSessionId.value)
+  if (session) {
+    emit('updateSession', {
+      ...session,
+      isPinned: !session.isPinned
+    })
+  }
+  closeMenu()
+}
+
+// 重命名
+const handleRename = () => {
+  const session = props.sessions.find(s => s.id === currentMenuSessionId.value)
+  if (session) {
+    renameValue.value = session.title
+    showRenameDialog.value = true
+    nextTick(() => {
+      if (renameInputRef.value) {
+        renameInputRef.value.focus()
+        renameInputRef.value.select()
+      }
+    })
+  }
+  closeMenu()
+}
+
+// 确认重命名
+const confirmRename = () => {
+  if (renameValue.value.trim()) {
+    const session = props.sessions.find(s => s.id === currentMenuSessionId.value)
+    if (session) {
+      emit('updateSession', {
+        ...session,
+        title: renameValue.value.trim()
+      })
+    }
+  }
+  closeRenameDialog()
+}
+
+// 关闭重命名对话框
+const closeRenameDialog = () => {
+  showRenameDialog.value = false
+  renameValue.value = ''
+}
+
+// 删除
+const handleDelete = () => {
+  emit('deleteSession', currentMenuSessionId.value)
+  closeMenu()
+}
+
+// 批量操作
+const handleBatchOperation = () => {
+  isBatchMode.value = true
+  selectedSessions.value.clear()
+  closeMenu()
+}
+
+// 退出批量操作模式
+const exitBatchMode = () => {
+  isBatchMode.value = false
+  selectedSessions.value.clear()
+}
+
+// 切换选择
+const toggleSelect = (sessionId) => {
+  if (selectedSessions.value.has(sessionId)) {
+    selectedSessions.value.delete(sessionId)
+  } else {
+    selectedSessions.value.add(sessionId)
+  }
+}
+
+// 全选/取消全选
+const toggleSelectAll = () => {
+  if (selectedSessions.value.size === props.sessions.length) {
+    selectedSessions.value.clear()
+  } else {
+    selectedSessions.value = new Set(props.sessions.map(s => s.id))
+  }
+}
+
+// 删除选中的会话
+const deleteSelected = () => {
+  if (selectedSessions.value.size > 0) {
+    emit('deleteSessions', Array.from(selectedSessions.value))
+    exitBatchMode()
+  }
+}
+
+// 处理列表项点击
+const handleItemClick = (sessionId) => {
+  if (isBatchMode.value) {
+    toggleSelect(sessionId)
+  } else {
+    props.onSelectSession(sessionId)
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -249,6 +512,14 @@ defineProps({
   background: #e1e5ea;
 }
 
+.sidebar-section-header h3 {
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #444746;
+}
+
 .sidebar-arrow {
   font-size: 12px;
   opacity: 0.6;
@@ -271,8 +542,8 @@ defineProps({
 }
 
 .sidebar-section-title {
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  padding: 0;
+  margin: 0;
   font-size: 14px;
   font-weight: 500;
   color: #444746;
@@ -397,5 +668,212 @@ defineProps({
 
 .sidebar-content::-webkit-scrollbar-thumb:hover {
   background: #c2c8d0;
+}
+
+
+.sidebar-refresh-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s;
+}
+
+.sidebar-refresh-btn:hover {
+  opacity: 1;
+  background: #e1e5ea;
+}
+
+.sidebar-chat-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar-chat-item.selected {
+  background: #e1e5ea;
+}
+
+.sidebar-batch-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 8px;
+}
+
+.sidebar-batch-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.sidebar-batch-select-all:hover {
+  background: #1557b0;
+}
+
+.sidebar-batch-count {
+  flex: 1;
+  font-size: 13px;
+  color: #5e5e5e;
+}
+
+.sidebar-batch-cancel {
+  padding: 4px 12px;
+  background: white;
+  border: 1px solid #e1e5ea;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #444746;
+  transition: background-color 0.2s;
+}
+
+.sidebar-batch-cancel:hover {
+  background: #f0f4f9;
+}
+
+.sidebar-batch-delete {
+  padding: 4px 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.sidebar-batch-delete:hover {
+  background: #c82333;
+}
+
+.sidebar-menu {
+  position: absolute;
+  background: white;
+  border: 1px solid #e1e5ea;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 140px;
+  overflow: hidden;
+}
+
+.sidebar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #444746;
+  transition: background-color 0.2s;
+}
+
+.sidebar-menu-item:hover {
+  background: #f0f4f9;
+}
+
+.sidebar-menu-item:last-child {
+  border-top: 1px solid #e1e5ea;
+}
+
+.sidebar-rename-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.sidebar-rename-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 400px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-rename-dialog h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.sidebar-rename-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e1e5ea;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.sidebar-rename-input:focus {
+  border-color: #1a73e8;
+}
+
+.sidebar-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sidebar-rename-cancel,
+.sidebar-rename-confirm {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sidebar-rename-cancel {
+  background: white;
+  border: 1px solid #e1e5ea;
+  color: #444746;
+}
+
+.sidebar-rename-cancel:hover {
+  background: #f0f4f9;
+}
+
+.sidebar-rename-confirm {
+  background: #1a73e8;
+  color: white;
+  border: none;
+}
+
+.sidebar-rename-confirm:hover {
+  background: #1557b0;
 }
 </style>

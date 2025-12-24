@@ -8,6 +8,9 @@
         :currentSessionId="currentSessionId"
         :onNewChat="startNewChat"
         :onSelectSession="selectSession"
+        @updateSession="handleUpdateSession"
+        @deleteSession="handleDeleteSession"
+        @deleteSessions="handleDeleteSessions"
       />
       <MainContent 
         :currentSession="currentSession"
@@ -195,6 +198,26 @@ const sendMessage = async (content) => {
           } 
         : s
     )
+  }
+}
+
+const handleUpdateSession = (updatedSession) => {
+  sessions.value = sessions.value.map(s => 
+    s.id === updatedSession.id ? updatedSession : s
+  )
+}
+
+const handleDeleteSession = (sessionId) => {
+  sessions.value = sessions.value.filter(s => s.id !== sessionId)
+  if (currentSessionId.value === sessionId) {
+    currentSessionId.value = null
+  }
+}
+
+const handleDeleteSessions = (sessionIds) => {
+  sessions.value = sessions.value.filter(s => !sessionIds.includes(s.id))
+  if (sessionIds.includes(currentSessionId.value)) {
+    currentSessionId.value = null
   }
 }
 

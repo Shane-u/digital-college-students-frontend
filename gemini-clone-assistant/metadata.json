@@ -1,0 +1,8 @@
+{
+  "name": "Gemini Clone Assistant",
+  "description": "A high-fidelity clone of the Gemini AI chat interface, powered by the latest Gemini 3 models with support for multiple modalities and model switching.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}

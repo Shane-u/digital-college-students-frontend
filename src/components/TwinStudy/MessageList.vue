@@ -25,6 +25,8 @@
 
           <div class="markdown-content" v-html="renderMarkdown(msg.content || (msg.isStreaming && !msg.workflow ? '...' : ''))"></div>
 
+          <component v-if="msg.role === 'model' && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" />
+
           <div v-if="msg.role === 'model' && msg.references && msg.references.length > 0" class="references">
             <div class="references-header">
               <LinkIcon />
@@ -158,6 +160,72 @@ const ChevronDownIcon = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24
   h('polyline', { points: '6 9 12 15 18 9' })
 ])
 
+const StarIcon = (props = {}) => h('svg', { width: props.size || 14, height: props.size || 14, viewBox: '0 0 24 24', fill: props.fill || 'currentColor', stroke: 'currentColor', 'stroke-width': 2, class: props.class }, [
+  h('polygon', { points: '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2' })
+])
+
+const FileTextIcon = (props = {}) => h('svg', { width: props.size || 14, height: props.size || 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
+  h('polyline', { points: '14 2 14 8 20 8' }),
+  h('line', { x1: 16, y1: 13, x2: 8, y2: 13 }),
+  h('line', { x1: 16, y1: 17, x2: 8, y2: 17 }),
+  h('polyline', { points: '10 9 9 9 8 9' })
+])
+
+const KnowledgeSource = {
+  props: {
+    paragraphs: {
+      type: Array,
+      required: true
+    }
+  },
+  setup(props) {
+    const isExpanded = ref(false)
+    return () => {
+      if (!props.paragraphs || props.paragraphs.length === 0) return null
+      
+      return h('div', { class: 'knowledge-source' }, [
+        h('button', {
+          onClick: () => isExpanded.value = !isExpanded.value,
+          class: 'knowledge-source-header'
+        }, [
+          h('div', { class: 'knowledge-source-title' }, [
+            h(LinkIcon),
+            h('span', `知识来源 · ${props.paragraphs.length}`)
+          ]),
+          h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon, { class: 'knowledge-source-chevron' })
+        ]),
+        isExpanded.value && h('div', { class: 'knowledge-source-content' }, 
+          props.paragraphs.map((p, idx) => 
+            h('div', { key: idx, class: 'knowledge-paragraph' }, [
+              h('div', { class: 'knowledge-paragraph-badge' }, `TOP ${idx + 1}`),
+              h('div', { class: 'knowledge-paragraph-header' }, [
+                h('div', { class: 'knowledge-paragraph-title-wrapper' }, [
+                  h('span', { class: 'knowledge-paragraph-label' }, '召回标题:'),
+                  h('span', { class: 'knowledge-paragraph-title' }, p.problem_title || p.document_name)
+                ]),
+                h('div', { class: 'knowledge-paragraph-rating' }, [
+                  ...Array(4).fill(0).map(() => h(StarIcon, { size: 14, fill: '#fbc02d' })),
+                  h(StarIcon, { size: 14, fill: '#fbc02d', class: 'star-empty' }),
+                  h('span', { class: 'knowledge-paragraph-similarity' }, (p.similarity || 0).toFixed(3))
+                ])
+              ]),
+              h('div', { class: 'knowledge-paragraph-text', innerHTML: renderMarkdown(p.content) }),
+              h('div', { class: 'knowledge-paragraph-footer' }, [
+                h('div', { class: 'knowledge-paragraph-doc' }, [
+                  h(FileTextIcon, { size: 14 }),
+                  h('span', { class: 'knowledge-paragraph-doc-name' }, p.document_name)
+                ]),
+                h('span', { class: 'knowledge-paragraph-dataset' }, p.dataset_name)
+              ])
+            ])
+          )
+        )
+      ])
+    }
+  }
+}
+
 const props = defineProps({
   messages: {
     type: Array,
@@ -169,6 +237,9 @@ const endRef = ref(null)
 
 // 注册 ThinkingBlock 组件
 const ThinkingBlockComponent = ThinkingBlock
+
+// 注册 KnowledgeSource 组件
+const KnowledgeSourceComponent = KnowledgeSource
 
 const renderMarkdown = (text) => {
   if (!text) return ''
@@ -320,6 +391,186 @@ watch(() => props.messages, () => {
   margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid #dbeafe;
+}
+
+.knowledge-source {
+  width: 100%;
+  margin-top: 16px;
+  background: #f8f9fc;
+  border: 1px solid #eef2f8;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.knowledge-source-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.knowledge-source-header:hover {
+  background: #f1f4f9;
+}
+
+.knowledge-source-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1a73e8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.knowledge-source-chevron {
+  color: #444746;
+}
+
+.knowledge-source-content {
+  padding: 0 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.knowledge-source-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.knowledge-source-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.knowledge-source-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.knowledge-source-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.knowledge-paragraph {
+  background: white;
+  border: 1px solid #eef2f8;
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+}
+
+.knowledge-paragraph-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: #1a73e8;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 0 0 8px 0;
+}
+
+.knowledge-paragraph-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  margin-top: 16px;
+}
+
+.knowledge-paragraph-title-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.knowledge-paragraph-label {
+  color: #fb8c00;
+  font-weight: 700;
+}
+
+.knowledge-paragraph-title {
+  color: #444746;
+  font-weight: 500;
+}
+
+.knowledge-paragraph-rating {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: #fbc02d;
+}
+
+.star-empty {
+  opacity: 0.2;
+}
+
+.knowledge-paragraph-similarity {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #444746;
+  font-weight: 500;
+}
+
+.knowledge-paragraph-text {
+  background: #f0f7ff;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #2c3e50;
+  overflow-x: auto;
+}
+
+.knowledge-paragraph-text :deep(p) {
+  margin: 0;
+}
+
+.knowledge-paragraph-text :deep(code) {
+  background: transparent;
+  padding: 0;
+}
+
+.knowledge-paragraph-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #5e5e5e;
+  border-top: 1px solid #f3f4f6;
+  padding-top: 8px;
+}
+
+.knowledge-paragraph-doc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.knowledge-paragraph-doc-name {
+  color: #1a73e8;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.knowledge-paragraph-doc-name:hover {
+  text-decoration: underline;
+}
+
+.knowledge-paragraph-dataset {
+  color: #5e5e5e;
 }
 
 .markdown-content {
