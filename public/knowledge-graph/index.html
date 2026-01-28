@@ -660,7 +660,7 @@
 			// -----------------------------
 			// 1. 助手功能逻辑 (保持功能不变)
 			// -----------------------------
-			const TEXT2CYPHER_ENDPOINT = 'http://172.27.63.134:8121/api/mcp/text2cypher';
+			const TEXT2CYPHER_ENDPOINT = 'http://localhost:8121/api/mcp/text2cypher';
 			const assistantElements = {
 				form: document.getElementById('assistantForm'),
 				input: document.getElementById('assistantInput'),
@@ -1308,7 +1308,7 @@
 			});
 			
 			const NEO4J_CONFIG = {
-				url: "bolt://172.27.63.134:7687",
+				url: "bolt://localhost:7687",
 				user: "neo4j",
 				password: "12345678"
 			};

@@ -16,7 +16,9 @@
         </div>
 
         <div :class="['message-bubble', { 'message-user-bubble': msg.role === 'user' }]">
-          <component v-if="msg.role === 'model' && msg.thought" :is="ThinkingBlockComponent" :content="msg.thought" />
+          <component v-if="msg.role === 'model' && msg.thought" :is="ThinkingBlockComponent" :content="msg.thought" :isStreaming="msg.isStreaming" />
+
+          <div v-if="msg.role === 'model' && msg.thought && msg.content" class="thinking-divider"></div>
 
           <div v-if="msg.role === 'model' && msg.knowledgeBase" class="knowledge-base">
             <BookOpenIcon />
@@ -51,6 +53,12 @@
           </span>
         </div>
 
+        <div v-if="msg.role === 'model' && msg.isStreaming" class="message-actions">
+          <button @click="handleAbort" class="action-btn stop-btn" title="终止">
+            <StopIcon />
+          </button>
+        </div>
+        
         <div v-if="msg.role === 'model' && !msg.isStreaming" class="message-actions">
           <button class="action-btn"><ThumbsUpIcon /></button>
           <button class="action-btn"><ThumbsDownIcon /></button>
@@ -58,6 +66,15 @@
           <button class="action-btn"><RotateCcwIcon /></button>
           <button @click="copyToClipboard(msg.content)" class="action-btn">
             <CopyIcon />
+          </button>
+          <button 
+            v-if="msg.content && msg.content.trim().length > 50" 
+            @click="generateFlashCard(msg.content)" 
+            class="action-btn flash-card-btn"
+            :disabled="flashCardGenerating"
+            :title="flashCardGenerating ? '生成中...' : '生成记忆闪卡'"
+          >
+            <FlashCardIcon />
           </button>
         </div>
       </div>
@@ -75,6 +92,8 @@ import { ref, watch, nextTick } from 'vue'
 import { marked } from 'marked'
 import { h } from 'vue'
 import WorkflowSteps from './WorkflowSteps.vue'
+import { sanitizeHtml } from '../../utils/sanitizeHtml'
+import { flashCardApi } from '../../api/flashCard'
 
 const SparklesIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'currentColor' }, [
   h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })
@@ -127,26 +146,53 @@ const CopyIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', f
   h('path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' })
 ])
 
+const StopIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'currentColor' }, [
+  h('rect', { x: 6, y: 6, width: 12, height: 12, rx: 2 })
+])
+
+const FlashCardIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('rect', { x: 2, y: 3, width: 20, height: 14, rx: 2, ry: 2 }),
+  h('line', { x1: 8, y1: 21, x2: 16, y2: 21 }),
+  h('line', { x1: 12, y1: 17, x2: 12, y2: 21 })
+])
+
 const ThinkingBlock = {
   props: {
     content: {
       type: String,
       required: true
+    },
+    isStreaming: {
+      type: Boolean,
+      default: true
     }
   },
   setup(props) {
     const isExpanded = ref(true)
+    
+    // 监听isStreaming变化，当流式传输结束时自动收缩
+    watch(() => props.isStreaming, (newVal, oldVal) => {
+      if (oldVal && !newVal) {
+        // 从streaming变为非streaming，自动收缩
+        isExpanded.value = false
+      }
+    })
+    
     return () => {
       if (!props.content) return null
+      
+      // 移除 <details> 标签及其内容（通常用于调试信息）
+      const cleanedContent = props.content.replace(/<details>[\s\S]*?<\/details>/gi, '')
+      
       return h('div', { class: 'thinking-block' }, [
         h('button', {
           onClick: () => isExpanded.value = !isExpanded.value,
           class: 'thinking-toggle'
         }, [
           h('span', '思考过程'),
-          h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon)
+          h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon, { size: 14 })
         ]),
-        isExpanded.value && h('div', { class: 'thinking-content' }, props.content)
+        isExpanded.value && h('div', { class: 'thinking-content' }, cleanedContent)
       ])
     }
   }
@@ -230,10 +276,15 @@ const props = defineProps({
   messages: {
     type: Array,
     required: true
+  },
+  onAbortStream: {
+    type: Function,
+    default: null
   }
 })
 
 const endRef = ref(null)
+const flashCardGenerating = ref(false)
 
 // 注册 ThinkingBlock 组件
 const ThinkingBlockComponent = ThinkingBlock
@@ -244,9 +295,15 @@ const KnowledgeSourceComponent = KnowledgeSource
 const renderMarkdown = (text) => {
   if (!text) return ''
   try {
-    return marked.parse(text)
+    // 移除 <details> 标签及其内容（通常用于调试信息）
+    const cleanedText = text.replace(/<details>[\s\S]*?<\/details>/gi, '')
+    // IMPORTANT: marked 输出为 HTML，必须消毒后再 v-html
+    return sanitizeHtml(marked.parse(cleanedText))
   } catch (e) {
-    return text
+    // 兜底：作为纯文本显示（转义）
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
   }
 }
 
@@ -255,6 +312,91 @@ const copyToClipboard = async (text) => {
     await navigator.clipboard.writeText(text)
   } catch (err) {
     console.error('Failed to copy:', err)
+  }
+}
+
+const handleAbort = () => {
+  if (props.onAbortStream) {
+    props.onAbortStream()
+  }
+}
+
+const generateFlashCard = async (content) => {
+  if (flashCardGenerating.value) return
+  
+  try {
+    flashCardGenerating.value = true
+    
+    // 使用原生fetch以便检查HTTP状态码
+    const response = await fetch('/api/flash-card/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        originalContent: content
+      })
+    })
+    
+    // 使用HTTP状态码200来判断成功
+    if (response.ok && response.status === 200) {
+      // 显示成功消息
+      const notification = document.createElement('div')
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: #10B981;
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+      `
+      notification.textContent = '闪卡生成中，完成后会通知您'
+      document.body.appendChild(notification)
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease'
+        setTimeout(() => notification.remove(), 300)
+      }, 3000)
+    } else {
+      // HTTP状态码不是200，尝试解析错误信息
+      let errorMessage = '生成失败'
+      try {
+        const result = await response.json()
+        errorMessage = result.message || result.error || errorMessage
+      } catch (e) {
+        errorMessage = `HTTP错误: ${response.status}`
+      }
+      throw new Error(errorMessage)
+    }
+  } catch (error) {
+    console.error('生成闪卡失败:', error)
+    const notification = document.createElement('div')
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      background: #EF4444;
+      color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+    `
+    notification.textContent = `生成闪卡失败: ${error.message}`
+    document.body.appendChild(notification)
+    
+    setTimeout(() => {
+      notification.style.animation = 'slideOut 0.3s ease'
+      setTimeout(() => notification.remove(), 300)
+    }, 3000)
+  } finally {
+    flashCardGenerating.value = false
   }
 }
 
@@ -334,11 +476,19 @@ watch(() => props.messages, () => {
   font-size: 16px;
   line-height: 1.6;
   transition: all 0.2s;
+  background: white;
+  color: #1f1f1f;
 }
 
 .message-user-bubble {
   background: #f0f4f9;
   color: #1f1f1f;
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  min-height: auto;
 }
 
 .workflow-container {
@@ -349,27 +499,64 @@ watch(() => props.messages, () => {
 .thinking-block {
   width: 100%;
   margin-bottom: 16px;
-  border-left: 2px solid #d3e3fd;
-  padding-left: 16px;
 }
 
-.thinking-toggle {
-  display: flex;
+.thinking-block :deep(button.thinking-toggle),
+button.thinking-toggle {
+  display: inline-flex !important;
   align-items: center;
   gap: 8px;
-  color: #444746;
-  font-size: 14px;
+  color: #6366f1 !important;
+  font-size: 13px;
   font-weight: 500;
-  background: transparent;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.06) 100%) !important;
+  border: none !important;
+  outline: none !important;
+  padding: 8px 16px;
+  border-radius: 20px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  user-select: none;
 }
 
-.thinking-toggle:hover {
-  background: #f0f4f9;
+.thinking-block :deep(button.thinking-toggle::before),
+button.thinking-toggle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.thinking-block :deep(button.thinking-toggle:hover),
+button.thinking-toggle:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%) !important;
+  color: #4f46e5 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.thinking-block :deep(button.thinking-toggle:hover::before),
+button.thinking-toggle:hover::before {
+  opacity: 1;
+}
+
+.thinking-block :deep(button.thinking-toggle:active),
+button.thinking-toggle:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
+}
+
+.thinking-block :deep(button.thinking-toggle > *),
+button.thinking-toggle > * {
+  position: relative;
+  z-index: 1;
 }
 
 .thinking-content {
@@ -379,6 +566,12 @@ watch(() => props.messages, () => {
   line-height: 1.6;
   white-space: pre-wrap;
   font-style: italic;
+}
+
+.thinking-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #e0e0e0, transparent);
+  margin: 16px 0;
 }
 
 .knowledge-base {
@@ -716,5 +909,48 @@ watch(() => props.messages, () => {
 
 .action-btn:hover {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.stop-btn {
+  color: #ef4444;
+}
+
+.stop-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.flash-card-btn {
+  color: #2563EB;
+}
+
+.flash-card-btn:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.flash-card-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
 }
 </style>

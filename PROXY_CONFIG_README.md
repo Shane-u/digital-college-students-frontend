@@ -48,7 +48,7 @@ const api = axios.create({
 
 ### 代理流程
 
-1. **前端请求**: `http://172.27.63.134:3000/api/user/login`
+1. **前端请求**: `http://localhost:3000/api/user/login`
 2. **Vite代理**: 将请求转发到 `http://192.168.147.38:8121/api/user/login`
 3. **后端响应**: 返回数据和Set-Cookie头
 4. **浏览器保存**: 自动保存cookie（因为withCredentials: true）
@@ -85,7 +85,7 @@ npm run dev
 ```javascript
 // ✅ 正确 - 使用代理
 await userApi.login({ account, password })
-// 实际请求: http://172.27.63.134:3000/api/user/login
+// 实际请求: http://localhost:3000/api/user/login
 // 代理转发: http://192.168.147.38:8121/api/user/login
 
 // ❌ 错误 - 不要使用完整URL
@@ -113,19 +113,19 @@ await userApi.getCurrentUser()
 打开浏览器开发者工具（F12）→ Network标签：
 
 ```
-Request URL: http://172.27.63.134:3000/api/user/login
+Request URL: http://localhost:3000/api/user/login
 Status: 200
 ```
 
-如果看到`172.27.63.134:3000`而不是`192.168.147.38:8121`，说明代理正在工作。
+如果看到`localhost:3000`而不是`192.168.147.38:8121`，说明代理正在工作。
 
 ### 2. 检查Cookie
 
-在Application标签 → Cookies → `http://172.27.63.134:3000`：
+在Application标签 → Cookies → `http://localhost:3000`：
 
 应该能看到：
 - `JSESSIONID` 或其他session cookie
-- `Domain`: 172.27.63.134
+- `Domain`: localhost
 - `Path`: /
 - `HttpOnly`: ✓
 
@@ -151,7 +151,7 @@ Set-Cookie: JSESSIONID=xxx; Path=/; HttpOnly
 
 ```java
 // Spring Boot示例
-@CrossOrigin(origins = "http://172.27.63.134:3000", allowCredentials = "true")
+@CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
 ```
 
 或者在配置类中：
@@ -162,7 +162,7 @@ public class CorsConfig {
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        config.addAllowedOrigin("http://172.27.63.134:3000");
+        config.addAllowedOrigin("http://localhost:3000");
         config.setAllowCredentials(true);
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
@@ -184,7 +184,7 @@ location /api {
     proxy_pass http://backend-server:8121;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
-    proxy_cookie_domain backend-server 172.27.63.134;
+    proxy_cookie_domain backend-server localhost;
 }
 ```
 
@@ -194,8 +194,8 @@ location /api {
 ### 3. Cookie Domain
 
 开发环境：
-- 前端: `172.27.63.134:3000`
-- Cookie Domain: `172.27.63.134`
+- 前端: `localhost:3000`
+- Cookie Domain: `localhost`
 
 生产环境：
 - 前端: `www.example.com`
@@ -206,10 +206,10 @@ location /api {
 
 - [ ] 启动后端服务
 - [ ] 重启前端开发服务器
-- [ ] 打开浏览器访问 `http://172.27.63.134:3000`
+- [ ] 打开浏览器访问 `http://localhost:3000`
 - [ ] 打开开发者工具（F12）
 - [ ] 尝试登录
-- [ ] 检查Network标签，确认请求URL是172.27.63.134:3000
+- [ ] 检查Network标签，确认请求URL是localhost:3000
 - [ ] 检查Application标签，确认cookie已保存
 - [ ] 刷新页面，确认session保持
 - [ ] 调用需要登录的接口，确认自动携带cookie

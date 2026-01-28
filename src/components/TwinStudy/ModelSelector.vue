@@ -9,7 +9,7 @@
     </button>
 
     <div v-if="isOpen" class="model-dropdown">
-      <div class="dropdown-header">Gemini 3</div>
+      <div class="dropdown-header">Luan Luan</div>
       
       <button 
         @click="selectMode('fast')"

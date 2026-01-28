@@ -245,7 +245,7 @@ onMounted(() => {
   align-items: center;
   z-index: 20;
   flex-shrink: 0;
-  padding-bottom: 70px;
+  padding-bottom: 0px;
 }
 
 .refresh-button {

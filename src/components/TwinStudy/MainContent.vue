@@ -3,6 +3,9 @@
     <header class="main-header">
       <div class="main-header-title">孪孪伴学</div>
       <div class="main-header-actions">
+        <button @click="openFlashCardPage" class="header-action-btn" title="记忆闪卡">
+          <FlashCardHeaderIcon />
+        </button>
         <div v-if="userAvatar" class="user-avatar-small">
           <img :src="userAvatar" alt="用户头像" class="user-avatar-img" />
         </div>
@@ -23,7 +26,7 @@
           <VintageCardGallery @cardClick="handleCardClick" />
         </div>
       </div>
-      <MessageList v-else :messages="currentSession.messages" />
+      <MessageList v-else :messages="currentSession.messages" :onAbortStream="onAbortStream" />
     </div>
 
     <div class="main-input-area">
@@ -52,7 +55,12 @@
 
             <div class="input-footer-right">
               <ModelSelector :mode="modelMode" :setMode="setModelMode" />
-              <button class="input-icon-btn">
+              <button 
+                @click="toggleRecording" 
+                class="input-icon-btn"
+                :class="{ 'recording': isRecording }"
+                :title="isRecording ? '停止录音' : '语音输入'"
+              >
                 <MicIcon />
               </button>
               <button 
@@ -67,7 +75,7 @@
         </div>
         
         <div class="input-disclaimer">
-          Gemini can make mistakes, so double-check it. <a href="#" class="disclaimer-link">Your privacy & Gemini Apps</a>
+          Luanluan can make mistakes, so double-check it.
         </div>
       </div>
     </div>
@@ -75,8 +83,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted } from 'vue'
 import { h } from 'vue'
+import { useRouter } from 'vue-router'
 import MessageList from './MessageList.vue'
 import ModelSelector from './ModelSelector.vue'
 import VintageCardGallery from './VintageCardGallery.vue'
@@ -112,6 +121,12 @@ const MicIcon = () => h('svg', { width: 20, height: 20, viewBox: '0 0 24 24', fi
   h('line', { x1: 8, y1: 23, x2: 16, y2: 23 })
 ])
 
+const FlashCardHeaderIcon = () => h('svg', { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('rect', { x: 2, y: 3, width: 20, height: 14, rx: 2, ry: 2 }),
+  h('line', { x1: 8, y1: 21, x2: 16, y2: 21 }),
+  h('line', { x1: 12, y1: 17, x2: 12, y2: 21 })
+])
+
 const props = defineProps({
   currentSession: {
     type: Object,
@@ -129,6 +144,10 @@ const props = defineProps({
     type: Function,
     required: true
   },
+  onAbortStream: {
+    type: Function,
+    default: null
+  },
   isSidebarOpen: {
     type: Boolean,
     required: true
@@ -139,6 +158,9 @@ const inputValue = ref('')
 const userAvatar = ref('')
 const userDisplayName = ref('U')
 const userName = ref('')
+const isRecording = ref(false)
+let mediaRecorder = null
+let audioChunks = []
 
 const setInputValue = (value) => {
   inputValue.value = value
@@ -216,6 +238,92 @@ const handleInput = (e) => {
   target.style.height = 'auto'
   target.style.height = target.scrollHeight + 'px'
 }
+
+const router = useRouter()
+
+const openFlashCardPage = () => {
+  router.push('/flash-card')
+}
+
+const toggleRecording = async () => {
+  if (!isRecording.value) {
+    await startRecording()
+  } else {
+    stopRecording()
+  }
+}
+
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder = new MediaRecorder(stream)
+    audioChunks = []
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        audioChunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = async () => {
+      stream.getTracks().forEach(track => track.stop())
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+      await sendAudioToAsr(audioBlob)
+      isRecording.value = false
+    }
+
+    mediaRecorder.start()
+    isRecording.value = true
+  } catch (error) {
+    console.error('无法启动录音:', error)
+    alert('无法启动录音，请检查麦克风权限。')
+  }
+}
+
+const stopRecording = () => {
+  if (mediaRecorder && isRecording.value) {
+    mediaRecorder.stop()
+  }
+}
+
+const sendAudioToAsr = async (audioBlob) => {
+  try {
+    const formData = new FormData()
+    formData.append('file', audioBlob, 'recording.webm')
+
+    // 使用原生fetch，因为axios的request.js拦截器会处理响应格式
+    const response = await fetch('/api/asr/transcribe', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    })
+
+    const result = await response.json()
+    
+    if (result.code === 0 && result.data?.text) {
+      inputValue.value = result.data.text
+      nextTick(() => {
+        const textarea = document.querySelector('.input-textarea')
+        if (textarea) {
+          textarea.focus()
+          textarea.style.height = 'auto'
+          textarea.style.height = textarea.scrollHeight + 'px'
+        }
+      })
+    } else {
+      throw new Error(result.message || '语音识别失败')
+    }
+  } catch (error) {
+    console.error('ASR 请求失败:', error)
+    alert(`语音识别失败: ${error.message}`)
+  }
+}
+
+onUnmounted(() => {
+  if (mediaRecorder && isRecording.value) {
+    mediaRecorder.stop()
+  }
+})
 </script>
 
 <style scoped>
@@ -284,6 +392,23 @@ const handleInput = (e) => {
   height: 100%;
   object-fit: cover;
   border-radius: 50%;
+}
+
+.header-action-btn {
+  padding: 8px;
+  color: #444746;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-action-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .main-messages {
@@ -453,6 +578,21 @@ const handleInput = (e) => {
 
 .input-icon-btn:hover {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.input-icon-btn.recording {
+  background: #EF4444;
+  color: white;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .tooltip {

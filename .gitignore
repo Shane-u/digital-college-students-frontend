@@ -24,3 +24,10 @@ pnpm-debug.log*
 src/assets/competition/com1.jpg
 src/assets/competition/com2.jpg
 src/assets/competition/com3.jpg
+
+
+
+.cursor
+.shared
+接口
+.gitignore

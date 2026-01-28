@@ -91,6 +91,11 @@ const routes = [
     name: 'TwinStudy',
     component: () => import('../views/TwinStudyPage.vue')
   },
+  {
+    path: '/flash-card',
+    name: 'FlashCard',
+    component: () => import('../views/FlashCardPage.vue')
+  },
 ]
 
 const router = createRouter({

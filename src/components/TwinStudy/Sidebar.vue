@@ -18,28 +18,11 @@
         :class="['new-chat-btn', { 'new-chat-btn-open': isOpen, 'new-chat-btn-closed': !isOpen }]"
       >
         <PlusIcon />
-        <span v-if="isOpen">New chat</span>
+        <span v-if="isOpen">新的对话</span>
       </button>
     </div>
 
     <div v-if="isOpen" class="sidebar-content">
-      <div class="sidebar-section">
-        <div class="sidebar-section-header">
-          <span>My Stuff</span>
-          <span class="sidebar-arrow">›</span>
-        </div>
-      </div>
-
-      <div class="sidebar-section">
-        <div class="sidebar-section-header">
-          <span>Gems</span>
-          <span class="sidebar-arrow">›</span>
-        </div>
-        <div class="sidebar-item">
-          <HistoryIcon />
-          <span>Time Planner</span>
-        </div>
-      </div>
 
       <div class="sidebar-section">
         <div v-if="!isBatchMode" class="sidebar-section-header">

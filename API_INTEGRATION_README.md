@@ -62,9 +62,9 @@ npm run dev
 ```
 
 ### 2. 访问页面
-- 登录页面: `http://172.27.63.134:3000/login`
-- 测试页面: `http://172.27.63.134:3000/test`
-- 首页: `http://172.27.63.134:3000/home`
+- 登录页面: `http://localhost:3000/login`
+- 测试页面: `http://localhost:3000/test`
+- 首页: `http://localhost:3000/home`
 
 ### 3. 测试API接口
 1. 访问测试页面 `/test`
