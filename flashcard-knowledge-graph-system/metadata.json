@@ -1,0 +1,8 @@
+
+{
+  "name": "Flashcard Knowledge Graph System",
+  "description": "An advanced knowledge management system featuring flashcard generation, neo4j-like graph visualization, time-based filtering, and interactive review modes with voice support.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

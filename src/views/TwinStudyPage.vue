@@ -53,6 +53,60 @@ const getUserId = () => {
   return 1
 }
 
+// 解析后端返回的内容，将 <think>...</think> 部分拆分为思考过程 + 对外展示内容
+// 确保「首次流式展示」与「刷新后通过历史接口展示」的内容一致
+const splitThinkingContent = (source) => {
+  if (!source) {
+    return { display: '', thought: '' }
+  }
+
+  // 先做统一的解码和清洗
+  let text = String(source)
+    .replace(/&#32;/g, ' ')
+    .replace(/&#92n/g, '\n')
+
+  let display = ''
+  let thought = ''
+  let inThinking = false
+  let i = 0
+
+  while (i < text.length) {
+    const openIdx = text.indexOf('<think>', i)
+    const closeIdx = text.indexOf('</think>', i)
+
+    if (!inThinking) {
+      if (openIdx === -1) {
+        // 后面再也没有 <think>，全部当作展示内容
+        display += text.slice(i)
+        break
+      }
+      // 先把 <think> 之前的内容当作展示内容
+      display += text.slice(i, openIdx)
+      inThinking = true
+      i = openIdx + '<think>'.length
+    } else {
+      if (closeIdx === -1) {
+        // 没有闭合标签，全部当作思考内容
+        thought += text.slice(i)
+        break
+      }
+      thought += text.slice(i, closeIdx)
+      inThinking = false
+      i = closeIdx + '</think>'.length
+    }
+  }
+
+  const stripDetails = (s) =>
+    s
+      .replace(/<details>[\s\S]*?<\/details>/gi, '')
+      .trim()
+
+  return {
+    display: stripDetails(display),
+    thought: stripDetails(thought)
+  }
+}
+
 // 注意：currentUserId 在模块加载时计算，如果用户登录后 userInfo 更新，需要刷新页面
 // 如果需要动态获取，应该每次都调用 getUserId()，而不是使用常量
 const currentUserId = getUserId()
@@ -113,27 +167,56 @@ const loadHistoryMessages = async (chatId, sessionId) => {
     const messages = await apiService.getChatMessages(chatId, userId)
     console.log('[loadHistoryMessages] 获取到消息列表:', messages)
     
-    const list = Array.isArray(messages) ? messages : []
-    console.log('[loadHistoryMessages] 格式化后的消息数量:', list.length)
+    const rawList = Array.isArray(messages) ? messages : []
+
+    // 去重：如果后端连续保存了两条完全相同的助手消息，只展示一条，避免“回答两次”
+    const deduped = []
+    for (const msg of rawList) {
+      const prev = deduped[deduped.length - 1]
+      if (
+        prev &&
+        prev.role !== 'user' &&
+        msg.role !== 'user' &&
+        (prev.content || '').trim() === (msg.content || '').trim()
+      ) {
+        continue
+      }
+      deduped.push(msg)
+    }
+
+    console.log('[loadHistoryMessages] 去重后消息数量:', deduped.length)
     
-    const formattedMessages = list.map(msg => ({
-      id: `${msg.id || Date.now()}-${msg.role}`,
-      role: msg.role === 'user' ? 'user' : 'model',
-      content: msg.content || '',
-      timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
-      thought: msg.thought || '',
-      workflow: msg.workflow,
-      references: msg.references || [],
-      knowledgeBase: msg.knowledgeBase || '',
-      isStreaming: false
-    }))
+    const formattedMessages = deduped.map(msg => {
+      const isUser = msg.role === 'user'
+      let content = msg.content || ''
+      let thought = msg.thought || ''
+
+      // 对助手消息统一做一次 <think> 拆分，保证和流式展示一致
+      if (!isUser && content) {
+        const parsed = splitThinkingContent(content)
+        content = parsed.display
+        thought = parsed.thought
+      }
+
+      return {
+        id: `${msg.id || Date.now()}-${msg.role}`,
+        role: isUser ? 'user' : 'model',
+        content,
+        timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
+        thought,
+        workflow: msg.workflow,
+        references: msg.references || [],
+        knowledgeBase: msg.knowledgeBase || '',
+        isStreaming: false
+      }
+    })
     
     sessions.value = sessions.value.map(s =>
       s.id === sessionId ? { ...s, messages: formattedMessages } : s
     )
     saveSessionsToStorage()
     
-    if (list.length === 0) {
+    if (deduped.length === 0) {
       console.log('[loadHistoryMessages] 该会话暂无历史消息')
     }
   } catch (error) {
@@ -238,9 +321,7 @@ const sendMessage = async (content) => {
   )
 
   try {
-    let rawText = ''
-    let thoughtText = '' // 单独跟踪思考内容
-    let isInThinking = false // 是否在思考标签内
+    let fullText = '' // 后端流式返回的原始内容累积
     let currentWorkflow = undefined
     let lastNodeId = ''
     let references = []
@@ -269,69 +350,10 @@ const sendMessage = async (content) => {
       if (chunk.references) references = chunk.references
 
       if (chunk.content && typeof chunk.content === 'string') {
-        const content = chunk.content
-        
-        // 检查是否是独立的闭合标签（只有 </think>）
-        // 注意：必须是完全独立的，trim后就是闭合标签
-        const trimmedContent = content.trim()
-        if (trimmedContent === '</think>') {
-          // 闭合标签，结束思考状态
-          isInThinking = false
-          // 不添加到 rawText，因为这是思考内容的结束标记
-          continue
-        }
-        
-        // 检查是否包含开始标签
-        if (content.includes('<think>')) {
-          isInThinking = true
-          // 移除开始标签，提取标签后的内容
-          const afterTag = content.replace(/<think>/, '')
-          if (afterTag.trim()) {
-            thoughtText += afterTag
-          }
-          continue
-        }
-        
-        // 检查是否包含闭合标签（但不是独立的，说明标签被分割了）
-        if (content.includes('</think>')) {
-          // 提取闭合标签前的内容
-          const beforeClose = content.split('</think>')[0]
-          if (beforeClose.trim()) {
-            thoughtText += beforeClose
-          }
-          isInThinking = false
-          // 闭合标签后的内容添加到显示内容
-          const afterClose = content.split('</think>').slice(1).join('</think>')
-          if (afterClose.trim()) {
-            rawText += afterClose
-          }
-          continue
-        }
-        
-        // 如果在思考标签内，添加到思考内容
-        if (isInThinking) {
-          thoughtText += content
-        } else {
-          // 否则添加到显示内容
-          rawText += content
-        }
+        fullText += chunk.content
       }
 
-      // 清理编码并移除 <details> 标签（通常用于调试信息）
-      const cleanedThought = thoughtText
-        .replace(/&#32;/g, ' ')
-        .replace(/&#92n/g, '\n')
-        .replace(/<details>[\s\S]*?<\/details>/gi, '')
-        .trim()
-      
-      const cleanedDisplay = rawText
-        .replace(/&#32;/g, ' ')
-        .replace(/&#92n/g, '\n')
-        .replace(/<details>[\s\S]*?<\/details>/gi, '')
-        .trim()
-      
-      const thoughtContent = cleanedThought
-      const displayContent = cleanedDisplay
+      const { display: displayContent, thought: thoughtContent } = splitThinkingContent(fullText)
 
     sessions.value = sessions.value.map(s => 
       s.id === activeSessionId 

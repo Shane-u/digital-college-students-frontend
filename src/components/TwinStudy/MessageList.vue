@@ -442,7 +442,8 @@ watch(() => props.messages, () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-width: 85%;
+  /* 预留头像(32px) + 间距(16px)，避免气泡“撑到”对侧头像区域 */
+  max-width: calc(100% - 48px);
   align-items: flex-start;
 }
 
@@ -458,6 +459,10 @@ watch(() => props.messages, () => {
   transition: all 0.2s;
   background: white;
   color: #1f1f1f;
+  /* 避免超长字符串/链接把气泡撑破布局 */
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .message-user-bubble {
