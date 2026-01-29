@@ -1,27 +1,44 @@
+import { createBailianChat, getBailianChatMessages } from '../../api/bailianChatApi'
+
 const API_BASE = '/api/bailian'
 
 export class ExternalApiService {
   /**
    * 创建新的聊天会话
+   * POST /bailian/chat/create
    * @returns Promise<string> 返回 chatId
    */
   async getChatId(): Promise<string> {
-    const response = await fetch(`${API_BASE}/chat/create`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
+    const data = await createBailianChat()
+    console.log('[apiService] 创建会话返回的 data:', data)
+    
+    if (!data || typeof data !== 'object') {
+      throw new Error('创建会话返回的数据格式错误')
+    }
+    
+    // 尝试多种可能的 key：chatId, id, sessionId, chat_id, 以及第一个非空字符串值
+    const possibleKeys = ['chatId', 'id', 'sessionId', 'chat_id', 'chatId']
+    for (const key of possibleKeys) {
+      const value = (data as Record<string, unknown>)[key]
+      if (value != null && String(value).trim() !== '') {
+        const chatId = String(value).trim()
+        console.log('[apiService] 从 data 中提取到 chatId:', chatId, 'key:', key)
+        return chatId
       }
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
     }
-
-    const result = await response.json()
-    if (result.code === 0 && result.data?.chatId) {
-      return result.data.chatId
+    
+    // 如果所有 key 都不匹配，尝试取第一个非空字符串值
+    const entries = Object.entries(data)
+    for (const [key, value] of entries) {
+      if (value != null && String(value).trim() !== '') {
+        const chatId = String(value).trim()
+        console.log('[apiService] 使用第一个非空值作为 chatId:', chatId, 'key:', key)
+        return chatId
+      }
     }
-    throw new Error(result.message || 'Failed to get chat_id')
+    
+    console.error('[apiService] 无法从返回数据中提取 chatId，data:', data)
+    throw new Error(`创建会话成功但未返回 chatId，返回数据: ${JSON.stringify(data)}`)
   }
 
   /**
@@ -29,9 +46,13 @@ export class ExternalApiService {
    * @param chatId 会话ID
    * @param question 用户问题
    * @param signal AbortSignal 用于取消请求
+   * @param userId 用户ID（可选，缺省时从 userInfo 取）
    * @yields 返回流式数据块，格式：{ content?: string, node_id?: string, node_dict?: any, knowledge?: string, references?: any[] }
    */
-  async *streamChat(chatId: string, question: string, signal?: AbortSignal) {
+  async *streamChat(chatId: string, question: string, signal?: AbortSignal, userId?: number) {
+    const uid = userId ?? this.getUserId()
+    console.log('[apiService.streamChat] 调用流式接口，chatId:', chatId, 'userId:', uid, 'question:', question.substring(0, 50))
+    
     const response = await fetch(`${API_BASE}/chat/stream/flux`, {
       method: 'POST',
       headers: {
@@ -41,6 +62,7 @@ export class ExternalApiService {
       body: JSON.stringify({
         chat_id: chatId, // 后端 DTO 使用 chat_id
         question: question,
+        userId: uid, // 添加 userId，后端需要用它来保存消息
         stream: true
       }),
       signal
@@ -199,29 +221,18 @@ export class ExternalApiService {
   }
 
   /**
-   * 获取会话的历史消息
+   * 获取会话的历史消息（聊天记录持久化）
+   * GET /bailian/chat/{chatId}/messages?userId=
    * @param chatId 会话ID
-   * @param userId 用户ID（可选）
-   * @returns Promise<Array> 返回消息列表
+   * @param userId 用户ID（可选，缺省时从 userInfo 取）
+   * @returns Promise<Array> 返回消息列表（ChatMessageVO[]）
    */
   async getChatMessages(chatId: string, userId?: number): Promise<any[]> {
-    const userIdParam = userId || this.getUserId()
-    const response = await fetch(`${API_BASE}/chat/${chatId}/messages?userId=${userIdParam}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+    const list = await getBailianChatMessages({
+      chatId,
+      userId: userId ?? this.getUserId()
     })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const result = await response.json()
-    if (result.code === 0 && result.data) {
-      return result.data
-    }
-    return []
+    return Array.isArray(list) ? list : []
   }
 
   /**

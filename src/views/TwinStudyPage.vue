@@ -25,7 +25,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import Sidebar from '../components/TwinStudy/Sidebar.vue'
 import MainContent from '../components/TwinStudy/MainContent.vue'
 import { apiService } from '../services/twinStudy/apiService'
@@ -37,13 +38,14 @@ const currentSessionId = ref(null)
 const modelMode = ref('fast')
 const currentAbortController = ref(null)
 
-// 获取用户ID
+// 获取用户ID（与 bailianChatApi.js 保持一致）
 const getUserId = () => {
   try {
     const userInfoStr = localStorage.getItem('userInfo')
     if (userInfoStr) {
       const userInfo = JSON.parse(userInfoStr)
-      return userInfo.userId || 1
+      // 尝试多种可能的字段：id, userId
+      return userInfo.id ?? userInfo.userId ?? 1
     }
   } catch (e) {
     console.warn('获取用户ID失败:', e)
@@ -51,7 +53,10 @@ const getUserId = () => {
   return 1
 }
 
+// 注意：currentUserId 在模块加载时计算，如果用户登录后 userInfo 更新，需要刷新页面
+// 如果需要动态获取，应该每次都调用 getUserId()，而不是使用常量
 const currentUserId = getUserId()
+console.log('[TwinStudyPage] 当前用户ID:', currentUserId)
 const STORAGE_KEY = `bailian_sessions_${currentUserId}`
 
 // 计算属性
@@ -59,9 +64,11 @@ const currentSession = computed(() => {
   return sessions.value.find(s => s.id === currentSessionId.value)
 })
 
-// 方法
+// 方法：点击「新的对话」时只清除当前会话，不创建新会话
+// 等用户发送第一条消息时，才创建会话并添加到列表，标题根据消息内容命名
 const startNewChat = () => {
   currentSessionId.value = null
+  saveSessionsToStorage()
 }
 
 const selectSession = async (id) => {
@@ -69,46 +76,69 @@ const selectSession = async (id) => {
     return
   }
   
+  console.log('[selectSession] 选择会话，id:', id)
   currentSessionId.value = id
   const session = sessions.value.find(s => s.id === id)
   
-  if (session && session.chat_id) {
+  if (!session) {
+    console.warn('[selectSession] 未找到会话，id:', id)
+    ElMessage.warning('未找到该会话')
+    return
+  }
+  
+  console.log('[selectSession] 找到会话:', session)
+  
+  if (session.chat_id) {
     // 加载历史消息
     await loadHistoryMessages(session.chat_id, id)
+  } else {
+    console.warn('[selectSession] 会话缺少 chat_id，无法加载历史消息，session:', session)
+    ElMessage.warning('该会话缺少会话ID，无法加载历史消息')
   }
 }
 
-// 加载历史消息
+// 加载历史消息（始终用接口结果更新会话 messages，含空数组）
 const loadHistoryMessages = async (chatId, sessionId) => {
+  if (!chatId || String(chatId).trim() === '') {
+    console.warn('[loadHistoryMessages] chatId 为空，sessionId:', sessionId)
+    ElMessage.warning('会话ID无效，无法加载历史消息')
+    return
+  }
+  
+  // 每次都重新获取用户ID，确保使用最新的 userInfo
+  const userId = getUserId()
+  console.log('[loadHistoryMessages] 开始加载历史消息，chatId:', chatId, 'sessionId:', sessionId, 'userId:', userId)
+  
   try {
-    const messages = await apiService.getChatMessages(chatId, currentUserId)
+    const messages = await apiService.getChatMessages(chatId, userId)
+    console.log('[loadHistoryMessages] 获取到消息列表:', messages)
     
-    if (messages && messages.length > 0) {
-      // 转换消息格式
-      const formattedMessages = messages.map(msg => ({
-        id: `${msg.id || Date.now()}-${msg.role}`,
-        role: msg.role === 'user' ? 'user' : 'model',
-        content: msg.content || '',
-        timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
-        thought: msg.thought || '',
-        workflow: msg.workflow,
-        references: msg.references || [],
-        knowledgeBase: msg.knowledgeBase || '',
-        isStreaming: false
-      }))
-      
-      // 更新会话的消息列表
-      sessions.value = sessions.value.map(s => 
-        s.id === sessionId 
-          ? { ...s, messages: formattedMessages }
-          : s
-      )
-      
-      // 保存到localStorage
-      saveSessionsToStorage()
+    const list = Array.isArray(messages) ? messages : []
+    console.log('[loadHistoryMessages] 格式化后的消息数量:', list.length)
+    
+    const formattedMessages = list.map(msg => ({
+      id: `${msg.id || Date.now()}-${msg.role}`,
+      role: msg.role === 'user' ? 'user' : 'model',
+      content: msg.content || '',
+      timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
+      thought: msg.thought || '',
+      workflow: msg.workflow,
+      references: msg.references || [],
+      knowledgeBase: msg.knowledgeBase || '',
+      isStreaming: false
+    }))
+    
+    sessions.value = sessions.value.map(s =>
+      s.id === sessionId ? { ...s, messages: formattedMessages } : s
+    )
+    saveSessionsToStorage()
+    
+    if (list.length === 0) {
+      console.log('[loadHistoryMessages] 该会话暂无历史消息')
     }
   } catch (error) {
-    console.error('加载历史消息失败:', error)
+    console.error('[loadHistoryMessages] 加载历史消息失败:', error)
+    ElMessage.error(`加载历史消息失败: ${error?.message || '请检查网络连接或稍后重试'}`)
   }
 }
 
@@ -127,7 +157,7 @@ const sendMessage = async (content) => {
   }
 
   if (!activeSessionId) {
-    // 创建新会话
+    // 无当前会话时先创建（POST /bailian/chat/create），再在该 session 下聊天才会持久化
     try {
       const chatId = await apiService.getChatId()
       const newId = Date.now().toString()
@@ -144,7 +174,8 @@ const sendMessage = async (content) => {
       currentSessionId.value = newId
       saveSessionsToStorage()
     } catch (err) {
-      console.error("Failed to initialize chat session", err)
+      console.error('创建会话失败:', err)
+      ElMessage.error(err?.message || '创建会话失败，请重试')
       return
     }
   } else {
@@ -157,26 +188,33 @@ const sendMessage = async (content) => {
   }
 
   let targetSession = sessions.value.find(s => s.id === activeSessionId)
-  if (!targetSession) return
+  if (!targetSession) {
+    console.error('[sendMessage] 未找到目标会话，activeSessionId:', activeSessionId)
+    return
+  }
   
   let chatId = targetSession.chat_id
+  console.log('[sendMessage] 准备发送消息，chatId:', chatId, 'sessionId:', activeSessionId)
 
   if (!chatId) {
+    console.log('[sendMessage] 会话缺少 chatId，正在创建...')
     try {
       chatId = await apiService.getChatId()
-      sessions.value = sessions.value.map(s => 
+      console.log('[sendMessage] 创建成功，chatId:', chatId)
+      sessions.value = sessions.value.map(s =>
         s.id === activeSessionId ? { ...s, chat_id: chatId } : s
       )
       saveSessionsToStorage()
     } catch (err) {
-      console.error("Failed to initialize chat session", err)
+      console.error('[sendMessage] 创建会话失败:', err)
+      ElMessage.error(err?.message || '创建会话失败，请重试')
       const errorMsg = {
         id: Date.now().toString() + '-error',
         role: 'model',
-        content: `Failed to initialize session: ${err.message}.`,
+        content: `创建会话失败：${err?.message || '请重试'}`,
         timestamp: new Date()
       }
-      sessions.value = sessions.value.map(s => 
+      sessions.value = sessions.value.map(s =>
         s.id === activeSessionId ? { ...s, messages: [...s.messages, errorMsg] } : s
       )
       saveSessionsToStorage()
@@ -212,7 +250,10 @@ const sendMessage = async (content) => {
     const abortController = new AbortController()
     currentAbortController.value = abortController
 
-    const stream = apiService.streamChat(chatId, content, abortController.signal)
+    // 每次都重新获取用户ID，确保使用最新的 userInfo
+    const userId = getUserId()
+    console.log('[sendMessage] 调用流式接口，chatId:', chatId, 'userId:', userId, 'content:', content.substring(0, 50))
+    const stream = apiService.streamChat(chatId, content, abortController.signal, userId)
 
     for await (const chunk of stream) {
       if (chunk.node_id) lastNodeId = chunk.node_id
@@ -402,38 +443,45 @@ const handleDeleteSessions = (sessionIds) => {
   saveSessionsToStorage()
 }
 
-// 保存会话列表到localStorage
+// 保存会话列表与当前会话ID到localStorage
 const saveSessionsToStorage = () => {
   try {
-    // 只保存必要的字段，避免存储过大的数据
     const sessionsToSave = sessions.value.map(s => ({
       id: s.id,
       chat_id: s.chat_id,
       title: s.title,
       updatedAt: s.updatedAt,
       lastMessageTime: s.lastMessageTime,
-      // 不保存消息内容，消息从后端加载
       messageCount: s.messages?.length || 0
     }))
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionsToSave))
+    const payload = {
+      sessions: sessionsToSave,
+      currentSessionId: currentSessionId.value
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
   } catch (error) {
     console.error('保存会话列表失败:', error)
   }
 }
 
-// 从localStorage加载会话列表
+// 从localStorage加载会话列表并恢复当前会话ID（兼容旧格式：纯数组）
 const loadSessionsFromStorage = () => {
   try {
-    const savedSessions = localStorage.getItem(STORAGE_KEY)
-    if (savedSessions) {
-      const parsed = JSON.parse(savedSessions)
-      // 按最后消息时间排序
-      parsed.sort((a, b) => new Date(b.lastMessageTime || b.updatedAt) - new Date(a.lastMessageTime || a.updatedAt))
-      sessions.value = parsed.map(s => ({
-        ...s,
-        messages: [], // 消息列表为空，切换会话时会从后端加载
-        updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date()
-      }))
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    const list = Array.isArray(parsed) ? parsed : (parsed?.sessions ?? [])
+    if (!Array.isArray(list) || list.length === 0) return
+    list.sort((a, b) => new Date(b.lastMessageTime || b.updatedAt) - new Date(a.lastMessageTime || a.updatedAt))
+    const ids = new Set(list.map(s => s.id))
+    sessions.value = list.map(s => ({
+      ...s,
+      messages: [],
+      updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date()
+    }))
+    const restored = Array.isArray(parsed) ? null : (parsed?.currentSessionId ?? null)
+    if (restored != null && ids.has(restored)) {
+      currentSessionId.value = restored
     }
   } catch (error) {
     console.error('加载会话列表失败:', error)
@@ -441,11 +489,14 @@ const loadSessionsFromStorage = () => {
   }
 }
 
-// 注意：消息内容不保存到localStorage，只保存会话基本信息
-// 消息内容在切换会话时从后端加载
-
-onMounted(() => {
+onMounted(async () => {
   loadSessionsFromStorage()
+  const sid = currentSessionId.value
+  if (!sid) return
+  const session = sessions.value.find(s => s.id === sid)
+  if (session?.chat_id) {
+    await loadHistoryMessages(session.chat_id, sid)
+  }
 })
 </script>
 
