@@ -26,7 +26,7 @@
           <VintageCardGallery @cardClick="handleCardClick" />
         </div>
       </div>
-      <MessageList v-else :messages="currentSession.messages" :onAbortStream="onAbortStream" />
+      <MessageList v-else :messages="currentSession.messages" />
     </div>
 
     <div class="main-input-area">
@@ -56,6 +56,7 @@
             <div class="input-footer-right">
               <ModelSelector :mode="modelMode" :setMode="setModelMode" />
               <button 
+                v-if="!isSending && !inputValue.trim()" 
                 @click="toggleRecording" 
                 class="input-icon-btn"
                 :class="{ 'recording': isRecording }"
@@ -64,11 +65,19 @@
                 <MicIcon />
               </button>
               <button 
-                v-if="inputValue.trim()"
+                v-if="inputValue.trim() && !isSending"
                 @click="handleSend"
                 class="send-button"
               >
                 <ArrowRightIcon />
+              </button>
+              <button
+                v-if="isSending"
+                @click="handleAbort"
+                class="send-button stop-button"
+                title="终止"
+              >
+                <StopCircleIcon />
               </button>
             </div>
           </div>
@@ -83,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { h } from 'vue'
 import { useRouter } from 'vue-router'
 import MessageList from './MessageList.vue'
@@ -127,6 +136,14 @@ const FlashCardHeaderIcon = () => h('svg', { width: 20, height: 20, viewBox: '0 
   h('line', { x1: 12, y1: 17, x2: 12, y2: 21 })
 ])
 
+// 对话框终止按钮图标：外圈圆形 + 内部实心方块
+const StopCircleIcon = () => h('svg', { width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  // 外圈圆形描边
+  h('circle', { cx: 12, cy: 12, r: 8 }),
+  // 内部实心圆角方块
+  h('rect', { x: 9, y: 9, width: 6, height: 6, rx: 1.5, fill: 'currentColor', stroke: 'none' })
+])
+
 const props = defineProps({
   currentSession: {
     type: Object,
@@ -159,6 +176,7 @@ const userAvatar = ref('')
 const userDisplayName = ref('U')
 const userName = ref('')
 const isRecording = ref(false)
+const isSending = ref(false) // 新增状态变量
 let mediaRecorder = null
 let audioChunks = []
 
@@ -219,6 +237,7 @@ onMounted(() => {
 
 const handleSend = () => {
   if (inputValue.value.trim()) {
+    isSending.value = true // 设置为发送中
     props.onSendMessage(inputValue.value)
     inputValue.value = ''
     const textarea = document.querySelector('.input-textarea')
@@ -226,10 +245,36 @@ const handleSend = () => {
   }
 }
 
+const handleAbort = () => {
+  if (isSending.value) {
+    props.onAbortStream()
+    isSending.value = false // 停止发送
+  }
+}
+
+// 监听会话消息，当所有模型消息不再处于流式生成状态时，自动恢复为语音按钮
+watch(
+  () => props.currentSession && props.currentSession.messages,
+  (messages) => {
+    if (!messages || !Array.isArray(messages)) return
+    const hasStreamingModelMsg = messages.some(
+      (m) => m.role === 'model' && m.isStreaming
+    )
+    if (!hasStreamingModelMsg) {
+      isSending.value = false
+    }
+  },
+  { deep: true }
+)
+
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && e.ctrlKey) {
     e.preventDefault()
-    handleSend()
+    if (!isSending.value) { // 只有不在发送中才能发送新消息
+      handleSend()
+    } else { // 否则终止发送
+      handleAbort()
+    }
   }
 }
 
@@ -652,6 +697,19 @@ onUnmounted(() => {
 
 .send-button:hover {
   background: #1d4ed8;
+}
+
+/* 终止按钮样式：浅灰圆形 + 黑色图标，接近截图效果 */
+.send-button.stop-button {
+  background: #f5f5f5;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transform: scale(1);
+  border-radius: 50%;
+}
+
+.send-button.stop-button:hover {
+  background: #e5e5e5;
 }
 
 .input-disclaimer {

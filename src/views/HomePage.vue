@@ -542,7 +542,7 @@ export default {
 
 .slide-item {
   position: relative;
-  width: 100vw;
+  width: 98.9vw;
   height: 100vh;
   flex-shrink: 0;
 }

@@ -52,12 +52,6 @@
             Generating...
           </span>
         </div>
-
-        <div v-if="msg.role === 'model' && msg.isStreaming" class="message-actions">
-          <button @click="handleAbort" class="action-btn stop-btn" title="终止">
-            <StopIcon />
-          </button>
-        </div>
         
         <div v-if="msg.role === 'model' && !msg.isStreaming" class="message-actions">
           <button class="action-btn"><ThumbsUpIcon /></button>
@@ -144,10 +138,6 @@ const RotateCcwIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 2
 const CopyIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
   h('rect', { x: 9, y: 9, width: 13, height: 13, rx: 2, ry: 2 }),
   h('path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' })
-])
-
-const StopIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'currentColor' }, [
-  h('rect', { x: 6, y: 6, width: 12, height: 12, rx: 2 })
 ])
 
 const FlashCardIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
@@ -276,10 +266,6 @@ const props = defineProps({
   messages: {
     type: Array,
     required: true
-  },
-  onAbortStream: {
-    type: Function,
-    default: null
   }
 })
 
@@ -312,12 +298,6 @@ const copyToClipboard = async (text) => {
     await navigator.clipboard.writeText(text)
   } catch (err) {
     console.error('Failed to copy:', err)
-  }
-}
-
-const handleAbort = () => {
-  if (props.onAbortStream) {
-    props.onAbortStream()
   }
 }
 
@@ -909,14 +889,6 @@ button.thinking-toggle > * {
 
 .action-btn:hover {
   background: rgba(0, 0, 0, 0.05);
-}
-
-.stop-btn {
-  color: #ef4444;
-}
-
-.stop-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
 }
 
 .flash-card-btn {
