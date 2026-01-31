@@ -384,7 +384,7 @@ const loadHistoryMessages = async (chatId, sessionId) => {
 
     console.log('[loadHistoryMessages] 去重后消息数量:', deduped.length)
     
-    const formattedMessages = list.map(msg => {
+    const formattedMessages = deduped.map(msg => {
       // 1. 基础转换 后端返回的 content 可能包含 <think> 和 outputList 等原始数据
       let content = msg.content || ''
       let thought = msg.thought || ''
