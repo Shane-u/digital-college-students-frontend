@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>百炼 AI 聊天</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 左侧会话列表 */
+        .sidebar {
+            width: 300px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            height: 100vh;
+            min-height: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar-header h2 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .new-chat-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .new-chat-btn:active {
+            transform: translateY(0);
+        }
+
+        .session-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .session-item {
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+            border: 2px solid transparent;
+        }
+
+        .session-item:hover {
+            background: #e9ecef;
+            transform: translateX(4px);
+        }
+
+        .session-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .session-item-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .session-item-time {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+        .session-item.active .session-item-time {
+            opacity: 0.9;
+        }
+
+        /* 主聊天区域 */
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            overflow: hidden;
+            min-height: 0;
+            height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .session-info {
+            font-size: 12px;
+            opacity: 0.9;
+            font-family: 'Courier New', monospace;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 12px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .header-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .header-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 24px;
+            background: #f5f7fa;
+            position: relative;
+            min-height: 0;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .chat-area.loading-history {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .loading-more {
+            text-align: center;
+            padding: 16px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 14px 18px;
+            border-radius: 16px;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            /* Reset white-space for Markdown content */
+            white-space: normal;
+        }
+
+        /* Markdown Styles & Deep Thinking */
+        .think-block {
+            background: #f0f4f8;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            margin-bottom: 16px;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9em;
+            color: #4a5568;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        .think-label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Markdown 内容样式 */
+        /* 段落 */
+        .message-content p {
+            font-size: 14px; /* 统一段落字体大小 */
+            margin-bottom: 10px;
+        }
+
+        .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        /* 标题 */
+        .message-content h1,
+        .message-content h2,
+        .message-content h3,
+        .message-content h4,
+        .message-content h5,
+        .message-content h6 {
+            font-weight: 700; /* 确保标题加粗 */
+            margin-top: 20px;
+            margin-bottom: 10px;
+            line-height: 1.4;
+            color: #333; /* 统一标题颜色 */
+        }
+
+        .message-content h3 {
+            font-size: 1.15em;
+            color: #4a5568;
+        }
+
+        /* 加粗文本 */
+        .message-content strong {
+            font-weight: 700; /* 确保粗体效果 */
+        }
+
+        /* 代码块 */
+        .message-content pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 10px 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+
+        /* 内联代码 */
+        .message-content code {
+            background: rgba(0, 0, 0, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #d63384;
+            word-break: break-word; /* 避免长代码导致溢出 */
+        }
+
+        .message-content pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+            font-size: 0.9em;
+        }
+
+        /* 无序列表和有序列表 */
+        .message-content ul, .message-content ol {
+            font-size: 14px; /* 统一列表字体大小 */
+            margin-left: 20px;
+            margin-bottom: 10px;
+            padding-left: 20px; /* 增加左边距以显示项目符号 */
+            list-style-type: disc; /* 默认无序列表项目符号 */
+            line-height: 1.6; /* 增加行高 */
+        }
+
+        .message-content ol {
+            list-style-type: decimal; /* 有序列表显示数字 */
+        }
+
+        .message-content li {
+            font-size: 14px; /* 统一列表项字体大小 */
+            margin-bottom: 4px;
+            line-height: 1.5; /* 增加行高，提升可读性 */
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #e2e8f0;
+            padding-left: 16px;
+            color: #718096;
+            margin: 10px 0;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .message-content th, .message-content td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-content th {
+            background: #f7fafc;
+            font-weight: 600;
+        }
+
+        .message.system {
+            justify-content: center;
+        }
+
+        .message.system .message-content {
+            background: #e3f2fd;
+            color: #1976d2;
+            font-size: 13px;
+            padding: 10px 16px;
+            border-radius: 20px;
+            max-width: 90%;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+
+        .message.user .message-time {
+            text-align: right;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-area {
+            padding: 20px 24px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        #questionInput {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        #questionInput:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        #sendBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-width: 80px;
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        #sendBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #recordBtn {
+            background: #ff7043;
+            color: white;
+            padding: 12px 20px;
+        }
+
+        #recordBtn:hover:not(:disabled) {
+            background: #f4511e;
+            transform: translateY(-2px);
+        }
+
+        #recordBtn.recording {
+            background: #d32f2f;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .error {
+            color: #d32f2f;
+            background: #ffebee !important;
+        }
+
+        /* 滚动条样式 */
+        .chat-area::-webkit-scrollbar,
+        .session-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-area::-webkit-scrollbar-track,
+        .session-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-area::-webkit-scrollbar-thumb,
+        .session-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        .chat-area::-webkit-scrollbar-thumb:hover,
+        .session-list::-webkit-scrollbar-thumb:hover {
+            background: #999;
+        }
+
+        /* 闪卡按钮样式 */
+        .flash-card-btn {
+            margin-top: 12px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .flash-card-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .flash-card-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                left: -300px;
+                z-index: 1000;
+                height: 100vh;
+                transition: left 0.3s;
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+    <!-- SockJS and STOMP for WebSocket -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <!-- Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <!-- 左侧会话列表 -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>💬 会话列表</h2>
+            <button class="new-chat-btn" onclick="createNewSession()">
+                <span>➕</span>
+                <span>新建会话</span>
+            </button>
+        </div>
+        <div class="session-list" id="sessionList">
+            <div class="empty-state">
+                <div class="empty-state-icon">💭</div>
+                <div class="empty-state-text">暂无会话<br>点击"新建会话"开始聊天</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主聊天区域 -->
+    <div class="main-container">
+        <div class="header">
+            <div class="header-left">
+                <h1>🤖 百炼 AI 聊天</h1>
+                <div class="session-info" id="chatIdDisplay">未选择会话</div>
+            </div>
+            <div class="header-actions">
+                <button class="header-btn" onclick="toggleSidebar()">📋 会话</button>
+                <button class="header-btn" onclick="openFlashCardPage()">📚 闪卡</button>
+            </div>
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="empty-state">
+                <div class="empty-state-icon">👋</div>
+                <div class="empty-state-text">选择一个会话或创建新会话开始聊天</div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-wrapper">
+                <button id="recordBtn" onclick="toggleRecording()">🎤 语音</button>
+                <input 
+                    type="text" 
+                    id="questionInput" 
+                    placeholder="输入你的问题..." 
+                    disabled
+                    onkeypress="handleKeyPress(event)"
+                />
+                <button id="sendBtn" onclick="sendMessage()" disabled>发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        marked.setOptions({ breaks: true });
+        let currentChatId = null;
+        let isStreaming = false;
+        let sessions = []; // 会话列表
+        let currentUserId = null; // 当前用户ID
+        const API_BASE = '/api/bailian';
+        const ASR_API_BASE = '/api/asr';
+        const FLASH_CARD_API_BASE = '/api/flash-card';
+        
+        let ws = null;
+        
+        // Render Markdown Content
+        function renderContent(text) {
+            if (!text) return '';
+
+            let html = '';
+            let thinkContent = null;
+            let mainContent = text;
+            let knowledgeSourcesHtml = ''; // To store the rendered knowledge sources
+
+            // --- Phase 1: Extract and remove all <details> blocks for outputList and outputList.output ---
+            const outputListDetailsPattern = /<details><summary>(outputList(?:\.output)?)<\/summary>([\s\S]*?)<\/details>/g;
+            let outputListMatches = [];
+            
+            // 使用一个临时变量来处理文本，避免修改原始 text
+            let tempContent = text;
+            let match;
+
+            // 收集所有 outputList details 并从 tempContent 中移除
+            while ((match = outputListDetailsPattern.exec(tempContent)) !== null) {
+                const summaryText = match[1]; // "outputList" or "outputList.output"
+                const contentText = match[2]; // Content inside the details tag
+                outputListMatches.push({ summary: summaryText, content: contentText });
+            }
+            // 移除所有 outputList details 块
+            tempContent = tempContent.replace(outputListDetailsPattern, '').trim();
+
+            // --- Phase 2: Extract and select the second-to-last <think> block, then remove all <think> blocks ---
+            const thinkBlocks = [];
+            const thinkTagPattern = /<think>([\s\S]*?)<\/think>/g;
+            let thinkMatch;
+            while ((thinkMatch = thinkTagPattern.exec(tempContent)) !== null) {
+                thinkBlocks.push(thinkMatch[0]); // Store full think block including tags
+            }
+
+            if (thinkBlocks.length >= 2) {
+                thinkContent = thinkBlocks[thinkBlocks.length - 2].replace(/<think>|<\/think>/g, '').trim();
+            } else if (thinkBlocks.length === 1) {
+                thinkContent = thinkBlocks[0].replace(/<think>|<\/think>/g, '').trim();
+            } else {
+                thinkContent = null;
+            }
+
+            // 移除所有 <think> 块
+            tempContent = tempContent.replace(thinkTagPattern, '').trim();
+
+            // 将处理后的 tempContent 赋值给 processedMainContent
+            let processedMainContent = tempContent;
+
+            // --- Phase 3: De-duplicate processedMainContent if it's an exact X + X repetition (for the last main answer) ---
+            const mainContentLength = processedMainContent.length;
+            if (mainContentLength > 0 && mainContentLength % 2 === 0) {
+                const halfLength = mainContentLength / 2;
+                const firstHalf = processedMainContent.substring(0, halfLength);
+                const secondHalf = processedMainContent.substring(halfLength);
+                if (firstHalf === secondHalf) {
+                    processedMainContent = firstHalf.trim();
+                }
+            }
+            processedMainContent = processedMainContent; // 移除 trim()，让 marked.js 自行处理空格
+
+
+            // --- Phase 4: Render thinkContent and processedMainContent ---
+            if (thinkContent !== null && thinkContent !== '') { // Use !== '' after trimming
+                html += `<div class="think-block">
+                                    <div class="think-label">
+                                        <span style="animation: pulse 2s infinite">💭</span> 深度思考
+                                    </div>
+                                    <div class="think-content">${marked.parse(thinkContent)}</div>
+                                 </div>`;
+            }
+
+            if (processedMainContent && processedMainContent !== '') { // Use !== '' after trimming
+                html += marked.parse(processedMainContent);
+            }
+
+            // --- Phase 4: Process and append knowledge sources ---
+            if (outputListMatches.length > 0) {
+                let individualSourcesHtml = '';
+                outputListMatches.forEach((item, index) => {
+                    let formattedContent = '';
+                    let summaryTitle = item.summary;
+
+                    if (item.summary === 'outputList') {
+                        try {
+                            // Replace single quotes with double quotes for valid JSON parsing
+                            const jsonLikeString = item.content.trim().replace(/'/g, '"');
+                            try {
+                                const parsedJson = JSON.parse(jsonLikeString);
+                                formattedContent = `<pre><code class="json">${JSON.stringify(parsedJson, null, 2)}</code></pre>`;
+                            } catch (jsonParseError) {
+                                console.error(`Failed to parse outputList JSON after replacing single quotes:`, jsonParseError);
+                                // 如果 JSON 解析失败，直接将原始内容作为文本显示
+                                formattedContent = `<pre><code class="text">${item.content.trim()}</code></pre>`;
+                            }
+
+                            // Try to get document_name from the first item if available
+                            if (parsedJson.length > 0 && parsedJson[0].document_name) {
+                                summaryTitle = `知识来源: ${parsedJson[0].document_name}`;
+                            } else {
+                                summaryTitle = `知识来源: ${item.summary}`;
+                            }
+
+                        } catch (e) {
+                            console.error(`Failed to parse ${item.summary} JSON:`, e);
+                            formattedContent = `<pre><code class="text">${item.content.trim()}</code></pre>`;
+                            summaryTitle = `知识来源: ${item.summary} (原始数据)`;
+                        }
+                    } else if (item.summary === 'outputList.output') {
+                        formattedContent = marked.parse(item.content.trim());
+                        summaryTitle = `知识来源: ${item.summary}`;
+                    }
+
+                    individualSourcesHtml += `
+                        <details style="margin-bottom: 8px; border: 1px solid #e0e0e0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                            <summary style="padding: 12px 16px; font-weight: 600; cursor: pointer; color: #667eea; display: flex; align-items: center; gap: 8px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-open-text"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/><path d="M10 12H8"/><path d="M16 12h2"/><path d="M16 18h2"/><path d="M10 18H8"/></svg>
+                                <span>${summaryTitle}</span>
+                            </summary>
+                            <div style="padding: 12px 16px; border-top: 1px solid #e0e0e0; background: #fcfcfc;">
+                                ${formattedContent}
+                            </div>
+                        </details>
+                    `;
+                });
+
+                knowledgeSourcesHtml = `
+                    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px dashed #cccccc;">
+                        <div style="font-size: 16px; font-weight: 600; color: #4a5568; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                            知识来源
+                        </div>
+                        ${individualSourcesHtml}
+                    </div>
+                `;
+            }
+            return html + knowledgeSourcesHtml;
+        }
+
+        // 初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            // 尝试从URL获取userId，或从localStorage获取
+            const urlParams = new URLSearchParams(window.location.search);
+            currentUserId = urlParams.get('userId') || localStorage.getItem('bailian_userId');
+            
+            if (!currentUserId) {
+                // 如果没有userId，提示用户输入或使用默认值
+                currentUserId = prompt('请输入用户ID:', '1');
+                if (currentUserId) {
+                    localStorage.setItem('bailian_userId', currentUserId);
+                } else {
+                    currentUserId = '1'; // 默认值
+                }
+            }
+            
+            initWebSocket();
+            loadSessions();
+        });
+        
+        function initWebSocket() {
+            if (typeof SockJS === 'undefined' || typeof Stomp === 'undefined') {
+                console.warn('WebSocket库未加载，将使用轮询方式检查闪卡状态');
+                return;
+            }
+            
+            const wsUrl = `${window.location.protocol === 'https:' ? 'https' : 'http'}://${window.location.host}/api/ws/flashcard`;
+            
+            try {
+                const socket = new SockJS(wsUrl);
+                ws = Stomp.over(socket);
+                if (ws.debug) {
+                    ws.debug = null;
+                }
+                
+                ws.connect({}, function(frame) {
+                    console.log('WebSocket连接成功');
+                    ws.subscribe('/user/queue/flashcard', function(message) {
+                        try {
+                            const data = JSON.parse(message.body);
+                            console.log('收到WebSocket消息:', data);
+                            handleFlashCardNotification(data);
+                        } catch (error) {
+                            console.error('解析WebSocket消息失败:', error);
+                        }
+                    });
+                }, function(error) {
+                    console.warn('WebSocket连接失败，将使用轮询方式检查闪卡状态:', error);
+                    // 连接失败时，使用轮询作为降级方案
+                    ws = null;
+                });
+            } catch (error) {
+                console.warn('初始化WebSocket失败，将使用轮询方式检查闪卡状态:', error);
+                ws = null;
+            }
+        }
+        
+        // 检查WebSocket连接状态
+        function isWebSocketConnected() {
+            return ws && ws.connected;
+        }
+        
+        function handleFlashCardNotification(data) {
+            console.log('处理闪卡通知:', data);
+            
+            if (data.type === 'flashcard_generated' && data.status === 'success') {
+                window.flashCardGenerated = true; // 标记已收到通知
+                addSystemMessage('✅ 闪卡生成完成！点击"查看闪卡"按钮查看。');
+                
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('闪卡生成完成', {
+                        body: '您的闪卡已生成完成，点击查看',
+                        icon: '/favicon.ico'
+                    });
+                }
+                
+                // 清除轮询定时器
+                if (window.flashCardCheckInterval) {
+                    clearInterval(window.flashCardCheckInterval);
+                    clearTimeout(window.flashCardCheckInterval);
+                    window.flashCardCheckInterval = null;
+                }
+            } else if (data.type === 'flashcard_failed' && data.status === 'failed') {
+                window.flashCardGenerated = true; // 标记已收到通知
+                addSystemMessage(`❌ 闪卡生成失败: ${data.error || '未知错误'}`, true);
+                
+                // 清除轮询定时器
+                if (window.flashCardCheckInterval) {
+                    clearInterval(window.flashCardCheckInterval);
+                    clearTimeout(window.flashCardCheckInterval);
+                    window.flashCardCheckInterval = null;
+                }
+            }
+        }
+
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        // 加载会话列表（从localStorage）
+        function loadSessions() {
+            try {
+                const savedSessions = localStorage.getItem(`bailian_sessions_${currentUserId}`);
+                if (savedSessions) {
+                    sessions = JSON.parse(savedSessions);
+                    // 按最后消息时间排序
+                    sessions.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+                } else {
+                    sessions = [];
+                }
+                renderSessionList(sessions);
+            } catch (error) {
+                console.error('加载会话列��失败:', error);
+                sessions = [];
+                renderSessionList([]);
+            }
+        }
+
+        // 保存会话列表到localStorage
+        function saveSessions() {
+            try {
+                localStorage.setItem(`bailian_sessions_${currentUserId}`, JSON.stringify(sessions));
+            } catch (error) {
+                console.error('保存会话列表失败:', error);
+            }
+        }
+
+        // 渲染会话列表
+        function renderSessionList(sessionList) {
+            const sessionListEl = document.getElementById('sessionList');
+            
+            if (sessionList.length === 0) {
+                sessionListEl.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">💭</div>
+                        <div class="empty-state-text">暂无会话<br>点击"新建会话"开始聊天</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            sessionListEl.innerHTML = sessionList.map(session => {
+                const isActive = session.chatId === currentChatId;
+                const time = formatTime(session.lastMessageTime);
+                return `
+                    <div class="session-item ${isActive ? 'active' : ''}" onclick="switchSession('${session.chatId}')">
+                        <div class="session-item-title">${escapeHtml(session.title)}</div>
+                        <div class="session-item-time">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 切换会话
+        async function switchSession(chatId) {
+            if (chatId === currentChatId) {
+                return;
+            }
+            
+            currentChatId = chatId;
+            const session = sessions.find(s => s.chatId === chatId);
+            document.getElementById('chatIdDisplay').textContent = session ? session.title : `会话: ${chatId.substring(0, 8)}...`;
+            
+            // 更新会话列表高亮
+            renderSessionList(sessions);
+            
+            // 清空聊天区域
+            const chatArea = document.getElementById('chatArea');
+            chatArea.innerHTML = '<div class="loading-more">加载历史消息中...</div>';
+            chatArea.classList.add('loading-history');
+            
+            // 加载历史消息
+            await loadHistoryMessages(chatId);
+            
+            chatArea.classList.remove('loading-history');
+            
+            // 启用输入框
+            document.getElementById('questionInput').disabled = false;
+            document.getElementById('sendBtn').disabled = false;
+            document.getElementById('questionInput').focus();
+        }
+
+        // 加载历史消息
+        async function loadHistoryMessages(chatId) {
+            try {
+                const response = await fetch(`${API_BASE}/chat/${chatId}/messages?userId=${currentUserId}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                
+                // 清空加载提示
+                const chatArea = document.getElementById('chatArea');
+                chatArea.innerHTML = '';
+                
+                if (result.code === 0 && result.data) {
+                    const messages = result.data;
+                    
+                    if (messages.length === 0) {
+                        addSystemMessage('这是一个新会话，开始聊天吧！');
+                        return;
+                    }
+                    
+                    // 渲染历史消息
+                    messages.forEach(msg => {
+                        if (msg.role === 'user') {
+                            addUserMessage(msg.content, msg.createTime);
+                        } else if (msg.role === 'assistant') {
+                            // 对历史消息内容也调用renderContent进行处理
+                            const processedContent = renderContent(msg.content);
+                            const msgDiv = addAssistantMessage(processedContent, msg.createTime);
+                            // 如果有内容，添加闪卡按钮（使用原始内容，不是渲染后的HTML）
+                            if (msg.content && msg.content.trim().length > 50) {
+                                addFlashCardButton(msgDiv, msg.content);
+                            }
+                        }
+                    });
+                    
+                    scrollToBottom();
+                } else {
+                    addSystemMessage(`加载历史消息失败: ${result.message || '未知错误'}`, true);
+                }
+            } catch (error) {
+                console.error('加载历史消息失败:', error);
+                const chatArea = document.getElementById('chatArea');
+                chatArea.innerHTML = '';
+                addSystemMessage(`加载历史消息失败: ${error.message}`, true);
+            }
+        }
+
+        // 创建新会话
+        async function createNewSession() {
+            try {
+                addSystemMessage('正在创建新会话...');
+                
+                const response = await fetch(`${API_BASE}/chat/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 0 && result.data.chatId) {
+                    currentChatId = result.data.chatId;
+                    document.getElementById('chatIdDisplay').textContent = `会话: ${currentChatId.substring(0, 8)}...`;
+                    
+                    // 清空聊天区域
+                    const chatArea = document.getElementById('chatArea');
+                    chatArea.innerHTML = '';
+                    
+                    // 添加到会话列表
+                    const newSession = {
+                        chatId: currentChatId,
+                        title: `新会话 ${new Date().toLocaleTimeString()}`,
+                        lastMessageTime: new Date().toISOString()
+                    };
+                    sessions.unshift(newSession);
+                    saveSessions();
+                    renderSessionList(sessions);
+                    
+                    // 启用输入框
+                    document.getElementById('questionInput').disabled = false;
+                    document.getElementById('sendBtn').disabled = false;
+                    document.getElementById('questionInput').focus();
+                    
+                    addSystemMessage('会话创建成功！开始聊天吧。');
+                } else {
+                    addSystemMessage(`创建会话失败: ${result.message}`, true);
+                }
+            } catch (error) {
+                console.error('创建会话失败:', error);
+                addSystemMessage(`创建会话失败: ${error.message}`, true);
+            }
+        }
+
+        // 发送消息
+        function sendMessage() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+
+            if (!question) {
+                return;
+            }
+
+            if (!currentChatId) {
+                addSystemMessage('请先创建会话', true);
+                return;
+            }
+
+            if (isStreaming) {
+                addSystemMessage('请等待当前消息完成', true);
+                return;
+            }
+
+            // 显示用户消息
+            addUserMessage(question);
+            input.value = '';
+            input.disabled = true;
+            document.getElementById('sendBtn').disabled = true;
+            isStreaming = true;
+
+            sendMessageFlux(question);
+        }
+
+        // Flux模式发送消息
+        async function sendMessageFlux(question) {
+            try {
+                const messageDiv = addAssistantMessage('');
+                const contentDiv = messageDiv.querySelector('.message-content');
+                let fullContent = ''; // 用于渲染的累积内容
+                let rawContentForSave = ''; // 用于保存的完整原始内容（包含所有数据块）
+
+                const response = await fetch(`${API_BASE}/chat/stream/flux`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    },
+                    body: JSON.stringify({
+                        chat_id: currentChatId,
+                        question: question,
+                        stream: true,
+                        userId: parseInt(currentUserId)
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let isDone = false;
+                let isFirstData = true; // 新增标志，用于跳过第一个 data 事件
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        isDone = true;
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // 保留最后一个不完整的行
+
+                    for (const line of lines) {
+                        if (line.startsWith('event:')) {
+                            continue;
+                        }
+
+                        if (line.startsWith('data:')) {
+                            const data = line.substring(5).trim();
+                            
+                            if (data === '[DONE]') {
+                                isDone = true;
+                                continue;
+                            }
+
+                            // 如果是第一个 data 事件且 fullContent 为空，则跳过此次处理
+                            if (isFirstData) {
+                                isFirstData = false; // 标记第一个 data 已处理
+                                continue;
+                            }
+                            isFirstData = false; // 确保后续数据不再视为第一个
+
+                            const decoded = data.replace(/&#32;/g, ' ').replace(/&#92n/g, '\n');
+                            console.log("原始 data:", data); // 添加日志
+                            console.log("解码后的 decoded:", decoded); // 添加日志
+                            
+                            // 所有内容都累积到 rawContentForSave（用于持久化）
+                            rawContentForSave += decoded;
+                            
+                            // 后端在流式结束前，通常会再发送一个完整的
+                            // "<think>...思考...</think> + 最终回答" 的大块内容，
+                            // 这对应倒数第三个 data。为避免在前端重复渲染整段回答，
+                            // 这里对这种完整 <think> 块做过滤：只用前面的真正流式 token。
+                            if (decoded && decoded.includes('<think>') && decoded.includes('</think>')) {
+                                // 跳过这个聚合块的渲染，但已累积到 rawContentForSave
+                                continue;
+                            }
+
+                            // 空行（如倒数第二个 data: "\n"）在 trim 后会变成空字符串，这里也不渲染
+                            // if (!decoded || decoded.trim() === '') {
+                            //     continue;
+                            // }
+
+                            fullContent += decoded;
+                            console.log("传递给 renderContent 的完整内容 (fullContent):", fullContent); // 添加日志
+                            contentDiv.innerHTML = renderContent(fullContent);
+                            scrollToBottom();
+                        }
+                    }
+                }
+
+                if (!contentDiv.textContent.trim() && !contentDiv.innerHTML.trim()) {
+                    contentDiv.textContent = '(无响应)';
+                }
+
+                if (isDone && fullContent.trim()) {
+                    addFlashCardButton(messageDiv, fullContent);
+                    
+                    // 流式结束后，调用后端接口保存完整的原始内容
+                    if (rawContentForSave.trim()) {
+                        await saveFinalMessage(fullContent);
+                    }
+                }
+
+                // 更新会话列表中的最后消息时间
+                const session = sessions.find(s => s.chatId === currentChatId);
+                if (session) {
+                    session.lastMessageTime = new Date().toISOString();
+                    session.title = question.substring(0, 20) + (question.length > 20 ? '...' : '');
+                    // 重新排序
+                    sessions.sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
+                    saveSessions();
+                    renderSessionList(sessions);
+                }
+
+            } catch (error) {
+                console.error('Flux 发送消息失败:', error);
+                addSystemMessage(`Flux 发送消息失败: ${error.message}`, true);
+            } finally {
+                isStreaming = false;
+                document.getElementById('questionInput').disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                document.getElementById('questionInput').focus();
+            }
+        }
+
+        // 保存最终消息到后端
+        async function saveFinalMessage(finalContent) {
+            try {
+                const response = await fetch(`${API_BASE}/chat/save-final-message`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        chatId: currentChatId,
+                        userId: parseInt(currentUserId),
+                        finalContent: finalContent
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 0) {
+                    console.log('最终消息保存成功');
+                } else {
+                    console.error('保存最终消息失败:', result.message);
+                    // 不显示错误提示，避免影响用户体验
+                }
+            } catch (error) {
+                console.error('保存最终消息异常:', error);
+                // 不显示错误提示，避免影响用户体验
+            }
+        }
+
+        function addUserMessage(text, time) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            const timeStr = time ? formatTime(time) : formatTime(new Date().toISOString());
+            messageDiv.innerHTML = `
+                <div>
+                    <div class="message-content">${escapeHtml(text)}</div>
+                    <div class="message-time">${timeStr}</div>
+                </div>
+            `;
+            chatArea.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addAssistantMessage(text, time) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message assistant';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            // 直接使用传入的内容 (假定调用方已处理好 HTML)
+            contentDiv.innerHTML = text;
+
+            const timeStr = time ? formatTime(time) : formatTime(new Date().toISOString());
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = timeStr;
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            chatArea.appendChild(messageDiv);
+            scrollToBottom();
+            return messageDiv;
+        }
+
+        function addFlashCardButton(messageDiv, fullContent) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            if (!contentDiv || contentDiv.querySelector('.flash-card-btn')) {
+                return;
+            }
+            
+            const flashCardBtn = document.createElement('button');
+            flashCardBtn.className = 'flash-card-btn';
+            flashCardBtn.textContent = '是否形成记忆闪卡？';
+            flashCardBtn.onclick = function(event) {
+                generateFlashCard(fullContent, this);
+            };
+            contentDiv.appendChild(flashCardBtn);
+            scrollToBottom();
+        }
+
+        function addSystemMessage(text, isError = false) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            if (isError) {
+                contentDiv.classList.add('error');
+            }
+            contentDiv.textContent = text;
+            messageDiv.appendChild(contentDiv);
+            chatArea.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const chatArea = document.getElementById('chatArea');
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(timeStr) {
+            if (!timeStr) return '';
+            const date = new Date(timeStr);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) { // 1分钟内
+                return '刚刚';
+            } else if (diff < 3600000) { // 1小时内
+                return `${Math.floor(diff / 60000)}分钟前`;
+            } else if (diff < 86400000) { // 24小时内
+                return `${Math.floor(diff / 3600000)}小时前`;
+            } else if (diff < 604800000) { // 7天内
+                return `${Math.floor(diff / 86400000)}天前`;
+            } else {
+                return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('open');
+        }
+
+        function openFlashCardPage() {
+            window.open('/api/flash-card.html', '_blank');
+        }
+
+        // ------------------- 语音录制 + 后端转写 -------------------
+
+        async function toggleRecording() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        async function startRecording() {
+            const recordBtn = document.getElementById('recordBtn');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data && event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    await sendAudioToAsr(audioBlob);
+
+                    isRecording = false;
+                    recordBtn.textContent = '🎤 语音';
+                    recordBtn.classList.remove('recording');
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recordBtn.textContent = '■ 停止';
+                recordBtn.classList.add('recording');
+                addSystemMessage('开始录音，请开始说话...');
+            } catch (error) {
+                console.error('无法启动录音:', error);
+                addSystemMessage('无法启动录音，请检查麦克风权限。', true);
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                addSystemMessage('录音结束，正在识别中...');
+            }
+        }
+
+        async function sendAudioToAsr(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'recording.webm');
+
+                const response = await fetch(`${ASR_API_BASE}/transcribe`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.code !== 0) {
+                    addSystemMessage(`ASR 调用失败: ${result.message || '未知错误'}`, true);
+                    return;
+                }
+
+                const data = result.data || {};
+                if (data.error) {
+                    addSystemMessage(`语音识别失败: ${data.error}`, true);
+                    return;
+                }
+
+                const text = data.text || '';
+                if (!text) {
+                    addSystemMessage('未识别到有效文本，请再试一次。', true);
+                    return;
+                }
+
+                const input = document.getElementById('questionInput');
+                input.value = text;
+                input.disabled = false;
+                document.getElementById('sendBtn').disabled = false;
+                input.focus();
+
+                addSystemMessage('语音识别完成，已填入输入框。');
+            } catch (error) {
+                console.error('ASR 请求失败:', error);
+                addSystemMessage(`ASR 请求失败: ${error.message}`, true);
+            }
+        }
+
+        // 闪卡功能
+        async function generateFlashCard(originalContent, btn) {
+            if (btn && btn.disabled) return;
+            
+            // 重置生成状态标记
+            window.flashCardGenerated = false;
+            
+            try {
+                if (btn) {
+                    btn.disabled = true;
+                    btn.textContent = '生成中...';
+                }
+                addSystemMessage('正在生成记忆闪卡，请稍候...');
+                
+                const response = await fetch(`${FLASH_CARD_API_BASE}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        originalContent: originalContent
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.code === 0) {
+                    addSystemMessage('闪卡生成中，完成后会通过通知告知您。您可以点击"查看闪卡"按钮查看所有闪卡。');
+                    // 如果WebSocket未连接，使用轮询方式检查
+                    if (!isWebSocketConnected()) {
+                        console.log('WebSocket未连接，使用轮询方式检查闪卡状态');
+                        checkFlashCardProgress(result.data); // 传递String类型的flashCardId
+                    } else {
+                        console.log('WebSocket已连接，等待实时通知');
+                        // 即使WebSocket连接，也启动一个备用轮询（防止WebSocket消息丢失）
+                        window.flashCardCheckInterval = setTimeout(() => {
+                            if (!window.flashCardGenerated) {
+                                checkFlashCardProgress(result.data);    // 传递String类型的flashCardId
+                            }
+                        }, 10000); // 10秒后如果还没收到通知，开始轮询
+                    }
+                } else {
+                    addSystemMessage(`生成闪卡失败: ${result.message}`, true);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = '是否形成记忆闪卡？';
+                    }
+                }
+            } catch (error) {
+                console.error('生成闪卡失败:', error);
+                addSystemMessage(`生成闪卡失败: ${error.message}`, true);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = '是否形成记忆闪卡？';
+                }
+            }
+        }
+
+        async function checkFlashCardProgress(flashCardId) {
+            // 如果已经收到通知，不再轮询
+            if (window.flashCardGenerated) {
+                return;
+            }
+            
+            let attempts = 0;
+            const maxAttempts = 120; // 增加到120次，每次2秒，总共4分钟，适应更长的AI生成时间
+            
+            const checkInterval = setInterval(async () => {
+                // 如果已经收到通知，停止轮询
+                if (window.flashCardGenerated) {
+                    clearInterval(checkInterval);
+                    return;
+                }
+                
+                attempts++;
+                
+                try {
+                    const progressResponse = await fetch(`${FLASH_CARD_API_BASE}/progress?flashCardId=${flashCardId}`, {
+                        method: 'GET',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include'
+                    });
+                    
+                    const progressResult = await progressResponse.json();
+                    
+                    if (progressResult.code === 0 && progressResult.data) {
+                        const progressData = progressResult.data;
+                        
+                        if (progressData.status === 'COMPLETED') {
+                            window.flashCardGenerated = true;
+                            clearInterval(checkInterval);
+                            addSystemMessage(`✅ 闪卡生成完成！闪卡ID: ${flashCardId}。您可以点击"确认保存"按钮。`);
+                            addConfirmFlashCardButton(flashCardId);
+                            if ('Notification' in window && Notification.permission === 'granted') {
+                                new Notification('闪卡生成完成', {
+                                    body: `闪卡已生成完成，点击确认保存`, // 这里应该显示闪卡标题，但目前无法获取
+                                    icon: '/favicon.ico'
+                                });
+                            }
+                            return;
+                        } else if (progressData.status === 'FAILED') {
+                            window.flashCardGenerated = true;
+                            clearInterval(checkInterval);
+                            addSystemMessage(`❌ 闪卡生成失败: ${progressData.message || '未知错误'}。`, true);
+                            return;
+                        } else {
+                            // 正在生成中，更新进度信息
+                            const progressMessage = `闪卡生成中... 状态: ${progressData.status || '未知'}, 进度: ${progressData.progress || 0}%`;
+                            // 可以在这里更新一个专门的进度显示区域，或者仅在控制台打印
+                            console.log(progressMessage);
+                        }
+                    } else if (progressResult.code === 10000 && progressResult.message === '指定闪卡ID的进度不存在或已过期') {
+                        // 进度信息已过期或不存在，可能是用户已经确认或删除了
+                        window.flashCardGenerated = true;
+                        clearInterval(checkInterval);
+                        addSystemMessage('闪卡进度信息已过期或不存在。');
+                    } else {
+                        console.error('获取闪卡进度失败:', progressResult.message);
+                    }
+                } catch (error) {
+                    console.error('检查闪卡进度失败:', error);
+                }
+                
+                if (attempts >= maxAttempts) {
+                    clearInterval(checkInterval);
+                    addSystemMessage('闪卡生成超时，请检查闪卡列表或重试。', true);
+                }
+            }, 2000); // 改为每2秒检查一次，减少服务器压力
+            
+            window.flashCardCheckInterval = checkInterval;
+        }
+
+        function addConfirmFlashCardButton(flashCardId) {
+            const chatArea = document.getElementById('chatArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = `
+                <p>闪卡已生成成功，是否要保存到终库？</p>
+                <button class="flash-card-btn" onclick="confirmSaveFlashCard('${flashCardId}', this)">确认保存</button>
+            `;
+            messageDiv.appendChild(contentDiv);
+            chatArea.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        async function confirmSaveFlashCard(flashCardId, btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const response = await fetch(`${FLASH_CARD_API_BASE}/confirm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ id: flashCardId })
+                });
+
+                const result = await response.json();
+
+                if (result.code === 0) {
+                    addSystemMessage('✅ 闪卡已成功保存到终库！', false);
+                    if (btn) btn.remove(); // 移除按钮
+                } else {
+                    addSystemMessage(`保存闪卡失败: ${result.message}`, true);
+                    if (btn) btn.disabled = false;
+                }
+            } catch (error) {
+                console.error('保存闪卡失败:', error);
+                addSystemMessage(`保存闪卡失败: ${error.message}`, true);
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        window.addEventListener('beforeunload', function() {
+            if (ws && ws.connected) {
+                ws.disconnect();
+            }
+        });
+    </script>
+</body>
+</html>

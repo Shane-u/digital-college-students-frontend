@@ -27,8 +27,6 @@
 
           <div class="markdown-content" v-html="renderMarkdown(msg.content || (msg.isStreaming && !msg.workflow ? '...' : ''))"></div>
 
-          <component v-if="msg.role === 'model' && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" />
-
           <div v-if="msg.role === 'model' && msg.references && msg.references.length > 0" class="references">
             <div class="references-header">
               <LinkIcon />
@@ -47,6 +45,8 @@
               </a>
             </div>
           </div>
+
+          <component v-if="msg.role === 'model' && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" />
 
           <span v-if="msg.isStreaming && !msg.content && !msg.workflow && !msg.thought" class="streaming-indicator">
             Generating...
@@ -82,9 +82,18 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
-import { marked } from 'marked'
+import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import MarkdownIt from 'markdown-it'
 import { h } from 'vue'
+import DOMPurify from 'dompurify'
+
+
+const md = new MarkdownIt({
+  html: true, // 允许输出 HTML 标签
+  linkify: true, // 自动将像 URL 的文本转换为链接
+  typographer: true, // 启用一些排版替换，如 "foo" -> “foo”
+  breaks: true // 将 \n 转换为 <br>
+})
 import WorkflowSteps from './WorkflowSteps.vue'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
@@ -182,7 +191,7 @@ const ThinkingBlock = {
           h('span', '思考过程'),
           h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon, { size: 14 })
         ]),
-        isExpanded.value && h('div', { class: 'thinking-content' }, cleanedContent)
+        isExpanded.value && h('div', { class: 'thinking-content', innerHTML: renderMarkdown(cleanedContent) })
       ])
     }
   }
@@ -208,6 +217,15 @@ const FileTextIcon = (props = {}) => h('svg', { width: props.size || 14, height:
   h('polyline', { points: '10 9 9 9 8 9' })
 ])
 
+const BookOpenTextIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('path', { d: 'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z' }),
+  h('path', { d: 'M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z' }),
+  h('path', { d: 'M10 12H8' }),
+  h('path', { d: 'M16 12h2' }),
+  h('path', { d: 'M16 18h2' }),
+  h('path', { d: 'M10 18H8' })
+])
+
 const KnowledgeSource = {
   props: {
     paragraphs: {
@@ -216,47 +234,79 @@ const KnowledgeSource = {
     }
   },
   setup(props) {
-    const isExpanded = ref(false)
     return () => {
-      if (!props.paragraphs || props.paragraphs.length === 0) return null
+      // console.log('[KnowledgeSource] 接收到的paragraphs:', props.paragraphs)
+      if (!props.paragraphs || props.paragraphs.length === 0) {
+        // console.log('[KnowledgeSource] paragraphs为空，不渲染')
+        return null
+      }
+      // console.log('[KnowledgeSource] 准备渲染', props.paragraphs.length, '个知识来源')
       
-      return h('div', { class: 'knowledge-source' }, [
-        h('button', {
-          onClick: () => isExpanded.value = !isExpanded.value,
-          class: 'knowledge-source-header'
-        }, [
-          h('div', { class: 'knowledge-source-title' }, [
-            h(LinkIcon),
-            h('span', `知识来源 · ${props.paragraphs.length}`)
-          ]),
-          h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon, { class: 'knowledge-source-chevron' })
+      // 获取文档名称（从第一个段落或所有段落中提取）
+      const getDocumentName = () => {
+        if (props.paragraphs.length > 0) {
+          return props.paragraphs[0].document_name || '知识来源'
+        }
+        return '知识来源'
+      }
+      
+      return h('div', { class: 'knowledge-sources-container' }, [
+        h('div', { class: 'knowledge-sources-header' }, [
+          h(FileTextIcon, { size: 20 }),
+          h('span', { class: 'knowledge-sources-title' }, '知识来源')
         ]),
-        isExpanded.value && h('div', { class: 'knowledge-source-content' }, 
-          props.paragraphs.map((p, idx) => 
-            h('div', { key: idx, class: 'knowledge-paragraph' }, [
-              h('div', { class: 'knowledge-paragraph-badge' }, `TOP ${idx + 1}`),
-              h('div', { class: 'knowledge-paragraph-header' }, [
-                h('div', { class: 'knowledge-paragraph-title-wrapper' }, [
-                  h('span', { class: 'knowledge-paragraph-label' }, '召回标题:'),
-                  h('span', { class: 'knowledge-paragraph-title' }, p.problem_title || p.document_name)
-                ]),
-                h('div', { class: 'knowledge-paragraph-rating' }, [
-                  ...Array(4).fill(0).map(() => h(StarIcon, { size: 14, fill: '#fbc02d' })),
-                  h(StarIcon, { size: 14, fill: '#fbc02d', class: 'star-empty' }),
-                  h('span', { class: 'knowledge-paragraph-similarity' }, (p.similarity || 0).toFixed(3))
+        ...props.paragraphs.map((p, idx) => {
+          const similarity = p.similarity || p.score || 0
+          const documentName = p.document_name || p.documentName || '未知文档'
+          const title = p.problem_title || p.problemTitle || p.title || ''
+          const content = p.content || p.text || ''
+          const link = p.url || p.link || p.source_url || p.sourceUrl || ''
+          const datasetName = p.dataset_name || p.datasetName || ''
+          
+          return h('details', { 
+            key: p.id || idx,
+            class: 'knowledge-source-detail',
+            open: idx === 0 // 默认展开第一个
+          }, [
+            h('summary', { class: 'knowledge-source-summary' }, [
+              h(BookOpenTextIcon),
+              h('span', { class: 'knowledge-source-summary-text' }, 
+                documentName || `知识来源 ${idx + 1}`
+              )
+            ]),
+            h('div', { class: 'knowledge-source-detail-content' }, [
+              // 排序和得分
+              h('div', { class: 'knowledge-source-meta' }, [
+                h('span', { class: 'knowledge-source-rank' }, `排序: ${idx + 1}`),
+                similarity > 0 && h('span', { class: 'knowledge-source-score' }, `得分: ${typeof similarity === 'number' ? similarity.toFixed(3) : similarity}`)
+              ]),
+              // 标题
+              title && title !== documentName && h('div', { class: 'knowledge-source-item-title' }, title),
+              // 内容
+              content && h('div', { 
+                class: 'knowledge-source-item-content',
+                innerHTML: renderMarkdown(content)
+              }),
+              // 链接
+              link && h('div', { class: 'knowledge-source-item-link' }, [
+                h('a', {
+                  href: link,
+                  target: '_blank',
+                  rel: 'noopener noreferrer',
+                  class: 'knowledge-source-link'
+                }, [
+                  h(LinkIcon, { size: 14 }),
+                  h('span', '查看原文')
                 ])
               ]),
-              h('div', { class: 'knowledge-paragraph-text', innerHTML: renderMarkdown(p.content) }),
-              h('div', { class: 'knowledge-paragraph-footer' }, [
-                h('div', { class: 'knowledge-paragraph-doc' }, [
-                  h(FileTextIcon, { size: 14 }),
-                  h('span', { class: 'knowledge-paragraph-doc-name' }, p.document_name)
-                ]),
-                h('span', { class: 'knowledge-paragraph-dataset' }, p.dataset_name)
+              // 数据集名称
+              datasetName && h('div', { class: 'knowledge-source-dataset' }, [
+                h('span', { class: 'knowledge-source-dataset-label' }, '数据集:'),
+                h('span', { class: 'knowledge-source-dataset-name' }, datasetName)
               ])
             ])
-          )
-        )
+          ])
+        })
       ])
     }
   }
@@ -280,12 +330,42 @@ const KnowledgeSourceComponent = KnowledgeSource
 
 const renderMarkdown = (text) => {
   if (!text) return ''
+
   try {
-    // 移除 <details> 标签及其内容（通常用于调试信息）
     const cleanedText = text.replace(/<details>[\s\S]*?<\/details>/gi, '')
-    // IMPORTANT: marked 输出为 HTML，必须消毒后再 v-html
-    return sanitizeHtml(marked.parse(cleanedText))
+
+    let finalHtml = ''
+    let textToProcess = cleanedText
+
+    const codeBlockMarker = '```'
+    const codeBlockCount = (textToProcess.match(/```/g) || []).length
+
+    if (codeBlockCount % 2 !== 0) {
+      // 存在未闭合的代码块
+      const lastOpeningCodeBlockIndex = textToProcess.lastIndexOf(codeBlockMarker)
+      if (lastOpeningCodeBlockIndex !== -1) {
+        // 渲染最后一个未闭合代码块之前的部分
+        const textBeforeCodeBlock = textToProcess.substring(0, lastOpeningCodeBlockIndex)
+        // 未闭合的代码块部分
+        const codeBlockFragment = textToProcess.substring(lastOpeningCodeBlockIndex)
+
+        finalHtml += md.render(textBeforeCodeBlock)
+        // 将未闭合的代码块作为纯文本预格式化显示
+        finalHtml += `<pre class="streaming-code-fragment">${codeBlockFragment}</pre>`
+      } else {
+        // 理论上不应该出现，但作为兜底，如果找不到` ``` `就直接渲染
+        finalHtml += md.render(textToProcess)
+      }
+    } else {
+      // 代码块是闭合的，或者没有代码块，直接渲染所有内容
+      finalHtml += md.render(textToProcess)
+    }
+
+    // Ensure DOMPurify is still used for the final output.
+    return DOMPurify.sanitize(finalHtml)
+
   } catch (e) {
+    console.error('[renderMarkdown] Markdown rendering error:', e)
     // 兜底：作为纯文本显示（转义）
     const div = document.createElement('div')
     div.textContent = text
@@ -380,13 +460,39 @@ const generateFlashCard = async (content) => {
   }
 }
 
+const isUserScrolling = ref(false)
+
+const handleScroll = () => {
+  const el = endRef.value?.parentElement
+  if (el) {
+    // 如果滚动条不在底部20px范围内，则认为用户正在滚动
+    isUserScrolling.value = el.scrollHeight - el.scrollTop > el.clientHeight + 20
+  }
+}
+
+// 监听消息变化时自动滚动，但要考虑用户是否在手动滚动
 watch(() => props.messages, () => {
   nextTick(() => {
-    if (endRef.value) {
+    if (endRef.value && !isUserScrolling.value) {
       endRef.value.scrollIntoView({ behavior: 'smooth' })
     }
   })
 }, { deep: true })
+
+// 挂载时监听滚动事件，卸载时移除
+onMounted(() => {
+  const el = endRef.value?.parentElement
+  if (el) {
+    el.addEventListener('scroll', handleScroll)
+  }
+})
+
+onUnmounted(() => {
+  const el = endRef.value?.parentElement
+  if (el) {
+    el.removeEventListener('scroll', handleScroll)
+  }
+})
 </script>
 
 <style scoped>
@@ -566,184 +672,180 @@ button.thinking-toggle > * {
   border-bottom: 1px solid #dbeafe;
 }
 
-.knowledge-source {
+/* 知识来源容器 */
+.knowledge-sources-container {
   width: 100%;
-  margin-top: 16px;
-  background: #f8f9fc;
-  border: 1px solid #eef2f8;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed #cccccc;
 }
 
-.knowledge-source-header {
-  width: 100%;
+.knowledge-sources-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 16px;
+}
+
+.knowledge-sources-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+/* 知识来源详情项 */
+.knowledge-source-detail {
+  margin-bottom: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.knowledge-source-summary {
   padding: 12px 16px;
-  background: transparent;
-  border: none;
+  font-weight: 600;
   cursor: pointer;
+  color: #667eea;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  user-select: none;
   transition: background-color 0.2s;
 }
 
-.knowledge-source-header:hover {
-  background: #f1f4f9;
+.knowledge-source-summary::-webkit-details-marker {
+  display: none;
 }
 
-.knowledge-source-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #1a73e8;
-  font-size: 13px;
-  font-weight: 500;
+.knowledge-source-summary:hover {
+  background: #f5f7fa;
 }
 
-.knowledge-source-chevron {
-  color: #444746;
+.knowledge-source-detail[open] .knowledge-source-summary {
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.knowledge-source-content {
-  padding: 0 16px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.knowledge-source-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.knowledge-source-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.knowledge-source-content::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-}
-
-.knowledge-source-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.knowledge-paragraph {
-  background: white;
-  border: 1px solid #eef2f8;
-  border-radius: 8px;
-  padding: 16px;
-  position: relative;
-}
-
-.knowledge-paragraph-badge {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background: #1a73e8;
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 0 0 8px 0;
-}
-
-.knowledge-paragraph-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  margin-top: 16px;
-}
-
-.knowledge-paragraph-title-wrapper {
+.knowledge-source-summary-text {
   flex: 1;
+}
+
+.knowledge-source-detail-content {
+  padding: 12px 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #fcfcfc;
+}
+
+.knowledge-source-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.knowledge-paragraph-label {
-  color: #fb8c00;
-  font-weight: 700;
-}
-
-.knowledge-paragraph-title {
-  color: #444746;
-  font-weight: 500;
-}
-
-.knowledge-paragraph-rating {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  color: #fbc02d;
-}
-
-.star-empty {
-  opacity: 0.2;
-}
-
-.knowledge-paragraph-similarity {
-  margin-left: 8px;
+  gap: 16px;
+  margin-bottom: 12px;
   font-size: 12px;
-  color: #444746;
+  color: #666;
+}
+
+.knowledge-source-rank {
   font-weight: 500;
 }
 
-.knowledge-paragraph-text {
-  background: #f0f7ff;
+.knowledge-source-score {
+  font-weight: 500;
+  color: #667eea;
+}
+
+.knowledge-source-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.knowledge-source-item-content {
+  background: #f8f9fa;
   padding: 12px;
   border-radius: 6px;
   margin-bottom: 12px;
-  font-family: monospace;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.6;
   color: #2c3e50;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.knowledge-source-item-content :deep(p) {
+  margin: 0 0 8px 0;
+}
+
+.knowledge-source-item-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.knowledge-source-item-content :deep(code) {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.knowledge-source-item-content :deep(pre) {
+  background: #282c34;
+  color: #abb2bf;
+  padding: 12px;
+  border-radius: 6px;
   overflow-x: auto;
+  margin: 8px 0;
 }
 
-.knowledge-paragraph-text :deep(p) {
-  margin: 0;
-}
-
-.knowledge-paragraph-text :deep(code) {
+.knowledge-source-item-content :deep(pre code) {
   background: transparent;
   padding: 0;
+  color: inherit;
 }
 
-.knowledge-paragraph-footer {
-  display: flex;
+.knowledge-source-item-link {
+  margin-bottom: 8px;
+}
+
+.knowledge-source-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #5e5e5e;
-  border-top: 1px solid #f3f4f6;
-  padding-top: 8px;
-}
-
-.knowledge-paragraph-doc {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.knowledge-paragraph-doc-name {
-  color: #1a73e8;
-  cursor: pointer;
+  gap: 6px;
+  color: #667eea;
   text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color 0.2s;
 }
 
-.knowledge-paragraph-doc-name:hover {
+.knowledge-source-link:hover {
+  color: #5568d3;
   text-decoration: underline;
 }
 
-.knowledge-paragraph-dataset {
-  color: #5e5e5e;
+.knowledge-source-dataset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #666;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.knowledge-source-dataset-label {
+  font-weight: 500;
+  color: #888;
+}
+
+.knowledge-source-dataset-name {
+  color: #667eea;
 }
 
 .markdown-content {
@@ -924,5 +1026,17 @@ button.thinking-toggle > * {
     transform: translateX(100%);
     opacity: 0;
   }
+}
+.streaming-code-fragment {
+  background-color: #f0f4f9;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  color: #5e5e5e;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  opacity: 0.8;
 }
 </style>
