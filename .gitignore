@@ -21,9 +21,9 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
-src/assets/competition/com1.jpg
-src/assets/competition/com2.jpg
-src/assets/competition/com3.jpg
+# src/assets/competition/com1.jpg
+# src/assets/competition/com2.jpg
+# src/assets/competition/com3.jpg
 
 
 
