@@ -122,8 +122,7 @@
 
     <div class="sidebar-footer">
       <div :class="['sidebar-footer-item', { 'sidebar-footer-item-closed': !isOpen }]">
-        <SettingsIcon />
-        <span v-if="isOpen">Settings & help</span>
+        <span v-if="isOpen" class="sidebar-copyright">Copyright 2025 CDUT All Rights Reserved.</span>
       </div>
     </div>
   </div>
@@ -633,6 +632,13 @@ onUnmounted(() => {
 
 .sidebar-footer-item:hover {
   background: #e1e5ea;
+}
+
+.sidebar-copyright {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.4;
+  cursor: default;
 }
 
 /* 自定义滚动条 */

@@ -20,7 +20,7 @@
 
           <div v-if="msg.role === 'model' && msg.thought && msg.content" class="thinking-divider"></div>
 
-          <div v-if="msg.role === 'model' && msg.knowledgeBase" class="knowledge-base">
+          <div v-if="msg.role === 'model' && !msg.isStreaming && msg.knowledgeBase" class="knowledge-base">
             <BookOpenIcon />
             <span>已检索知识库: {{ msg.knowledgeBase }}</span>
           </div>
@@ -49,7 +49,7 @@
             </div>
           </div>
 
-          <component v-if="msg.role === 'model' && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" />
+          <component v-if="msg.role === 'model' && !msg.isStreaming && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" @open-modal="openKnowledgeModal(msg)" />
 
           <span v-if="msg.isStreaming && !msg.content && !msg.workflow && !msg.thought" class="streaming-indicator">
             Generating...
@@ -81,6 +81,43 @@
       </div>
     </div>
     <div ref="endRef"></div>
+
+    <!-- 知识库引用弹窗：图二内容 + 图三样式 -->
+    <Teleport to="body">
+      <div v-if="showKnowledgeModal" class="knowledge-modal-mask" @click.self="closeKnowledgeModal">
+        <div class="knowledge-modal" :class="{ 'has-multiple-refs': modalParagraphs.length > 1 }">
+          <div class="knowledge-modal-header">
+            <span class="knowledge-modal-title">知识库引用</span>
+            <button type="button" class="knowledge-modal-close" aria-label="关闭" @click="closeKnowledgeModal">×</button>
+          </div>
+          <div class="knowledge-modal-body">
+            <div class="knowledge-modal-section">
+              <div class="knowledge-modal-label">用户问题</div>
+              <div class="knowledge-modal-question">{{ modalUserQuestion }}</div>
+            </div>
+            <div class="knowledge-modal-section">
+              <div class="knowledge-modal-label">引用</div>
+              <div v-for="(p, idx) in modalParagraphs" :key="p.id || idx" class="knowledge-modal-card">
+                <div class="knowledge-modal-card-top">
+                  <span class="knowledge-modal-top-tag">TOP{{ idx + 1 }}</span>
+                  <span class="knowledge-modal-recall">召回标题: 分段{{ p.segment_id ?? idx + 1 }}</span>
+                  <span class="knowledge-modal-stars">{{ scoreToStars(p.similarity ?? p.score ?? 0) }}</span>
+                  <span class="knowledge-modal-score">{{ typeof (p.similarity ?? p.score) === 'number' ? (p.similarity ?? p.score).toFixed(3) : (p.similarity ?? p.score ?? '') }}</span>
+                </div>
+                <div class="knowledge-modal-card-content" v-html="renderMarkdown(p.content || p.text || '')"></div>
+                <div class="knowledge-modal-card-footer">
+                  <a :href="getDocHref(p)" target="_blank" rel="noopener noreferrer" class="knowledge-modal-doc-link">
+                    <span class="knowledge-modal-doc-icon">📄</span>
+                    {{ p.document_name || p.documentName || '文档' }}
+                  </a>
+                  <span v-if="p.dataset_name || p.datasetName" class="knowledge-modal-platform">{{ p.dataset_name || p.datasetName }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -143,10 +180,9 @@ const CopyIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', f
   h('path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' })
 ])
 
-const FlashCardIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
-  h('rect', { x: 2, y: 3, width: 20, height: 14, rx: 2, ry: 2 }),
-  h('line', { x1: 8, y1: 21, x2: 16, y2: 21 }),
-  h('line', { x1: 12, y1: 17, x2: 12, y2: 21 })
+const FLASHCARD_SVG_PATH = 'M688 925.504l-8.928-2.272a61.472 61.472 0 0 1-8.8-3.2 6.944 6.944 0 0 0-1.248-0.352 25.312 25.312 0 0 1-6.176-1.984c-3.424-1.664-6.4-1.696-10.048-3.2a25.6 25.6 0 0 0-6.4-1.984c-3.2-0.608-6.016-2.816-9.248-3.2a17.728 17.728 0 0 1-5.184-1.728 25.6 25.6 0 0 0-6.4-1.984c-3.2-0.576-6.016-2.72-9.184-3.2-3.904-0.576-7.392-2.944-11.68-3.808a27.456 27.456 0 0 1-6.208-2.304 4.704 4.704 0 0 0-0.96-0.352l-3.712-0.896q-8.672-2.624-55.936-18.56c-4.032-1.376-7.808-1.856-12.064-3.2q-26.624-9.28-53.024-17.888-3.424-1.12-5.536-1.568c-3.968-0.896-6.784-2.88-10.432-3.456s-7.104-3.2-11.2-3.808c-3.2-0.576-5.856-2.56-9.248-3.2s-6.912-2.88-10.752-3.584a17.888 17.888 0 0 1-4.896-1.568c-3.616-1.792-7.232-1.856-11.04-3.808a18.816 18.816 0 0 0-4.736-1.504 29.6 29.6 0 0 1-6.976-2.464 8.096 8.096 0 0 0-2.112-0.704c-4.384-0.832-7.712-2.784-11.648-3.744s-6.784-2.72-10.88-3.52a25.6 25.6 0 0 1-6.144-2.304 8.672 8.672 0 0 0-1.728-0.608c-7.488-1.728-16-4.896-23.328-7.328q-18.144-5.952-25.6-8.512a85.504 85.504 0 0 1-9.6-3.2 9.312 9.312 0 0 0-1.696-0.64 52.928 52.928 0 0 1-9.824-3.456 19.2 19.2 0 0 0-5.76-1.76 19.872 19.872 0 0 1-8.992-4.544 53.44 53.44 0 0 0-2.24-2.048 9.824 9.824 0 0 0-1.696-1.024l-4.832-2.368-0.288-0.192q-7.2-6.848-14.976-15.104a13.696 13.696 0 0 1-2.56-4 0.672 0.672 0 0 1 0-0.64 0.64 0.64 0 0 1 0.544-0.288h355.392a73.408 73.408 0 0 0 12.32-0.864 157.216 157.216 0 0 0 23.36-5.056q6.4-2.144 7.36-2.336a27.008 27.008 0 0 0 7.264-2.464q3.648-1.856 11.616-5.088a174.592 174.592 0 0 0 18.912-10.4c3.712-2.08 8.448-6.656 12.8-9.6a44.8 44.8 0 0 0 5.12-3.84 125.024 125.024 0 0 0 22.816-25.344 17.088 17.088 0 0 1 1.792-2.464 25.376 25.376 0 0 0 5.088-7.008 22.048 22.048 0 0 1 4.096-6.08 1.824 1.824 0 0 0 0.32-0.448l9.6-18.88a5.312 5.312 0 0 0 0.48-1.472l0.512-2.944a8 8 0 0 1 0.576-1.888 86.976 86.976 0 0 0 5.344-15.008q2.016-9.152 3.008-14.56a136 136 0 0 0 1.952-23.68v-270.016a8.352 8.352 0 0 1 1.312-4.704 0.896 0.896 0 0 1 0.576-0.384 0.896 0.896 0 0 1 0.672 0.16 18.592 18.592 0 0 0 7.296 3.488q3.552 0.8 6.08 1.6c9.088 2.944 18.368 5.28 26.56 8.192a18.4 18.4 0 0 0 3.2 0.864c4.064 0.672 7.328 3.008 10.72 3.488s6.88 3.008 10.624 3.52 6.048 2.72 9.6 3.2a27.264 27.264 0 0 1 4.8 1.248q5.888 2.08 14.656 4.384a20.544 20.544 0 0 1 3.456 1.248 39.68 39.68 0 0 0 9.6 3.744 24.576 24.576 0 0 1 8.736 3.872q6.976 5.056 8.704 5.952a7.264 7.264 0 0 1 1.6 1.12 106.144 106.144 0 0 1 9.92 8.96 107.264 107.264 0 0 1 10.784 13.504q1.536 2.56 4.896 7.2a17.952 17.952 0 0 1 2.56 5.152 124.8 124.8 0 0 1 5.152 16.928c0.48 3.68 1.888 7.168 2.176 11.328a107.744 107.744 0 0 1-0.672 20.288 54.4 54.4 0 0 1-1.696 8.832 101.408 101.408 0 0 1-4.544 15.52c-1.472 3.008-1.344 6.08-2.976 9.152s-1.888 7.36-3.584 10.816a15.456 15.456 0 0 0-1.696 4.96c-0.416 3.552-2.752 6.624-3.2 10.208s-3.2 7.04-3.648 10.656-2.944 6.656-3.424 10.56-3.2 7.04-3.584 11.36a3.2 3.2 0 0 1-0.256 1.056l-2.528 5.696a5.984 5.984 0 0 0-0.448 1.632 23.168 23.168 0 0 1-2.752 8.064c-0.896 1.632-0.864 5.088-1.984 7.296a21.216 21.216 0 0 0-2.144 6.08c-0.544 3.744-3.2 7.2-3.616 10.432-0.384 3.84-2.784 6.72-3.392 10.56a16.608 16.608 0 0 1-1.632 5.024 26.368 26.368 0 0 0-2.272 7.136 6.592 6.592 0 0 1-0.384 1.312l-2.24 5.184a4.64 4.64 0 0 0-0.32 1.024 23.072 23.072 0 0 1-1.6 5.792 19.808 19.808 0 0 0-1.792 5.024q0 0.864-3.2 10.4a56.864 56.864 0 0 1-2.016 5.728c-1.088 2.432-1.472 4.8-2.496 7.712q-3.2 8.64-5.856 17.344-2.208 6.944-8.384 25.088-4.64 13.664-9.216 27.424-4.896 14.688-11.264 34.4-1.824 5.696-2.752 8.896-1.888 6.656-2.656 8.896l-27.392 82.496a56.672 56.672 0 0 1-3.968 8.96 4.352 4.352 0 0 0-0.48 1.44 46.016 46.016 0 0 1-7.776 16 38.4 38.4 0 0 1-4.448 5.824 139.104 139.104 0 0 1-16.512 16.736 8.544 8.544 0 0 1-1.728 1.088 66.912 66.912 0 0 0-10.88 6.944l-0.512 0.32-2.592 1.312a13.92 13.92 0 0 1-2.272 0.896 66.976 66.976 0 0 0-10.656 4.064 7.84 7.84 0 0 1-2.24 0.704c-5.152 0.768-9.44 2.016-14.752 2.336-2.592 0-5.216 0.256-7.776 0.256a86.4 86.4 0 0 1-21.824-2.496zM599.872 691.2l-413.664-0.8A90.368 90.368 0 0 1 96 599.904l0.736-413.696A90.368 90.368 0 0 1 187.232 96l413.664 0.736A90.368 90.368 0 0 1 691.2 187.232l-0.736 413.696A90.368 90.368 0 0 1 600 691.2zM185.6 186.752v324.448a1.152 1.152 0 0 0 1.152 1.152h413.664a1.152 1.152 0 0 0 1.152-1.152V186.752a1.152 1.152 0 0 0-1.152-1.152H186.816a1.152 1.152 0 0 0-1.216 1.152z'
+const FlashCardIcon = () => h('svg', { width: 20, height: 20, viewBox: '0 0 1024 1024', fill: '#CE89D1' }, [
+  h('path', { d: FLASHCARD_SVG_PATH })
 ])
 
 const ThinkingBlock = {
@@ -240,87 +276,52 @@ const BookOpenTextIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 2
   h('path', { d: 'M10 18H8' })
 ])
 
+/** 图一：链式/链接图标，用于知识来源标题栏 */
+const ChainLinkIcon = () => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+  h('path', { d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' }),
+  h('path', { d: 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' })
+])
+
 const KnowledgeSource = {
   props: {
-    paragraphs: {
-      type: Array,
-      required: true
-    }
+    paragraphs: { type: Array, required: true }
   },
-  setup(props) {
+  emits: ['open-modal'],
+  setup(props, { emit }) {
+    const expanded = ref(false)
     return () => {
-      // console.log('[KnowledgeSource] 接收到的paragraphs:', props.paragraphs)
-      if (!props.paragraphs || props.paragraphs.length === 0) {
-        // console.log('[KnowledgeSource] paragraphs为空，不渲染')
-        return null
-      }
-      // console.log('[KnowledgeSource] 准备渲染', props.paragraphs.length, '个知识来源')
-      
-      // 获取文档名称（从第一个段落或所有段落中提取）
-      const getDocumentName = () => {
-        if (props.paragraphs.length > 0) {
-          return props.paragraphs[0].document_name || '知识来源'
-        }
-        return '知识来源'
-      }
-      
-      return h('div', { class: 'knowledge-sources-container' }, [
-        h('div', { class: 'knowledge-sources-header' }, [
-          h(FileTextIcon, { size: 20 }),
-          h('span', { class: 'knowledge-sources-title' }, '知识来源')
-        ]),
-        ...props.paragraphs.map((p, idx) => {
-          const similarity = p.similarity || p.score || 0
-          const documentName = p.document_name || p.documentName || '未知文档'
-          const title = p.problem_title || p.problemTitle || p.title || ''
-          const content = p.content || p.text || ''
-          const link = p.url || p.link || p.source_url || p.sourceUrl || ''
-          const datasetName = p.dataset_name || p.datasetName || ''
-          
-          return h('details', { 
-            key: p.id || idx,
-            class: 'knowledge-source-detail',
-            open: idx === 0 // 默认展开第一个
-          }, [
-            h('summary', { class: 'knowledge-source-summary' }, [
-              h(BookOpenTextIcon),
-              h('span', { class: 'knowledge-source-summary-text' }, 
-                documentName || `知识来源 ${idx + 1}`
-              )
-            ]),
-            h('div', { class: 'knowledge-source-detail-content' }, [
-              // 排序和得分
-              h('div', { class: 'knowledge-source-meta' }, [
-                h('span', { class: 'knowledge-source-rank' }, `排序: ${idx + 1}`),
-                similarity > 0 && h('span', { class: 'knowledge-source-score' }, `得分: ${typeof similarity === 'number' ? similarity.toFixed(3) : similarity}`)
-              ]),
-              // 标题
-              title && title !== documentName && h('div', { class: 'knowledge-source-item-title' }, title),
-              // 内容
-              content && h('div', { 
-                class: 'knowledge-source-item-content',
-                innerHTML: renderMarkdown(content)
-              }),
-              // 链接
-              link && h('div', { class: 'knowledge-source-item-link' }, [
-                h('a', {
-                  href: 'https://bailian.cdut.edu.cn' + link,
-                  target: '_blank',
-                  rel: 'noopener noreferrer',
-                  class: 'knowledge-source-link'
-                }, [
-                  h(LinkIcon, { size: 14 }),
-                  h('span', '查看原文')
-                ])
-              ]),
-              // 数据集名称
-              datasetName && h('div', { class: 'knowledge-source-dataset' }, [
-                h('span', { class: 'knowledge-source-dataset-label' }, '数据集:'),
-                h('span', { class: 'knowledge-source-dataset-name' }, datasetName)
-              ])
-            ])
+      if (!props.paragraphs || props.paragraphs.length === 0) return null
+      const count = props.paragraphs.length
+      const toggleExpand = () => { expanded.value = !expanded.value }
+      const openModal = (e) => { e.stopPropagation(); emit('open-modal') }
+      const baseUrl = 'https://bailian.cdut.edu.cn'
+      return h('div', { class: 'knowledge-sources-inline' }, [
+        h('div', {
+          class: ['knowledge-sources-inline-header', { 'is-expanded': expanded.value }],
+          onClick: toggleExpand
+        }, [
+          h(ChainLinkIcon),
+          h('span', {
+            class: 'knowledge-sources-inline-title',
+            onClick: openModal
+          }, '知识来源'),
+          h('span', { class: 'knowledge-sources-inline-dot' }, '·'),
+          h('span', { class: 'knowledge-sources-inline-count' }, String(count)),
+          h('span', { class: 'knowledge-sources-inline-chevron' }, [
+            expanded.value ? h(ChevronUpIcon) : h(ChevronDownIcon)
           ])
-        })
+        ]),
+        expanded.value && h('ol', { class: 'knowledge-sources-inline-list' }, props.paragraphs.map((p, idx) => {
+          const docName = p.document_name || p.documentName || `知识来源 ${idx + 1}`
+          const link = p.url || p.link || p.source_url || p.sourceUrl || ''
+          const href = link ? (link.startsWith('http') ? link : baseUrl + link) : 'javascript:void(0)'
+          return h('li', { class: 'knowledge-sources-inline-item', key: p.id || idx }, [
+            h('span', { class: 'knowledge-sources-inline-num' }, String(idx + 1)),
+            link
+              ? h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: 'knowledge-sources-inline-link' }, docName)
+              : h('span', { class: 'knowledge-sources-inline-link' }, docName)
+          ])
+        }))
       ])
     }
   }
@@ -360,6 +361,43 @@ function getDisplayContent(msg) {
   return msg.content || ''
 }
 const flashCardGenerating = ref(false)
+
+/** 知识库引用弹窗：图二内容 + 图三样式 */
+const showKnowledgeModal = ref(false)
+const modalParagraphs = ref([])
+const modalUserQuestion = ref('')
+
+function getUserQuestionForMsg(msg) {
+  const list = props.messages || []
+  const idx = list.findIndex(m => m.id === msg.id)
+  if (idx <= 0) return ''
+  for (let i = idx - 1; i >= 0; i--) {
+    if (list[i].role === 'user') return list[i].content || ''
+  }
+  return ''
+}
+
+function scoreToStars(score) {
+  if (typeof score !== 'number' || score <= 0) return '☆☆☆☆☆'
+  const n = Math.min(5, Math.round(score * 5))
+  return '★'.repeat(n) + '☆'.repeat(5 - n)
+}
+
+function openKnowledgeModal(msg) {
+  modalParagraphs.value = msg.knowledgeParagraphs || []
+  modalUserQuestion.value = getUserQuestionForMsg(msg)
+  showKnowledgeModal.value = true
+}
+
+function closeKnowledgeModal() {
+  showKnowledgeModal.value = false
+}
+
+function getDocHref(p) {
+  const u = p.url || p.link || p.source_url || p.sourceUrl || ''
+  if (!u) return 'javascript:void(0)'
+  return u.startsWith('http') ? u : 'https://bailian.cdut.edu.cn' + u
+}
 
 // 注册 ThinkingBlock 组件
 const ThinkingBlockComponent = ThinkingBlock
@@ -715,112 +753,298 @@ onUnmounted(() => {
   border-bottom: 1px solid #dbeafe;
 }
 
-/* 知识来源容器 */
-.knowledge-sources-container {
+
+/* 图一知识来源由子组件 KnowledgeSource 渲染，须用 :deep 穿透 scoped 才能生效 */
+.message-bubble :deep(.knowledge-sources-inline) {
   width: 100%;
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px dashed #cccccc;
+  margin-top: 20px;
 }
 
-.knowledge-sources-header {
+.message-bubble :deep(.knowledge-sources-inline-header) {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #4a5568;
-  margin-bottom: 16px;
-}
-
-.knowledge-sources-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #4a5568;
-}
-
-/* 知识来源详情项 */
-.knowledge-source-detail {
-  margin-bottom: 8px;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-
-.knowledge-source-summary {
-  padding: 12px 16px;
-  font-weight: 600;
+  gap: 6px;
   cursor: pointer;
-  color: #667eea;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  list-style: none;
   user-select: none;
-  transition: background-color 0.2s;
+  color: #2563eb;
 }
 
-.knowledge-source-summary::-webkit-details-marker {
+.message-bubble :deep(.knowledge-sources-inline-header .knowledge-sources-inline-title) {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-header .knowledge-sources-inline-title:hover) {
+  text-decoration: underline;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-dot) {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-count) {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+/* 折叠/展开箭头：紧挨数字后面，灰色，引导用户点击折叠或展开 */
+.message-bubble :deep(.knowledge-sources-inline-chevron) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-chevron svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-list) {
+  margin: 10px 0 0 0;
+  padding-left: 1.5em;
+  list-style: none;
+  counter-reset: ks-num;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-item) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: #e5f2fa;
+  border-radius: 6px;
+  counter-increment: ks-num;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-item::before) {
+  content: counter(ks-num);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  background: #5588f5;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.message-bubble :deep(.knowledge-sources-inline-num) {
   display: none;
 }
 
-.knowledge-source-summary:hover {
-  background: #f5f7fa;
-}
-
-.knowledge-source-detail[open] .knowledge-source-summary {
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.knowledge-source-summary-text {
+.message-bubble :deep(.knowledge-sources-inline-link) {
+  font-size: 13px;
+  color: #2563eb;
+  text-decoration: none;
   flex: 1;
 }
 
-.knowledge-source-detail-content {
-  padding: 12px 16px;
-  border-top: 1px solid #e0e0e0;
-  background: #fcfcfc;
+.message-bubble :deep(a.knowledge-sources-inline-link:hover) {
+  text-decoration: underline;
 }
 
-.knowledge-source-meta {
+/* ========== 图二/图三：知识库引用弹窗样式 ========== */
+.knowledge-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  color: #666;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
 }
 
-.knowledge-source-rank {
-  font-weight: 500;
+.knowledge-modal {
+  width: 90%;
+  max-width: 1100px;
+  max-height: 85vh;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.knowledge-source-score {
-  font-weight: 500;
-  color: #667eea;
+.knowledge-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
-.knowledge-source-item-title {
-  font-size: 14px;
+.knowledge-modal-title {
+  font-size: 18px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 12px;
-  line-height: 1.5;
+  color: #1f2937;
 }
 
-.knowledge-source-item-content {
-  background: #f8f9fa;
-  padding: 12px;
+.knowledge-modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+}
+
+.knowledge-modal-close:hover {
+  color: #1f2937;
+}
+
+.knowledge-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.knowledge-modal-section {
+  margin-bottom: 20px;
+}
+
+.knowledge-modal-section:last-child {
+  margin-bottom: 0;
+}
+
+.knowledge-modal-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.knowledge-modal-question {
+  padding: 12px 14px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   border-radius: 6px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #2c3e50;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  font-size: 15px;
+  color: #374151;
+  line-height: 1.55;
 }
 
+.knowledge-modal-card {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  margin-bottom: 12px;
+}
+
+.knowledge-modal-card:last-child {
+  margin-bottom: 0;
+}
+
+.knowledge-modal-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.knowledge-modal-top-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* 召回标题、星级、得分整体靠右，TOP 留在左边 */
+.knowledge-modal-recall {
+  margin-left: auto;
+  font-size: 14px;
+  color: #b45309;
+}
+
+.knowledge-modal-stars {
+  font-size: 16px;
+  color: #eab308;
+  letter-spacing: 1px;
+}
+
+.knowledge-modal-score {
+  font-size: 14px;
+  color: #b45309;
+}
+
+.knowledge-modal-card-content {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+/* 多条引用时：每条内容只显示约 5 行，其余用滚动条（:deep 确保 Teleport 到 body 后仍生效） */
+.knowledge-modal.has-multiple-refs :deep(.knowledge-modal-card-content) {
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.knowledge-modal-card-content :deep(p) {
+  margin: 0 0 6px 0;
+}
+
+.knowledge-modal-card-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.knowledge-modal-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knowledge-modal-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #1e40af;
+  text-decoration: underline;
+}
+
+.knowledge-modal-doc-link:hover {
+  color: #1d4ed8;
+}
+
+.knowledge-modal-doc-icon {
+  font-size: 14px;
+}
+
+.knowledge-modal-platform {
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+/* 保留旧类名以防别处引用（可后续删除） */
 .knowledge-source-item-content :deep(p) {
   margin: 0 0 8px 0;
 }
@@ -959,14 +1183,14 @@ onUnmounted(() => {
   margin-bottom: 1rem;
 }
 
-/* 表格撑满回答框、列间距拉大，避免拥挤 */
+/* 表格撑满回答框、每列平均分配宽度 */
 .markdown-content :deep(table) {
   width: 100%;
   max-width: 100%;
   margin: 1rem 0;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .markdown-content :deep(th),
@@ -975,6 +1199,8 @@ onUnmounted(() => {
   border: 1px solid #e2e8f0;
   text-align: left;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  box-sizing: border-box;
 }
 
 .markdown-content :deep(th) {
@@ -1051,12 +1277,13 @@ onUnmounted(() => {
   50% { opacity: 1; }
 }
 
+/* 与气泡内文字左对齐（padding 与 .message-bubble 一致），并靠拢上方 */
 .message-actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 8px;
-  margin-left: -8px;
+  margin-top: -14px;
+  padding-left: 20px;
 }
 
 .action-btn {
@@ -1121,5 +1348,30 @@ onUnmounted(() => {
   white-space: pre-wrap;
   word-break: break-all;
   opacity: 0.8;
+}
+</style>
+
+<!-- 弹窗 Teleport 到 body 后无 scoped 属性，单独用非 scoped 块保证「多条引用时每条限高+滚动」生效 -->
+<style>
+.knowledge-modal.has-multiple-refs .knowledge-modal-card-content {
+  max-height: 130px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+.knowledge-modal.has-multiple-refs .knowledge-modal-card-content::-webkit-scrollbar {
+  width: 4px;
+}
+.knowledge-modal.has-multiple-refs .knowledge-modal-card-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+.knowledge-modal.has-multiple-refs .knowledge-modal-card-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.knowledge-modal.has-multiple-refs .knowledge-modal-card-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 </style>
