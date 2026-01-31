@@ -31,7 +31,13 @@
               <router-link to="/career/resume" class="dropdown-item" exact>简历制作</router-link>
             </div>
           </div>
-          <router-link to="/knowledge-graph" class="nav-link bold" exact>技能图谱</router-link>
+          <div class="nav-dropdown">
+            <span class="nav-link bold">图谱</span>
+            <div class="dropdown-menu">
+              <router-link to="/knowledge-graph" class="dropdown-item" exact>技能图谱</router-link>
+              <router-link to="/flashcard-graph" class="dropdown-item" exact>闪卡图谱</router-link>
+            </div>
+          </div>
           <router-link to="/twin-study" class="nav-link bold" exact>孪孪伴学</router-link>
           <div class="nav-dropdown">
             <span class="nav-link bold">成长轨迹</span>

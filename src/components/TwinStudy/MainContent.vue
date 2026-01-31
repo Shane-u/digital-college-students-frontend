@@ -286,8 +286,25 @@ const handleInput = (e) => {
 
 const router = useRouter()
 
-const openFlashCardPage = () => {
-  router.push('/flash-card')
+const openFlashCardPage = async () => {
+  // 检查是否有正在生成的闪卡或首次生成标记
+  try {
+    // 检查暂存区是否有生成中的卡片
+    const tempCards = await fetch('/api/flash-card/temp-zone/list').then(r => r.json()).then(d => d.data || []).catch(() => [])
+    const hasGenerating = tempCards.some(c => c.isGenerating)
+    const isFirstTime = localStorage.getItem('flashcard_first_generate') === 'true'
+    
+    if (hasGenerating || isFirstTime) {
+      // 跳转到闪卡图谱页面，会自动显示暂存区
+      router.push('/flashcard-graph')
+    } else {
+      // 跳转到闪卡图谱页面（显示图谱）
+      router.push('/flashcard-graph')
+    }
+  } catch (error) {
+    // 出错时默认跳转到图谱页面
+    router.push('/flashcard-graph')
+  }
 }
 
 const toggleRecording = async () => {

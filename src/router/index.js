@@ -96,6 +96,11 @@ const routes = [
     name: 'FlashCard',
     component: () => import('../views/FlashCardPage.vue')
   },
+  {
+    path: '/flashcard-graph',
+    name: 'FlashcardGraph',
+    component: () => import('../views/FlashcardGraphPage.vue')
+  },
 ]
 
 const router = createRouter({

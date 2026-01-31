@@ -12,6 +12,7 @@
     "@microsoft/fetch-event-source": "^2.0.1",
     "animate.css": "^4.1.1",
     "axios": "^1.12.2",
+    "d3": "^7.9.0",
     "element-plus": "^2.11.5",
     "gsap": "^3.13.0",
     "marked": "^16.4.1",

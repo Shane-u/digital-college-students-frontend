@@ -321,6 +321,9 @@ const generateFlashCard = async (content) => {
     
     // 使用HTTP状态码200来判断成功
     if (response.ok && response.status === 200) {
+      // 设置首次生成标记
+      localStorage.setItem('flashcard_first_generate', 'true')
+      
       // 显示成功消息
       const notification = document.createElement('div')
       notification.style.cssText = `
