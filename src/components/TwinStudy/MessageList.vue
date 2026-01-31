@@ -643,7 +643,7 @@ onUnmounted(() => {
 
 /* 思考过程样式：与 WankoAssistant 深度思考一致 */
 .reasoning-content {
-  margin-bottom: 0;
+  margin-bottom:10px;
   padding: 12px 12px 8px 12px;
   background: #e8f3ff;
   border-left: 3px solid #5a8dee;
