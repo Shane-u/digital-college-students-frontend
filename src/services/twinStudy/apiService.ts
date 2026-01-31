@@ -152,9 +152,11 @@ export class ExternalApiService {
           yield {
             content: decoded
           }
+          // 参考 bailian-chat.demo：每次 yield 后让出主线程，便于浏览器重绘，实现边输出边渲染
+          await new Promise((r) => setTimeout(r, 0))
         }
       }
-      }
+    }
     } catch (error) {
       // 如果是取消操作，不抛出错误
       if (signal?.aborted || error.name === 'AbortError') {

@@ -25,7 +25,10 @@
             <span>已检索知识库: {{ msg.knowledgeBase }}</span>
           </div>
 
-          <div class="markdown-content" v-html="renderMarkdown(msg.content || (msg.isStreaming && !msg.workflow ? '...' : ''))"></div>
+          <!-- 流式时：仅挂 ref，由 TwinStudyPage 直接设置 innerHTML（参考 bailian-chat.demo） -->
+          <div v-if="msg.isStreaming" class="markdown-content" :ref="(el) => setStreamingElRef(el, msg)"></div>
+          <!-- 非流式时：用 v-html 渲染，避免覆盖父级直接写入的内容 -->
+          <div v-else class="markdown-content" v-html="renderMarkdown(getDisplayContent(msg))"></div>
 
           <div v-if="msg.role === 'model' && msg.references && msg.references.length > 0" class="references">
             <div class="references-header">
@@ -82,19 +85,10 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import MarkdownIt from 'markdown-it'
+import { ref, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import { h } from 'vue'
-import DOMPurify from 'dompurify'
-
-
-const md = new MarkdownIt({
-  html: true, // 允许输出 HTML 标签
-  linkify: true, // 自动将像 URL 的文本转换为链接
-  typographer: true, // 启用一些排版替换，如 "foo" -> “foo”
-  breaks: true // 将 \n 转换为 <br>
-})
 import WorkflowSteps from './WorkflowSteps.vue'
+import { renderMarkdownToHtml } from '../../utils/markdownRender'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 
@@ -316,10 +310,35 @@ const props = defineProps({
   messages: {
     type: Array,
     required: true
+  },
+  /** 流式输出时由父组件每 chunk 更新的内容，用于边输出边渲染 */
+  streamingContent: {
+    type: String,
+    default: ''
   }
 })
 
 const endRef = ref(null)
+/** 流式消息内容 DOM 的 ref，由 TwinStudyPage provide，用于直接 innerHTML 实现边输出边渲染（参考 bailian-chat.demo） */
+const streamingContentElRef = inject('streamingContentElRef', null)
+
+/** 流式时把当前消息的 markdown 容器挂到 provide 的 ref，供父组件直接写 innerHTML；元素卸载时清空 ref */
+function setStreamingElRef(el, msg) {
+  if (!streamingContentElRef) return
+  if (el && msg.role === 'model' && msg.isStreaming) {
+    streamingContentElRef.value = el
+  } else {
+    streamingContentElRef.value = null
+  }
+}
+
+/** 当前条消息要显示的内容：流式时用 streamingContent，否则用 msg.content */
+function getDisplayContent(msg) {
+  if (msg.role === 'model' && msg.isStreaming && props.streamingContent != null) {
+    return props.streamingContent || (msg.workflow ? '' : '...')
+  }
+  return msg.content || ''
+}
 const flashCardGenerating = ref(false)
 
 // 注册 ThinkingBlock 组件
@@ -328,50 +347,8 @@ const ThinkingBlockComponent = ThinkingBlock
 // 注册 KnowledgeSource 组件
 const KnowledgeSourceComponent = KnowledgeSource
 
-const renderMarkdown = (text) => {
-  if (!text) return ''
-
-  try {
-    const cleanedText = text.replace(/<details>[\s\S]*?<\/details>/gi, '')
-
-    let finalHtml = ''
-    let textToProcess = cleanedText
-
-    const codeBlockMarker = '```'
-    const codeBlockCount = (textToProcess.match(/```/g) || []).length
-
-    if (codeBlockCount % 2 !== 0) {
-      // 存在未闭合的代码块
-      const lastOpeningCodeBlockIndex = textToProcess.lastIndexOf(codeBlockMarker)
-      if (lastOpeningCodeBlockIndex !== -1) {
-        // 渲染最后一个未闭合代码块之前的部分
-        const textBeforeCodeBlock = textToProcess.substring(0, lastOpeningCodeBlockIndex)
-        // 未闭合的代码块部分
-        const codeBlockFragment = textToProcess.substring(lastOpeningCodeBlockIndex)
-
-        finalHtml += md.render(textBeforeCodeBlock)
-        // 将未闭合的代码块作为纯文本预格式化显示
-        finalHtml += `<pre class="streaming-code-fragment">${codeBlockFragment}</pre>`
-      } else {
-        // 理论上不应该出现，但作为兜底，如果找不到` ``` `就直接渲染
-        finalHtml += md.render(textToProcess)
-      }
-    } else {
-      // 代码块是闭合的，或者没有代码块，直接渲染所有内容
-      finalHtml += md.render(textToProcess)
-    }
-
-    // Ensure DOMPurify is still used for the final output.
-    return DOMPurify.sanitize(finalHtml)
-
-  } catch (e) {
-    console.error('[renderMarkdown] Markdown rendering error:', e)
-    // 兜底：作为纯文本显示（转义）
-    const div = document.createElement('div')
-    div.textContent = text
-    return div.innerHTML
-  }
-}
+// 与 TwinStudyPage 流式渲染使用同一函数，保证流式与最终显示一模一样（参考 bailian-chat.demo）
+const renderMarkdown = renderMarkdownToHtml
 
 const copyToClipboard = async (text) => {
   try {

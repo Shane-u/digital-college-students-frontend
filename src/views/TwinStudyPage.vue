@@ -14,6 +14,7 @@
       />
       <MainContent 
         :currentSession="currentSession"
+        :streamingContent="streamingContent"
         :modelMode="modelMode"
         :setModelMode="setModelMode"
         :onSendMessage="sendMessage"
@@ -25,12 +26,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick, provide } from 'vue'
 import { ElMessage } from 'element-plus'
-import { marked } from 'marked'
 import Sidebar from '../components/TwinStudy/Sidebar.vue'
 import MainContent from '../components/TwinStudy/MainContent.vue'
 import { apiService } from '../services/twinStudy/apiService'
+import { renderMarkdownToHtml } from '../utils/markdownRender'
 
 // 状态管理
 const isSidebarOpen = ref(true)
@@ -38,6 +39,11 @@ const sessions = ref([])
 const currentSessionId = ref(null)
 const modelMode = ref('fast')
 const currentAbortController = ref(null)
+// 流式输出时实时显示的 Markdown 文本（仍用于非直接 DOM 时的回退）
+const streamingContent = ref('')
+// 流式消息内容 DOM 元素 ref，参考 bailian-chat.demo 在循环内直接设置 innerHTML 实现边输出边渲染
+const streamingContentElRef = ref(null)
+provide('streamingContentElRef', streamingContentElRef)
 
 // ============ 内容处理函数 ============
 /**
@@ -527,16 +533,19 @@ const sendMessage = async (content) => {
       ? { ...s, messages: [...s.messages, modelMessage], updatedAt: new Date() } 
       : s
   )
+  streamingContent.value = ''
+  streamingContentElRef.value = null
+  // 等 Vue 挂载流式消息的 div 并设置 ref 后再开始收 chunk，否则首 chunk 时 ref 可能为空
+  await nextTick()
 
   try {
-    let fullContent = '' // 用于渲染的累积内容
-    let rawContentForSave = '' // 用于保存的完整原始内容
+    // 只保留一份累积内容 rawContentForSave，流式与结束时都用它解析，保证渲染结果与最终一模一样（参考 demo）
+    let rawContentForSave = ''
     let currentWorkflow = undefined
     let lastNodeId = ''
     let references = []
     let knowledgeBase = ''
-    let isFirstData = true // 用于跳过第一个data事件
-    let accumulatedKnowledge = null // 累积的knowledge数据
+    let isFirstData = true // 用于跳过第一个 data 事件
 
     // 创建新的AbortController
     const abortController = new AbortController()
@@ -558,49 +567,25 @@ const sendMessage = async (content) => {
       }
       if (chunk.knowledge) {
         knowledgeBase = chunk.knowledge
-        // 累积knowledge数据，可能是对象或字符串
-        accumulatedKnowledge = chunk.knowledge
-        // 将knowledge添加到rawContentForSave中，以便最终解析
         const kStr = typeof chunk.knowledge === 'string' ? chunk.knowledge : JSON.stringify(chunk.knowledge)
         rawContentForSave += `\n\n<details><summary>outputList</summary>${kStr}</details>`
-        // 也添加到fullContent中用于实时解析
-        if (!fullContent.includes('<summary>outputList')) {
-          fullContent += `\n\n<details><summary>outputList</summary>${kStr}</details>`
-        }
       }
       if (chunk.references) references = chunk.references
 
       // 处理内容块
       if (chunk.content && typeof chunk.content === 'string') {
         const decoded = chunk.content.replace(/&#32;/g, ' ').replace(/&#92n/g, '\n')
-        console.log('[sendMessage] Received chunk content (decoded):', decoded)
-        console.log('[sendMessage] Current rawContentForSave:', rawContentForSave)
-        
-        // 如果是第一个data事件且fullContent为空，则跳过
         if (isFirstData) {
           isFirstData = false
           continue
         }
-        isFirstData = false
-
-        // 所有内容都累积到rawContentForSave
         rawContentForSave += decoded
-
-
-
-        // 跳过聚合块（包含完整<think>的大块内容），避免重复渲染
-        if (decoded && decoded.includes('<think>') && decoded.includes('</think>')) {
-          continue
+        // 与结束时一致：始终用 rawContentForSave 解析，保证流式渲染结果和最终一模一样
+        const { content: cleanContent, thought, knowledgeParagraphs } = parseStreamData(rawContentForSave)
+        if (streamingContentElRef.value) {
+          streamingContentElRef.value.innerHTML = renderMarkdownToHtml(cleanContent)
         }
-
-        // 空行不渲染
-        if (!decoded || decoded.trim() === '') {
-          continue
-        }
-
-        // 使用parseStreamData处理内容
-        fullContent += decoded
-        const { content: cleanContent, thought, knowledgeParagraphs } = parseStreamData(fullContent)
+        streamingContent.value = cleanContent
         
         // 更新会话中的消息
         sessions.value = sessions.value.map(s =>
@@ -629,12 +614,18 @@ const sendMessage = async (content) => {
         )
         
         saveSessionsToStorage()
+        // 让出主线程：nextTick 等 Vue 更新 DOM，setTimeout 等浏览器重绘后再处理下一 chunk
+        await nextTick()
+        await new Promise(r => setTimeout(r, 0))
       }
     }
 
     // 流式结束，再次解析完整的rawContentForSave以确保提取所有knowledgeParagraphs
     const finalParsed = parseStreamData(rawContentForSave)
     console.log('[sendMessage] 流式结束，最终解析的knowledgeParagraphs:', finalParsed.knowledgeParagraphs)
+    
+    streamingContent.value = ''
+    streamingContentElRef.value = null
     
     // 流式结束，标记消息完成并更新最终解析的knowledgeParagraphs
     sessions.value = sessions.value.map(s =>
@@ -664,8 +655,7 @@ const sendMessage = async (content) => {
 
     saveSessionsToStorage()
 
-    // 仿照 html 发送请求持久化到后端
-    if (fullContent && fullContent.trim()) {
+    if (rawContentForSave && rawContentForSave.trim()) {
       await apiService.saveFinalMessage(chatId, rawContentForSave, userId)
     }
 
@@ -673,6 +663,8 @@ const sendMessage = async (content) => {
     currentAbortController.value = null
   } catch (error) {
     console.error("Streaming error:", error)
+    streamingContent.value = ''
+    streamingContentElRef.value = null
     const errorMessage = error.name === 'AbortError' || (currentAbortController.value?.signal.aborted)
       ? '已取消'
       : `错误: ${error.message}`

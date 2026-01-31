@@ -26,7 +26,7 @@
           <VintageCardGallery @cardClick="handleCardClick" />
         </div>
       </div>
-      <MessageList v-else :messages="currentSession.messages" />
+      <MessageList v-else :messages="currentSession.messages" :streamingContent="streamingContent" />
     </div>
 
     <div class="main-input-area">
@@ -148,6 +148,10 @@ const props = defineProps({
   currentSession: {
     type: Object,
     default: null
+  },
+  streamingContent: {
+    type: String,
+    default: ''
   },
   modelMode: {
     type: String,
