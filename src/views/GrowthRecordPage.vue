@@ -257,8 +257,8 @@ const formattedSelectedDate = computed(() => {
 })
 
 // 选择日期
-const handleSelectDate = (dateStr, openDialog = true) => {
-  console.log('点击了日期:', dateStr)
+const handleSelectDate = (dateStr, openDialog = true, initialEventName = '', initialImportance = 0, initialPersonalInsight = '') => {
+  console.log('handleSelectDate: Called with:', { dateStr, openDialog, initialEventName, initialImportance, initialPersonalInsight })
   selectedDate.value = dateStr
   
   // 如果不需要打开弹窗，直接返回
@@ -312,22 +312,26 @@ const handleSelectDate = (dateStr, openDialog = true) => {
       importance: existingRecord.importance || 0
     }
   } else {
-    // 创建新记录
+    // 创建新记录，使用传入的初始值
     dialogTitle.value = '添加成长记录'
     recordForm.value = {
       id: null,
       date: dateStr,
-      description: '',
+      description: initialEventName || '',
       images: [],
       files: [],
-      reflection: '',
-      importance: 0
+      reflection: initialPersonalInsight || '',
+      importance: initialImportance || 0
     }
   }
   
-  console.log('准备显示弹窗, dialogVisible.value =', dialogVisible.value)
+  // 确保图片和文件为空（语音命令需要用户手动上传）
+  recordForm.value.images = []
+  recordForm.value.files = []
+  
+  console.log('handleSelectDate: Setting dialogVisible to true. Current recordForm:', recordForm.value)
   dialogVisible.value = true
-  console.log('弹窗状态已设置为 true, dialogVisible.value =', dialogVisible.value)
+  console.log('handleSelectDate: Dialog visible set to:', dialogVisible.value)
 }
 
 // 添加今日记录
@@ -514,22 +518,61 @@ onMounted(async () => {
   await loadRecords()
   await loadStatistics()
   
-  // 检查是否有从里程碑页面跳转过来的日期参数
-  if (route.query.date) {
+  console.log('GrowthRecordPage onMounted: Initial route query:', route.query)
+  // 检查是否有从语音命令跳转过来的参数
+  if (route.query.date && route.query.openGrowthDialog === 'true') {
+    const shouldOpenDialog = route.query.openGrowthDialog === 'true'
+    handleSelectDate(
+      route.query.date,
+      shouldOpenDialog,
+      route.query.eventName || '',
+      parseInt(route.query.importance) || 0,
+      route.query.personalInsight || ''
+    )
+    // 清除查询参数，避免重复触发
+    const newQuery = { ...route.query }
+    delete newQuery.openGrowthDialog
+    delete newQuery.date
+    delete newQuery.eventName
+    delete newQuery.importance
+    delete newQuery.personalInsight
+    router.replace({ query: newQuery }).catch(() => {})
+  } else if (route.query.date) {
     // 从里程碑页面跳转过来时，只选中日期，不打开弹窗
     handleSelectDate(route.query.date, false)
+    const newQuery = { ...route.query }
+    delete newQuery.date
+    router.replace({ query: newQuery }).catch(() => {})
   }
 })
 
-// 监听路由变化，处理日期定位
-watch(() => route.query.date, (newDate) => {
-  if (newDate) {
+// 监听路由变化，处理日期定位和弹窗打开
+watch(() => route.query, (newQuery) => {
+  console.log('GrowthRecordPage watch: Route query changed:', newQuery)
+  if (newQuery.date && newQuery.openGrowthDialog === 'true') {
+    handleSelectDate(
+      newQuery.date,
+      true,
+      newQuery.eventName || '',
+      parseInt(newQuery.importance) || 0,
+      newQuery.personalInsight || ''
+    )
+    // 清除查询参数，避免重复触发
+    const updatedQuery = { ...newQuery }
+    delete updatedQuery.openGrowthDialog
+    delete updatedQuery.date
+    delete updatedQuery.eventName
+    delete updatedQuery.importance
+    delete updatedQuery.personalInsight
+    router.replace({ query: updatedQuery }).catch(() => {})
+  } else if (newQuery.date && !newQuery.openGrowthDialog) {
     // 从里程碑页面跳转过来时，只选中日期，不打开弹窗
-    handleSelectDate(newDate, false)
-    // 清除查询参数（可选）
-    // router.replace({ query: {} })
+    handleSelectDate(newQuery.date, false)
+    const updatedQuery = { ...newQuery }
+    delete updatedQuery.date
+    router.replace({ query: updatedQuery }).catch(() => {})
   }
-})
+}, { deep: true })
 </script>
 
 <style scoped>
