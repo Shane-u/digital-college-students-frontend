@@ -157,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import SidebarMenu from '../components/SidebarMenu.vue'
@@ -415,22 +415,38 @@ const convertFileToBase64 = (file) => {
 
 // 保存记录
 const saveRecord = async () => {
-  if (!recordForm.value.description && !recordForm.value.reflection) {
-    ElMessage.warning('请至少填写事件描述或个人感悟')
+  console.log('saveRecord: Starting save process. Current recordForm:', JSON.parse(JSON.stringify(recordForm.value)))
+  
+  // 验证：创建新记录时，事件描述不能为空（与后端验证一致）
+  if (!recordForm.value.id && !recordForm.value.description) {
+    console.warn('saveRecord: Validation failed - description is required for new records')
+    ElMessage.warning('请填写事件描述')
+    return
+  }
+  
+  // 验证：日期不能为空
+  if (!recordForm.value.date) {
+    console.warn('saveRecord: Validation failed - date is required')
+    ElMessage.warning('请选择日期')
     return
   }
   
   try {
+    console.log('saveRecord: Validation passed, proceeding with save')
+    
     // 1. 上传新图片，获取图片ID
     const imageIds = []
     for (const image of recordForm.value.images) {
       if (image.raw) {
         // 新上传的图片
+        console.log('saveRecord: Uploading new image:', image.name)
         const uploadedImage = await uploadImage(image.raw, 2, recordForm.value.date)
         imageIds.push(uploadedImage.id)
+        console.log('saveRecord: Image uploaded successfully, id:', uploadedImage.id)
       } else if (image.id) {
         // 已存在的图片
         imageIds.push(image.id)
+        console.log('saveRecord: Using existing image id:', image.id)
       }
     }
     
@@ -439,11 +455,14 @@ const saveRecord = async () => {
     for (const file of recordForm.value.files) {
       if (file.raw) {
         // 新上传的文件
+        console.log('saveRecord: Uploading new file:', file.name)
         const uploadedFile = await uploadFile(file.raw)
         fileIds.push(uploadedFile.id)
+        console.log('saveRecord: File uploaded successfully, id:', uploadedFile.id)
       } else if (file.id) {
         // 已存在的文件
         fileIds.push(file.id)
+        console.log('saveRecord: Using existing file id:', file.id)
       }
     }
     
@@ -460,24 +479,39 @@ const saveRecord = async () => {
       fileIds: fileIds
     }
     
+    console.log('saveRecord: Prepared recordData:', recordData)
+    
     if (recordForm.value.id) {
       // 更新记录
       recordData.id = recordForm.value.id
+      console.log('saveRecord: Updating existing record with id:', recordForm.value.id)
       await updateGrowthRecord(recordData)
+      console.log('saveRecord: Record updated successfully')
       ElMessage.success('记录更新成功')
     } else {
       // 添加新记录
+      console.log('saveRecord: Creating new record')
       await addGrowthRecord(recordData)
+      console.log('saveRecord: Record created successfully')
       ElMessage.success('记录添加成功')
     }
     
     // 5. 关闭对话框并重新加载数据
+    console.log('saveRecord: Closing dialog and reloading data')
     dialogVisible.value = false
     await loadRecords()
     await loadStatistics()
+    console.log('saveRecord: Save process completed successfully')
   } catch (error) {
-    console.error('保存记录失败:', error)
-    ElMessage.error('保存记录失败，请重试')
+    console.error('saveRecord: Error occurred:', error)
+    console.error('saveRecord: Error details:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response,
+      data: error.response?.data
+    })
+    const errorMessage = error.response?.data?.message || error.message || '保存记录失败，请重试'
+    ElMessage.error(`保存记录失败: ${errorMessage}`)
   }
 }
 
@@ -514,9 +548,39 @@ const loadStatistics = async () => {
   }
 }
 
+// 处理前端命令（保存、取消等）
+const handleFrontendCommand = async (event) => {
+  const payload = event.detail || {}
+  console.log('GrowthRecordPage: received frontendCommand event', payload)
+  
+  // 只有在弹窗打开时才处理保存和取消命令
+  if (!dialogVisible.value) {
+    console.log('GrowthRecordPage: Dialog is not open, ignoring command')
+    return
+  }
+  
+  if (payload.type === 'saveGrowthRecord') {
+    console.log('GrowthRecordPage: Handling saveGrowthRecord command')
+    console.log('GrowthRecordPage: Current dialogVisible:', dialogVisible.value)
+    console.log('GrowthRecordPage: Current recordForm:', recordForm.value)
+    try {
+      await saveRecord()
+    } catch (error) {
+      console.error('GrowthRecordPage: Error in saveRecord:', error)
+    }
+  } else if (payload.type === 'cancelGrowthRecord') {
+    console.log('GrowthRecordPage: Handling cancelGrowthRecord command')
+    dialogVisible.value = false
+    ElMessage.info('已取消')
+  }
+}
+
 onMounted(async () => {
   await loadRecords()
   await loadStatistics()
+  
+  // 监听前端命令事件
+  window.addEventListener('frontendCommand', handleFrontendCommand)
   
   console.log('GrowthRecordPage onMounted: Initial route query:', route.query)
   // 检查是否有从语音命令跳转过来的参数
@@ -544,6 +608,11 @@ onMounted(async () => {
     delete newQuery.date
     router.replace({ query: newQuery }).catch(() => {})
   }
+})
+
+onUnmounted(() => {
+  // 移除事件监听
+  window.removeEventListener('frontendCommand', handleFrontendCommand)
 })
 
 // 监听路由变化，处理日期定位和弹窗打开
