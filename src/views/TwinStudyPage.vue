@@ -27,6 +27,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { marked } from 'marked'
 import Sidebar from '../components/TwinStudy/Sidebar.vue'
 import MainContent from '../components/TwinStudy/MainContent.vue'
 import { apiService } from '../services/twinStudy/apiService'
@@ -37,6 +38,203 @@ const sessions = ref([])
 const currentSessionId = ref(null)
 const modelMode = ref('fast')
 const currentAbortController = ref(null)
+
+// ============ 内容处理函数 ============
+/**
+ * 解析流式数据：提取内容、思考过程、知识来源
+ * 返回 structured object: { content, thought, knowledgeParagraphs }
+ */
+const parseStreamData = (text) => {
+  if (!text) return { content: '', thought: '', knowledgeParagraphs: [] }
+
+  let tempContent = text
+  let knowledgeParagraphs = []
+  
+  // 辅助函数：将 Python 字典格式转换为 JSON 格式
+  const convertPythonDictToJson = (str) => {
+    try {
+      // 先尝试直接解析（可能已经是 JSON）
+      return JSON.parse(str)
+    } catch (e) {
+      // 如果不是 JSON，尝试转换 Python 字典格式
+      let jsonStr = str.trim()
+      
+      // 方法1: 使用更智能的正则表达式替换
+      // 替换键的单引号: 'key': -> "key":
+      jsonStr = jsonStr.replace(/'([a-zA-Z_][a-zA-Z0-9_]*)':/g, '"$1":')
+      
+      // 替换字符串值的单引号，但要小心处理字符串中的单引号
+      // 匹配 : '...' 模式，但要注意字符串中可能包含转义的单引号
+      // 使用负向前瞻来避免匹配字符串中的单引号
+      jsonStr = jsonStr.replace(/: '((?:[^'\\]|\\.)*)'/g, (match, content) => {
+        // 转义内容中的双引号
+        const escaped = content.replace(/"/g, '\\"')
+        return `: "${escaped}"`
+      })
+      
+      // 处理空字符串值
+      jsonStr = jsonStr.replace(/: ''/g, ': ""')
+      
+      // 处理布尔值和 null
+      jsonStr = jsonStr.replace(/: True/g, ': true')
+      jsonStr = jsonStr.replace(/: False/g, ': false')
+      jsonStr = jsonStr.replace(/: None/g, ': null')
+      
+      try {
+        return JSON.parse(jsonStr)
+      } catch (e2) {
+        // 如果还是失败，尝试更简单但可能不完美的替换
+        console.warn('[convertPythonDictToJson] 智能替换失败，尝试简单替换')
+        const simpleJson = jsonStr.replace(/'/g, '"')
+        try {
+          return JSON.parse(simpleJson)
+        } catch (e3) {
+          // 最后尝试：使用 Function 构造器（相对安全，因为只处理数据结构）
+          if (jsonStr.trim().startsWith('[') || jsonStr.trim().startsWith('{')) {
+            try {
+              // 创建一个安全的执行环境
+              const func = new Function('return ' + jsonStr.replace(/'/g, '"'))
+              const result = func()
+              console.log('[convertPythonDictToJson] 使用 Function 构造器成功')
+              return result
+            } catch (e4) {
+              throw new Error(`无法解析 JSON 格式: ${e4.message}`)
+            }
+          }
+          throw e3
+        }
+      }
+    }
+  }
+  
+  // 1. 提取并移除 outputList (知识来源 JSON)
+  const outputListPattern = /<details><summary>(outputList(?:\.output)?)<\/summary>([\s\S]*?)<\/details>/g
+  let match
+  
+  while ((match = outputListPattern.exec(text)) !== null) {
+      const summary = match[1]
+      const content = match[2]
+      if (summary === 'outputList') {
+          try {
+              let parsed
+              const contentStr = content.trim()
+              
+              // 尝试使用改进的转换函数
+              try {
+                parsed = convertPythonDictToJson(contentStr)
+              } catch (e) {
+                // 如果转换失败，尝试直接使用 Function 构造器解析 Python 字典格式
+                console.warn('[parseStreamData] JSON 解析失败，尝试使用 Function 构造器:', e.message)
+                try {
+                  // 对于 Python 字典格式，使用 Function 构造器是最可靠的方法
+                  // 因为 Python 字典和 JavaScript 对象语法几乎相同，只是引号不同
+                  const func = new Function('return ' + contentStr)
+                  parsed = func()
+                  console.log('[parseStreamData] Function 构造器解析成功')
+                } catch (funcError) {
+                  // 如果 Function 也失败，尝试简单替换（可能会破坏某些内容）
+                  console.warn('[parseStreamData] Function 构造器也失败，尝试简单替换:', funcError.message)
+                  const simpleJson = contentStr.replace(/'/g, '"')
+                  parsed = JSON.parse(simpleJson)
+                }
+              }
+              
+              console.log('[parseStreamData] 解析outputList成功，类型:', Array.isArray(parsed) ? 'Array' : typeof parsed, '长度:', Array.isArray(parsed) ? parsed.length : 'N/A')
+              
+              if (Array.isArray(parsed)) {
+                  parsed.forEach((p, idx) => {
+                      // 检查是否已存在（通过id或document_name+content组合）
+                      const exists = knowledgeParagraphs.some(kp => 
+                          (kp.id && p.id && kp.id === p.id) || 
+                          (kp.document_name === p.document_name && kp.content === p.content)
+                      )
+                      if (!exists) {
+                          knowledgeParagraphs.push(p)
+                          console.log(`[parseStreamData] 添加知识段落 ${idx + 1}:`, {
+                              id: p.id,
+                              document_name: p.document_name,
+                              content_length: p.content?.length || 0
+                          })
+                      }
+                  })
+              } else if (typeof parsed === 'object' && parsed !== null) {
+                  // 如果不是数组但是对象，尝试提取可能的数组字段
+                  console.log('[parseStreamData] outputList不是数组，尝试查找数组字段')
+                  Object.keys(parsed).forEach(key => {
+                      if (Array.isArray(parsed[key])) {
+                          parsed[key].forEach(p => {
+                              const exists = knowledgeParagraphs.some(kp => 
+                                  (kp.id && p.id && kp.id === p.id) || 
+                                  (kp.document_name === p.document_name && kp.content === p.content)
+                              )
+                              if (!exists) {
+                                  knowledgeParagraphs.push(p)
+                              }
+                          })
+                      }
+                  })
+              }
+          } catch (e) {
+              console.warn('[parseStreamData] 解析outputList失败:', e.message, '原始内容前200字符:', content.substring(0, 200))
+              // 所有解析方法都失败了，记录错误但不中断流程
+          }
+      }
+  }
+  tempContent = tempContent.replace(outputListPattern, '').trim()
+  
+  console.log('[parseStreamData] 最终提取的knowledgeParagraphs数量:', knowledgeParagraphs.length)
+
+  // 2. 提取并移除 <think> 块
+  // 支持未闭合的 <think> (流式传输中)
+  let thought = ''
+  
+  // 优先匹配完整的 <think>...</think>
+  const fullThinkPattern = /<think>([\s\S]*?)<\/think>/g
+  const thinkBlocks = []
+  let thinkMatch
+  
+  if (fullThinkPattern.test(tempContent)) {
+    // 重置 lastIndex
+    fullThinkPattern.lastIndex = 0
+    while ((thinkMatch = fullThinkPattern.exec(tempContent)) !== null) {
+        thinkBlocks.push(thinkMatch[0])
+    }
+    
+    // 使用倒数第二个或第一个 think 块 (Agent 逻辑)
+    if (thinkBlocks.length >= 2) {
+        thought = thinkBlocks[thinkBlocks.length - 2].replace(/<think>|<\/think>/g, '').trim()
+    } else if (thinkBlocks.length === 1) {
+        thought = thinkBlocks[0].replace(/<think>|<\/think>/g, '').trim()
+    }
+    tempContent = tempContent.replace(fullThinkPattern, '').trim()
+  } else {
+    // 如果没有完整的闭合块，检查是否有未闭合的 <think>
+    // 这意味着整个 <think> 后面的内容都是思考过程，还没有结束
+    const openThinkPattern = /<think>([\s\S]*)/
+    const openMatch = openThinkPattern.exec(tempContent)
+    if (openMatch) {
+      thought = openMatch[1].trim() // 提取 <think> 之后的所有内容作为思考
+      tempContent = tempContent.replace(openThinkPattern, '').trim() // 从正文中移除
+    }
+  }
+  
+  // 3. 去重逻辑 (X + X 模式)
+  const len = tempContent.length
+  if (len > 0 && len % 2 === 0) {
+      const tempHalf = len / 2
+      const firstHalf = tempContent.substring(0, tempHalf)
+      const secondHalf = tempContent.substring(tempHalf)
+      if (firstHalf.trim() === secondHalf.trim()) {
+          tempContent = firstHalf.trim()
+      }
+  }
+
+  return {
+      content: tempContent,
+      thought: thought,
+      knowledgeParagraphs: knowledgeParagraphs
+  }
+}
 
 // 获取用户ID（与 bailianChatApi.js 保持一致）
 const getUserId = () => {
@@ -186,27 +384,37 @@ const loadHistoryMessages = async (chatId, sessionId) => {
 
     console.log('[loadHistoryMessages] 去重后消息数量:', deduped.length)
     
-    const formattedMessages = deduped.map(msg => {
-      const isUser = msg.role === 'user'
+    const formattedMessages = list.map(msg => {
+      // 1. 基础转换 后端返回的 content 可能包含 <think> 和 outputList 等原始数据
       let content = msg.content || ''
       let thought = msg.thought || ''
-
-      // 对助手消息统一做一次 <think> 拆分，保证和流式展示一致
-      if (!isUser && content) {
-        const parsed = splitThinkingContent(content)
-        content = parsed.display
-        thought = parsed.thought
+      let knowledgeParagraphs = msg.knowledgeParagraphs || [] // 如果后端支持该字段
+      
+      // 2. 尝试从 content 中解析 thought 和 knowledge
+      if (content && typeof content === 'string') {
+         // 使用 parseStreamData 解析原始文本以提取 <think> 和 outputList
+         const parsed = parseStreamData(content)
+         console.log('[loadHistoryMessages] 解析消息，原始content长度:', content.length, '解析后的knowledgeParagraphs数量:', parsed.knowledgeParagraphs?.length || 0)
+         content = parsed.content
+         if (parsed.thought) {
+             thought = parsed.thought
+         }
+         if (parsed.knowledgeParagraphs && parsed.knowledgeParagraphs.length > 0) {
+             knowledgeParagraphs = parsed.knowledgeParagraphs
+             console.log('[loadHistoryMessages] 提取到knowledgeParagraphs:', knowledgeParagraphs)
+         }
       }
 
       return {
         id: `${msg.id || Date.now()}-${msg.role}`,
-        role: isUser ? 'user' : 'model',
-        content,
+        role: msg.role === 'user' ? 'user' : 'model',
+        content: content,
         timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
-        thought,
+        thought: thought,
         workflow: msg.workflow,
         references: msg.references || [],
         knowledgeBase: msg.knowledgeBase || '',
+        knowledgeParagraphs: knowledgeParagraphs,
         isStreaming: false
       }
     })
@@ -321,11 +529,14 @@ const sendMessage = async (content) => {
   )
 
   try {
-    let fullText = '' // 后端流式返回的原始内容累积
+    let fullContent = '' // 用于渲染的累积内容
+    let rawContentForSave = '' // 用于保存的完整原始内容
     let currentWorkflow = undefined
     let lastNodeId = ''
     let references = []
     let knowledgeBase = ''
+    let isFirstData = true // 用于跳过第一个data事件
+    let accumulatedKnowledge = null // 累积的knowledge数据
 
     // 创建新的AbortController
     const abortController = new AbortController()
@@ -337,65 +548,127 @@ const sendMessage = async (content) => {
     const stream = apiService.streamChat(chatId, content, abortController.signal, userId)
 
     for await (const chunk of stream) {
+      // 收集工作流和引用信息
       if (chunk.node_id) lastNodeId = chunk.node_id
-
       if (chunk.node_dict && chunk.node_dict.nodes) {
         currentWorkflow = {
           nodes: chunk.node_dict.nodes,
           edges: chunk.node_dict.edges || []
         }
       }
-
-      if (chunk.knowledge) knowledgeBase = chunk.knowledge
+      if (chunk.knowledge) {
+        knowledgeBase = chunk.knowledge
+        // 累积knowledge数据，可能是对象或字符串
+        accumulatedKnowledge = chunk.knowledge
+        // 将knowledge添加到rawContentForSave中，以便最终解析
+        const kStr = typeof chunk.knowledge === 'string' ? chunk.knowledge : JSON.stringify(chunk.knowledge)
+        rawContentForSave += `\n\n<details><summary>outputList</summary>${kStr}</details>`
+        // 也添加到fullContent中用于实时解析
+        if (!fullContent.includes('<summary>outputList')) {
+          fullContent += `\n\n<details><summary>outputList</summary>${kStr}</details>`
+        }
+      }
       if (chunk.references) references = chunk.references
 
+      // 处理内容块
       if (chunk.content && typeof chunk.content === 'string') {
-        fullText += chunk.content
+        const decoded = chunk.content.replace(/&#32;/g, ' ').replace(/&#92n/g, '\n')
+        console.log('[sendMessage] Received chunk content (decoded):', decoded)
+        console.log('[sendMessage] Current rawContentForSave:', rawContentForSave)
+        
+        // 如果是第一个data事件且fullContent为空，则跳过
+        if (isFirstData) {
+          isFirstData = false
+          continue
+        }
+        isFirstData = false
+
+        // 所有内容都累积到rawContentForSave
+        rawContentForSave += decoded
+
+
+
+        // 跳过聚合块（包含完整<think>的大块内容），避免重复渲染
+        if (decoded && decoded.includes('<think>') && decoded.includes('</think>')) {
+          continue
+        }
+
+        // 空行不渲染
+        if (!decoded || decoded.trim() === '') {
+          continue
+        }
+
+        // 使用parseStreamData处理内容
+        fullContent += decoded
+        const { content: cleanContent, thought, knowledgeParagraphs } = parseStreamData(fullContent)
+        
+        // 更新会话中的消息
+        sessions.value = sessions.value.map(s =>
+          s.id === activeSessionId
+            ? {
+                ...s,
+                messages: s.messages.map(m =>
+                  m.id === modelMessage.id
+                    ? {
+                        ...m,
+                        content: cleanContent,
+                        thought: thought || m.thought, // 优先使用提取到的 thought
+                        workflow: currentWorkflow || m.workflow,
+                        currentNodeId: lastNodeId,
+                        references: references.length > 0 ? references : m.references,
+                        knowledgeBase: knowledgeBase || m.knowledgeBase,
+                        // 合并知识来源，优先使用新解析的
+                        knowledgeParagraphs: knowledgeParagraphs.length > 0 ? knowledgeParagraphs : (m.knowledgeParagraphs || [])
+                      }
+                    : m
+                ),
+                updatedAt: new Date(),
+                lastMessageTime: new Date().toISOString()
+              }
+            : s
+        )
+        
+        saveSessionsToStorage()
       }
-
-      const { display: displayContent, thought: thoughtContent } = splitThinkingContent(fullText)
-
-    sessions.value = sessions.value.map(s => 
-      s.id === activeSessionId 
-        ? { 
-            ...s, 
-            messages: s.messages.map(m => 
-              m.id === modelMessage.id ? { 
-                ...m, 
-                content: displayContent,
-                thought: thoughtContent,
-                workflow: currentWorkflow || m.workflow,
-                currentNodeId: lastNodeId,
-                references: references.length > 0 ? references : m.references,
-                knowledgeBase: knowledgeBase || m.knowledgeBase
-              } : m
-            ),
-            updatedAt: new Date(),
-            lastMessageTime: new Date().toISOString()
-          } 
-        : s
-    )
-    
-    // 保存到localStorage
-    saveSessionsToStorage()
     }
 
-    sessions.value = sessions.value.map(s => 
-      s.id === activeSessionId 
-        ? { 
-            ...s, 
-            messages: s.messages.map(m => 
-              m.id === modelMessage.id ? { ...m, isStreaming: false } : m
+    // 流式结束，再次解析完整的rawContentForSave以确保提取所有knowledgeParagraphs
+    const finalParsed = parseStreamData(rawContentForSave)
+    console.log('[sendMessage] 流式结束，最终解析的knowledgeParagraphs:', finalParsed.knowledgeParagraphs)
+    
+    // 流式结束，标记消息完成并更新最终解析的knowledgeParagraphs
+    sessions.value = sessions.value.map(s =>
+      s.id === activeSessionId
+        ? {
+            ...s,
+            messages: s.messages.map(m =>
+              m.id === modelMessage.id 
+                ? { 
+                    ...m, 
+                    isStreaming: false,
+                    // 使用最终解析的knowledgeParagraphs，确保完整
+                    knowledgeParagraphs: finalParsed.knowledgeParagraphs.length > 0 
+                      ? finalParsed.knowledgeParagraphs 
+                      : (m.knowledgeParagraphs || []),
+                    // 更新content和thought为最终解析的结果
+                    content: finalParsed.content || m.content,
+                    thought: finalParsed.thought || m.thought
+                  } 
+                : m
             ),
             updatedAt: new Date(),
             lastMessageTime: new Date().toISOString()
-          } 
+          }
         : s
     )
-    
-    // 保存到localStorage
+
     saveSessionsToStorage()
-    
+
+    // 仿照 html 发送请求持久化到后端
+    if (fullContent && fullContent.trim()) {
+      await apiService.saveFinalMessage(chatId, rawContentForSave, userId)
+    }
+
     // 流式传输完成，清除AbortController
     currentAbortController.value = null
   } catch (error) {
@@ -403,18 +676,22 @@ const sendMessage = async (content) => {
     const errorMessage = error.name === 'AbortError' || (currentAbortController.value?.signal.aborted)
       ? '已取消'
       : `错误: ${error.message}`
-    
-    sessions.value = sessions.value.map(s => 
-      s.id === activeSessionId 
-        ? { 
-            ...s, 
-            messages: s.messages.map(m => 
-              m.id === modelMessage.id ? { ...m, content: m.content + (m.content ? `\n\n[${errorMessage}]` : `[${errorMessage}]`), isStreaming: false } : m
-            ) 
-          } 
+
+    sessions.value = sessions.value.map(s =>
+      s.id === activeSessionId
+        ? {
+            ...s,
+            messages: s.messages.map(m =>
+              m.id === modelMessage.id
+                ? { ...m, content: m.content + (m.content ? `\n\n[${errorMessage}]` : `[${errorMessage}]`), isStreaming: false }
+                : m
+            )
+          }
         : s
     )
-    
+
+    saveSessionsToStorage()
+
     // 错误后清除AbortController
     currentAbortController.value = null
   }
@@ -465,7 +742,7 @@ const handleDeleteSessions = (sessionIds) => {
   saveSessionsToStorage()
 }
 
-// 保存会话列表与当前会话ID到localStorage
+// 保存会话列表与当前会话ID到localStorage（仅元数据，不含消息内容）
 const saveSessionsToStorage = () => {
   try {
     const sessionsToSave = sessions.value.map(s => ({
@@ -474,7 +751,9 @@ const saveSessionsToStorage = () => {
       title: s.title,
       updatedAt: s.updatedAt,
       lastMessageTime: s.lastMessageTime,
-      messageCount: s.messages?.length || 0
+      messageCount: s.messages?.length || 0,
+      // 不保存消息内容到本地，完全依赖后端
+      messages: [] 
     }))
     const payload = {
       sessions: sessionsToSave,
@@ -486,7 +765,7 @@ const saveSessionsToStorage = () => {
   }
 }
 
-// 从localStorage加载会话列表并恢复当前会话ID（兼容旧格式：纯数组）
+// 从localStorage加载会话列表并恢复当前会话ID
 const loadSessionsFromStorage = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -496,11 +775,14 @@ const loadSessionsFromStorage = () => {
     if (!Array.isArray(list) || list.length === 0) return
     list.sort((a, b) => new Date(b.lastMessageTime || b.updatedAt) - new Date(a.lastMessageTime || a.updatedAt))
     const ids = new Set(list.map(s => s.id))
+    
+    // 初始化会话列表，消息为空
     sessions.value = list.map(s => ({
       ...s,
       messages: [],
       updatedAt: s.updatedAt ? new Date(s.updatedAt) : new Date()
     }))
+    
     const restored = Array.isArray(parsed) ? null : (parsed?.currentSessionId ?? null)
     if (restored != null && ids.has(restored)) {
       currentSessionId.value = restored

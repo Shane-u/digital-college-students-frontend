@@ -136,17 +136,16 @@ export class ExternalApiService {
             .replace(/&#32;/g, ' ')
             .replace(/&#92n/g, '\n')
 
-          // 过滤掉空内容或只有换行符的内容（重复的结束标记）
-          const trimmedDecoded = decoded.trim()
-          if (!trimmedDecoded || trimmedDecoded === '\n') {
-            continue
+          if (decoded && decoded.includes('<think>') && decoded.includes('</think>')) {
+              // 跳过这个聚合块的渲染，但已累积到 rawContentForSave
+              continue;
           }
 
-          // 忽略第一个纯文本内容块（通常是调试前缀或无用提示，例如 "xxx"）
-          if (!hasEmittedTextChunk) {
-            hasEmittedTextChunk = true
-            continue
-          }
+          // 过滤掉空内容或只有换行符的内容（重复的结束标记）
+          // const trimmedDecoded = decoded.trim()
+          // if (!trimmedDecoded || trimmedDecoded === '\n') {
+          //   continue
+          // }
 
           // 将解码后的文本内容包装成与原有格式兼容的对象
           // 原有代码期望：{ content?: string, node_id?: string, node_dict?: any, knowledge?: string, references?: any[] }
@@ -192,11 +191,6 @@ export class ExternalApiService {
             if (!trimmedDecoded || trimmedDecoded === '\n') {
               return
             }
-            // 忽略第一个纯文本内容块
-            if (!hasEmittedTextChunk) {
-              hasEmittedTextChunk = true
-              return
-            }
             yield { content: decoded }
           }
         } catch (e) {
@@ -204,16 +198,11 @@ export class ExternalApiService {
           const decoded = data
             .replace(/&#32;/g, ' ')
             .replace(/&#92n/g, '\n')
-          const trimmedDecoded = decoded.trim()
+          // const trimmedDecoded = decoded.trim()
           // 过滤掉空内容
-          if (!trimmedDecoded || trimmedDecoded === '\n') {
-            return
-          }
-          // 忽略第一个纯文本内容块
-          if (!hasEmittedTextChunk) {
-            hasEmittedTextChunk = true
-            return
-          }
+          // if (!trimmedDecoded || trimmedDecoded === '\n') {
+          //   return
+          // }
           yield { content: decoded }
         }
       }
@@ -233,6 +222,37 @@ export class ExternalApiService {
       userId: userId ?? this.getUserId()
     })
     return Array.isArray(list) ? list : []
+  }
+
+  /**
+   * 保存最终的助手回复到后端
+   * POST /bailian/chat/save-final-message
+   */
+  async saveFinalMessage(chatId: string, finalContent: string, userId?: number): Promise<void> {
+    const uid = userId ?? this.getUserId()
+    try {
+        console.log('[apiService] 开始保存最终消息，chatId:', chatId, 'length:', finalContent.length)
+        const response = await fetch(`${API_BASE}/chat/save-final-message`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                chatId: chatId,
+                userId: uid,
+                finalContent: finalContent
+            })
+        });
+        
+        const result = await response.json();
+        if (result.code !== 0) {
+            console.error('[apiService] 保存最终消息失败:', result.message);
+        } else {
+            console.log('[apiService] 最终消息保存成功');
+        }
+    } catch (e) {
+        console.error('[apiService] 保存最终消息异常:', e);
+    }
   }
 
   /**
