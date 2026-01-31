@@ -417,6 +417,7 @@ const loadHistoryMessages = async (chatId, sessionId) => {
         content: content,
         timestamp: msg.createTime ? new Date(msg.createTime) : new Date(),
         thought: thought,
+        thoughtDone: !!thought,
         workflow: msg.workflow,
         references: msg.references || [],
         knowledgeBase: msg.knowledgeBase || '',
@@ -524,6 +525,7 @@ const sendMessage = async (content) => {
     role: 'model',
     content: '',
     thought: '',
+    thoughtDone: false, // 思考内容是否已结束（出现 </think> 即视为结束，用于思考块在思考结束时即收起）
     timestamp: new Date(),
     isStreaming: true
   }
@@ -587,7 +589,8 @@ const sendMessage = async (content) => {
         }
         streamingContent.value = cleanContent
         
-        // 更新会话中的消息
+        // 思考内容一结束（出现 </think>）即标记 thoughtDone，供思考块提前收起
+        const thoughtDone = rawContentForSave.includes('</think>')
         sessions.value = sessions.value.map(s =>
           s.id === activeSessionId
             ? {
@@ -597,12 +600,12 @@ const sendMessage = async (content) => {
                     ? {
                         ...m,
                         content: cleanContent,
-                        thought: thought || m.thought, // 优先使用提取到的 thought
+                        thought: thought || m.thought,
+                        thoughtDone: thoughtDone || m.thoughtDone,
                         workflow: currentWorkflow || m.workflow,
                         currentNodeId: lastNodeId,
                         references: references.length > 0 ? references : m.references,
                         knowledgeBase: knowledgeBase || m.knowledgeBase,
-                        // 合并知识来源，优先使用新解析的
                         knowledgeParagraphs: knowledgeParagraphs.length > 0 ? knowledgeParagraphs : (m.knowledgeParagraphs || [])
                       }
                     : m
@@ -637,11 +640,10 @@ const sendMessage = async (content) => {
                 ? { 
                     ...m, 
                     isStreaming: false,
-                    // 使用最终解析的knowledgeParagraphs，确保完整
+                    thoughtDone: true,
                     knowledgeParagraphs: finalParsed.knowledgeParagraphs.length > 0 
                       ? finalParsed.knowledgeParagraphs 
                       : (m.knowledgeParagraphs || []),
-                    // 更新content和thought为最终解析的结果
                     content: finalParsed.content || m.content,
                     thought: finalParsed.thought || m.thought
                   } 

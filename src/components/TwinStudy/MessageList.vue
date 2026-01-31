@@ -16,7 +16,7 @@
         </div>
 
         <div :class="['message-bubble', { 'message-user-bubble': msg.role === 'user' }]">
-          <component v-if="msg.role === 'model' && msg.thought" :is="ThinkingBlockComponent" :content="msg.thought" :isStreaming="msg.isStreaming" />
+          <component v-if="msg.role === 'model' && msg.thought" :is="ThinkingBlockComponent" :content="msg.thought" :thoughtDone="msg.thoughtDone !== false" :isStreaming="msg.isStreaming" />
 
           <div v-if="msg.role === 'model' && msg.thought && msg.content" class="thinking-divider"></div>
 
@@ -155,37 +155,57 @@ const ThinkingBlock = {
       type: String,
       required: true
     },
+    /** 思考内容是否已结束（出现 </think> 即 true），用于思考一结束就收起，不等整条回复结束 */
+    thoughtDone: {
+      type: Boolean,
+      default: false
+    },
     isStreaming: {
       type: Boolean,
       default: true
     }
   },
   setup(props) {
-    const isExpanded = ref(true)
-    
-    // 监听isStreaming变化，当流式传输结束时自动收缩
-    watch(() => props.isStreaming, (newVal, oldVal) => {
-      if (oldVal && !newVal) {
-        // 从streaming变为非streaming，自动收缩
-        isExpanded.value = false
-      }
+    const isExpanded = ref(!props.thoughtDone)
+    watch(() => props.thoughtDone, (done) => {
+      if (done) isExpanded.value = false
     })
-    
+    watch(() => props.isStreaming, (streaming) => {
+      if (streaming) isExpanded.value = true
+    })
+    const toggleReasoning = () => {
+      if (!props.thoughtDone) return
+      isExpanded.value = !isExpanded.value
+    }
     return () => {
       if (!props.content) return null
-      
-      // 移除 <details> 标签及其内容（通常用于调试信息）
       const cleanedContent = props.content.replace(/<details>[\s\S]*?<\/details>/gi, '')
-      
-      return h('div', { class: 'thinking-block' }, [
-        h('button', {
-          onClick: () => isExpanded.value = !isExpanded.value,
-          class: 'thinking-toggle'
-        }, [
-          h('span', '思考过程'),
-          h(isExpanded.value ? ChevronUpIcon : ChevronDownIcon, { size: 14 })
+      const collapsed = props.thoughtDone && !isExpanded.value
+      return h('div', {
+        class: ['reasoning-content', { collapsed }]
+      }, [
+        h('div', { class: 'reasoning-label' }, [
+          props.thoughtDone
+            ? h('span', { class: 'reasoning-label-text' }, '✅ 深度思考已完成')
+            : h('span', { class: 'reasoning-label-text' }, '🧠 孪孪正在头脑风暴中...'),
+          ...(props.thoughtDone
+            ? [
+                h('span', {
+                  class: 'reasoning-link',
+                  role: 'button',
+                  tabindex: 0,
+                  onClick: toggleReasoning,
+                  onKeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleReasoning() } }
+                }, [ collapsed ? '展开' : '收起' ])
+              ]
+            : [])
         ]),
-        isExpanded.value && h('div', { class: 'thinking-content', innerHTML: renderMarkdown(cleanedContent) })
+        h('div', {
+          class: 'reasoning-text',
+          style: { display: !props.thoughtDone || isExpanded.value ? undefined : 'none' },
+          innerHTML: renderMarkdown(cleanedContent)
+        }),
+        (!props.thoughtDone || isExpanded.value) && h('div', { class: 'reasoning-divider' })
       ])
     }
   }
@@ -284,7 +304,7 @@ const KnowledgeSource = {
               // 链接
               link && h('div', { class: 'knowledge-source-item-link' }, [
                 h('a', {
-                  href: link,
+                  href: 'https://bailian.cdut.edu.cn' + link,
                   target: '_blank',
                   rel: 'noopener noreferrer',
                   class: 'knowledge-source-link'
@@ -562,87 +582,125 @@ onUnmounted(() => {
   min-height: auto;
 }
 
+/* 用户气泡内文字上下居中 */
+.message-user-bubble .markdown-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.message-user-bubble .markdown-content :deep(p) {
+  margin: 0.25em 0;
+}
+.message-user-bubble .markdown-content :deep(p:first-child) {
+  margin-top: 0;
+}
+.message-user-bubble .markdown-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
 .workflow-container {
   width: 100%;
   margin-bottom: 16px;
 }
 
-.thinking-block {
-  width: 100%;
-  margin-bottom: 16px;
+/* 思考过程样式：与 WankoAssistant 深度思考一致 */
+.reasoning-content {
+  margin-bottom: 0;
+  padding: 12px 12px 8px 12px;
+  background: #e8f3ff;
+  border-left: 3px solid #5a8dee;
+  border-radius: 8px;
+  border: 1px solid rgba(90, 141, 238, 0.3);
+  box-shadow: 0 2px 6px rgba(90, 141, 238, 0.12);
+  transition: background 0.2s ease, padding 0.2s ease;
 }
 
-.thinking-block :deep(button.thinking-toggle),
-button.thinking-toggle {
-  display: inline-flex !important;
+.reasoning-content.collapsed {
+  padding: 10px 12px 6px 12px;
+  background: rgba(232, 243, 255, 0.6);
+  border-color: rgba(90, 141, 238, 0.2);
+  box-shadow: none;
+  margin-bottom: 10px;
+}
+
+/* 统一整行高度，保证「深度思考已完成」与「展开/收起」视觉一致 */
+.message-bubble :deep(.reasoning-label) {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3a70c1;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  color: #6366f1 !important;
-  font-size: 13px;
-  font-weight: 500;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(139, 92, 246, 0.06) 100%) !important;
-  border: none !important;
-  outline: none !important;
-  padding: 8px 16px;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  user-select: none;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.thinking-block :deep(button.thinking-toggle::before),
-button.thinking-toggle::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
-  opacity: 0;
-  transition: opacity 0.25s ease;
-}
-
-.thinking-block :deep(button.thinking-toggle:hover),
-button.thinking-toggle:hover {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%) !important;
-  color: #4f46e5 !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-}
-
-.thinking-block :deep(button.thinking-toggle:hover::before),
-button.thinking-toggle:hover::before {
-  opacity: 1;
-}
-
-.thinking-block :deep(button.thinking-toggle:active),
-button.thinking-toggle:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.2);
-}
-
-.thinking-block :deep(button.thinking-toggle > *),
-button.thinking-toggle > * {
-  position: relative;
-  z-index: 1;
-}
-
-.thinking-content {
-  margin-top: 8px;
-  color: #5e5e5e;
+.message-bubble :deep(.reasoning-label-text) {
+  margin-right: 4px;
   font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  font-style: italic;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1f1f1f;
+}
+.message-bubble :deep(.reasoning-link) {
+  font-size: 11px;
+  line-height: 1.5;
+  font-weight: 550;
 }
 
-.thinking-divider {
+.reasoning-text {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+  padding-left: 2px;
+}
+
+.reasoning-text :deep(p) {
+  margin: 0 0 6px 0;
+}
+
+/* 思考块内有序列表：数字在内容框内，与文字对齐；用 .message-bubble :deep 确保子组件内生效 */
+.message-bubble :deep(.reasoning-text ol) {
+  margin: 0 0 8px 0;
+  padding-left: 1.5em;
+  list-style-position: inside;
+  list-style-type: decimal;
+}
+
+.message-bubble :deep(.reasoning-text ul) {
+  margin: 0 0 8px 0;
+  padding-left: 1.2em;
+}
+
+.message-bubble :deep(.reasoning-text li) {
+  margin-bottom: 4px;
+  padding-left: 0.25em;
+  display: list-item;
+}
+
+.reasoning-divider {
   height: 1px;
-  background: linear-gradient(to right, transparent, #e0e0e0, transparent);
-  margin: 16px 0;
+  background: rgba(90, 141, 238, 0.25);
+  margin-top: 8px;
+}
+
+/* 展开/收起：与左侧文案同高同字号，超链接样式 */
+.message-bubble :deep(.reasoning-link) {
+  margin-left: 12px;
+  color: #3a70c1;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: baseline;
+}
+
+.message-bubble :deep(.reasoning-link:hover) {
+  color: #15803d;
+  text-decoration: underline;
 }
 
 .knowledge-base {
@@ -834,28 +892,30 @@ button.thinking-toggle > * {
 }
 
 .markdown-content {
+  font-size: 16px;
   line-height: 1.6;
 }
 
 .markdown-content :deep(h1) {
-  font-size: 1.5rem;
+  font-size: 1.55rem;
   font-weight: 700;
   margin-bottom: 1rem;
 }
 
 .markdown-content :deep(h2) {
-  font-size: 1.25rem;
+  font-size: 1.3rem;
   font-weight: 700;
   margin-bottom: 0.75rem;
 }
 
 .markdown-content :deep(h3) {
-  font-size: 1.125rem;
+  font-size: 1.15rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
 }
 
 .markdown-content :deep(p) {
+  font-size: 1em;
   margin-bottom: 1rem;
 }
 
@@ -867,6 +927,7 @@ button.thinking-toggle > * {
 
 .markdown-content :deep(li) {
   margin-bottom: 0.25rem;
+  font-size: 1em;
 }
 
 .markdown-content :deep(code) {
@@ -874,7 +935,7 @@ button.thinking-toggle > * {
   padding: 0.2rem 0.4rem;
   border-radius: 4px;
   font-family: monospace;
-  font-size: 0.9em;
+  font-size: 1em;
 }
 
 .markdown-content :deep(pre) {
@@ -896,6 +957,43 @@ button.thinking-toggle > * {
   color: #444746;
   font-style: italic;
   margin-bottom: 1rem;
+}
+
+/* 表格撑满回答框、列间距拉大，避免拥挤 */
+.markdown-content :deep(table) {
+  width: 100%;
+  max-width: 100%;
+  margin: 1rem 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: auto;
+}
+
+.markdown-content :deep(th),
+.markdown-content :deep(td) {
+  padding: 0.75rem 1.25rem;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  word-wrap: break-word;
+}
+
+.markdown-content :deep(th) {
+  background: #f7fafc;
+  font-weight: 600;
+  font-size: 1.1em;
+  color: #2d3748;
+}
+
+.markdown-content :deep(td) {
+  font-size: 1.1em;
+}
+
+.markdown-content :deep(tr:not(:first-child) td) {
+  background: #fff;
+}
+
+.markdown-content :deep(tr:hover td) {
+  background: #f8fafc;
 }
 
 .references {
