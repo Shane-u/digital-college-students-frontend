@@ -178,6 +178,15 @@ export const flashCardApi = {
   },
   
   /**
+   * 更新暂存区闪卡（只改标题和纯文本内容）
+   * @param {Object} payload - { id, title, content }
+   */
+  updateTempCard(payload) {
+    const { id, title, content } = payload
+    return request.post('/flash-card/temp/update', { id, title, content })
+  },
+  
+  /**
    * 获取暂存区闪卡详情（包含完整的 htmlContent）
    * @param {string} id - 闪卡ID
    */
@@ -274,6 +283,23 @@ export const flashCardApi = {
    */
   deleteInNeo4j(payload) {
     return request.post('/neo4j-graph/delete', payload)
+  },
+
+  /**
+   * 在用户的 Neo4j 闪卡图谱中按关键词搜索节点
+   * 后端接口：GET /flash-card/neo4j/search
+   * Query 参数：
+   *  - type: 节点类型，ROOT / LEVEL / FLASHCARD / ALL
+   *  - keyword: 关键词
+   * 这里默认用于「闪卡图谱查询」，若未传 type 则自动补全为 FLASHCARD
+   * @param {Object} params - { type?: string, keyword: string }
+   */
+  searchInNeo4j(params = {}) {
+    const finalParams = { ...params }
+    if (!finalParams.type) {
+      finalParams.type = 'FLASHCARD'
+    }
+    return request.get('/flash-card/neo4j/search', { params: finalParams })
   }
 }
 

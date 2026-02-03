@@ -21,7 +21,7 @@
         </div>
         <div class="panel-body">
           <iframe 
-            src="/knowledge-graph/index.html"
+            src="/knowledge-graph/index.html?compareMode=true"
             class="knowledge-graph-iframe"
             frameborder="0"
             title="技能图谱"
@@ -52,10 +52,16 @@
         </div>
         <div class="panel-body">
           <FlashcardGraph 
-            :flashcards="flashcardData"
+            :flashcards="flashcardData.flashcards"
+            :graph-nodes="flashcardData.nodes"
+            :graph-links="flashcardData.links"
+            :user-id="userId"
+            :highlight-ids="highlightIds"
+            :hide-toolbar="true"
             @node-click="handleFlashcardNodeClick"
             @go-to-temp="handleGoToTemp"
             @compare="() => {}"
+            @refresh="loadFlashcardData"
           />
         </div>
       </div>
@@ -75,12 +81,29 @@ const props = defineProps({
   flashcards: {
     type: Array,
     default: () => []
+  },
+  /** Neo4j 图谱数据 */
+  graphNodes: {
+    type: Array,
+    default: () => []
+  },
+  graphLinks: {
+    type: Array,
+    default: () => []
+  },
+  userId: {
+    type: [String, Number],
+    default: null
+  },
+  highlightIds: {
+    type: Array,
+    default: () => []
   }
 })
 
 const emit = defineEmits(['close', 'nodeClick', 'goToTemp'])
 
-const flashcardData = ref([])
+const flashcardData = ref({ flashcards: [], nodes: [], links: [] })
 const containerRef = ref(null)
 const leftWidth = ref(50) // 左侧面板宽度百分比
 const isDragging = ref(false)
@@ -89,25 +112,62 @@ let startX = 0
 let startWidth = 50
 
 onMounted(async () => {
-  // 加载闪卡图谱数据
+  // 如果父组件已经传入了图谱数据，直接使用
+  if (props.graphNodes && props.graphNodes.length > 0) {
+    flashcardData.value = {
+      flashcards: props.flashcards || [],
+      nodes: props.graphNodes,
+      links: props.graphLinks || []
+    }
+    return
+  }
+  
+  // 否则加载闪卡图谱数据
   try {
-    const data = await flashCardApi.getGraphData()
-    // 兼容多种返回结构：
-    // - 直接返回数组
-    // - 返回 { flashcards: [...] }
-    // - 返回 { data: [...] }
-    if (Array.isArray(data)) {
-      flashcardData.value = data
+    const userId = props.userId
+    const params = userId != null ? { userId } : {}
+    const data = await flashCardApi.getGraphData(params)
+    
+    // 兼容多种返回结构
+    if (data && Array.isArray(data.nodes) && Array.isArray(data.links)) {
+      // Neo4j 图谱结构
+      flashcardData.value = {
+        flashcards: data.cards || props.flashcards || [],
+        nodes: data.nodes,
+        links: data.links
+      }
+    } else if (Array.isArray(data)) {
+      flashcardData.value = {
+        flashcards: data,
+        nodes: [],
+        links: []
+      }
     } else if (data && Array.isArray(data.flashcards)) {
-      flashcardData.value = data.flashcards
+      flashcardData.value = {
+        flashcards: data.flashcards,
+        nodes: [],
+        links: []
+      }
     } else if (data && Array.isArray(data.data)) {
-      flashcardData.value = data.data
+      flashcardData.value = {
+        flashcards: data.data,
+        nodes: [],
+        links: []
+      }
     } else {
-      flashcardData.value = props.flashcards || []
+      flashcardData.value = {
+        flashcards: props.flashcards || [],
+        nodes: [],
+        links: []
+      }
     }
   } catch (error) {
     console.error('加载闪卡图谱数据失败:', error)
-    flashcardData.value = props.flashcards || []
+    flashcardData.value = {
+      flashcards: props.flashcards || [],
+      nodes: [],
+      links: []
+    }
   }
 })
 
@@ -204,6 +264,37 @@ const handleFlashcardNodeClick = (card, mode) => {
 
 const handleGoToTemp = () => {
   emit('goToTemp')
+}
+
+// 重新加载闪卡图谱数据
+const loadFlashcardData = async () => {
+  try {
+    const userId = props.userId
+    const params = userId != null ? { userId } : {}
+    const data = await flashCardApi.getGraphData(params)
+    
+    if (data && Array.isArray(data.nodes) && Array.isArray(data.links)) {
+      flashcardData.value = {
+        flashcards: data.cards || props.flashcards || [],
+        nodes: data.nodes,
+        links: data.links
+      }
+    } else if (Array.isArray(data)) {
+      flashcardData.value = {
+        flashcards: data,
+        nodes: [],
+        links: []
+      }
+    } else {
+      flashcardData.value = {
+        flashcards: props.flashcards || [],
+        nodes: [],
+        links: []
+      }
+    }
+  } catch (error) {
+    console.error('重新加载闪卡图谱数据失败:', error)
+  }
 }
 </script>
 

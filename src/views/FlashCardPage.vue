@@ -47,9 +47,28 @@
               下次复习: {{ formatNextReviewTime(card.nextReviewTime) }}
             </div>
             <div class="flash-card-actions" @click.stop>
-              <button class="action-btn btn-edit" @click="editCard(card)">编辑</button>
+              <button class="action-btn btn-edit" @click="editCard(card)">
+                <span class="btn-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 20h9" stroke-linecap="round" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <span>编辑</span>
+              </button>
               <button class="action-btn btn-ai" @click="aiAssist(card)">AI辅助</button>
-              <button class="action-btn btn-delete" @click="deleteCard(card.id)">删除</button>
+              <button class="action-btn btn-delete" @click="deleteCard(card.id)">
+                <span class="btn-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h16" stroke-linecap="round" />
+                    <path d="M10 11v6" stroke-linecap="round" />
+                    <path d="M14 11v6" stroke-linecap="round" />
+                    <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12" stroke-linecap="round" stroke-linejoin="round" />
+                    <path d="M9 7V4h6v3" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <span>删除</span>
+              </button>
             </div>
           </div>
         </div>
@@ -646,23 +665,33 @@ onUnmounted(() => {
 
 .flash-card-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: auto;
 }
 
 .action-btn {
   padding: 6px 12px;
-  border: none;
-  border-radius: 6px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.3s;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.18s;
 }
 
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 使编辑/删除按钮样式与暂存区一致 */
 .btn-edit {
-  background: #2563EB;
-  color: white;
+  background: #f9fafb;
+  color: #64748b;
+  border: 1px solid #e5e7eb;
 }
 
 .btn-ai {
@@ -671,13 +700,24 @@ onUnmounted(() => {
 }
 
 .btn-delete {
-  background: #EF4444;
-  color: white;
+  background: #ffffff;
+  color: #9ca3af;
+  border: 1px solid #e5e7eb;
 }
 
 .action-btn:hover {
-  opacity: 0.8;
   transform: translateY(-1px);
+}
+
+.btn-edit:hover {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.btn-delete:hover {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fee2e2;
 }
 
 .review-mode {

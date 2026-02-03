@@ -59,10 +59,9 @@ const VINTAGE_COLORS = [
   '#D9D4E2', // Muted lavender
 ]
 
+// 使用与中文字体一致的字体，使英文与中文统一为同一书写风格（楷体）
 const FONTS = [
-  '"Gochi Hand", cursive',
-  '"Zeyada", cursive',
-  '"Special Elite", serif'
+  '"KaiTi", "楷体", STKaiti, "Microsoft YaHei", serif'
 ]
 
 const WEB_DEV_SNIPPETS = [
@@ -106,14 +105,13 @@ const generateBatch = () => {
     const lines = content.split('\n')
     const lineCount = lines.length
     
-    // 根据内容行数动态计算卡片尺寸，确保文字完整显示
+    // 根据内容行数动态计算卡片尺寸，细长比例：更窄、更高
     const isLong = lineCount > 3
-    const baseWidth = isLong ? 120 : 160
-    const baseHeight = isLong ? 180 + (lineCount - 3) * 28 : 140 + (lineCount - 2) * 24
+    const baseWidth = isLong ? 92 : 112
+    const baseHeight = isLong ? 220 + (lineCount - 3) * 32 : 200 + (lineCount - 2) * 28
     
-    const width = baseWidth + Math.random() * 20
-    // 增加高度以确保文字完整显示，并留出更多空间
-    const height = baseHeight + Math.random() * 40 + 20
+    const width = baseWidth + Math.random() * 16
+    const height = baseHeight + Math.random() * 36 + 16
     
     // 大幅增加旋转角度范围，让卡片看起来更"东倒西歪"
     // 每个卡片有不同的旋转角度，范围在 -25 到 +25 度之间

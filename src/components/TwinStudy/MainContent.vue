@@ -34,7 +34,29 @@
     </header>
 
     <div class="main-messages">
-      <div v-if="!currentSession || currentSession.messages.length === 0" class="welcome-screen">
+      <!-- 历史消息加载骨架屏：切换会话或恢复会话时展示，占据原对话区域 -->
+      <div v-if="isLoading" class="skeleton-wrapper">
+        <div class="skeleton-header">
+          <div class="skeleton-pill skeleton-pill--short"></div>
+          <div class="skeleton-pill skeleton-pill--long"></div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-line--title"></div>
+          <div class="skeleton-line-group">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line skeleton-line--short"></div>
+          </div>
+        </div>
+        <div class="skeleton-card">
+          <div class="skeleton-line skeleton-line--title"></div>
+          <div class="skeleton-line-group">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line skeleton-line--medium"></div>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="!currentSession || currentSession.messages.length === 0" class="welcome-screen">
         <div class="welcome-content">
           <div class="welcome-title">
             <SparklesIcon />
@@ -192,6 +214,11 @@ const props = defineProps({
   isSidebarOpen: {
     type: Boolean,
     required: true
+  },
+  // 历史消息加载中（切换会话或恢复当前会话），用于显示骨架屏
+  isLoading: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -372,28 +399,29 @@ const showToast = (message, type = 'info') => {
   toastElement.className = 'flashcard-toast'
   toastElement.style.cssText = `
     position: fixed;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-100px);
-    background: #D1FAE5;
+    top: 30px;
+    left: 60%;
+    transform: translateX(-50%) translateY(-120px);
+    // background: #D1FAE5;
     color: #10B981;
-    padding: 12px 20px;
-    border-radius: 9999px;
-    box-shadow: none;
+    // padding: 16px 24px;
+    // border-radius: 9999px;
+    // box-shadow: none;
     z-index: 10001;
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 14px;
+    gap: 12px;
+    font-size: 15px;
     font-weight: 500;
-    max-width: 500px;
+    max-width: 560px;
+    line-height: 1.6;
     animation: toastSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   `
   toastElement.innerHTML = `
     <div style="display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
       ${iconSvg}
     </div>
-    <span style="letter-spacing: 0.02em; white-space: nowrap;">${message}</span>
+    <span style="letter-spacing: 0.02em;">${message}</span>
   `
   document.body.appendChild(toastElement)
 
@@ -642,6 +670,85 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   min-height: 0;
+}
+
+/* ===== 历史消息加载骨架屏样式 ===== */
+.skeleton-wrapper {
+  width: 100%;
+  max-width: 64rem;
+  padding: 60px 32px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.skeleton-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.skeleton-pill {
+  height: 22px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #f4f4f5 0%, #e5e7eb 50%, #f4f4f5 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-pill--short {
+  width: 220px;
+}
+
+.skeleton-pill--long {
+  width: 320px;
+}
+
+.skeleton-card {
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: #f4f4f5;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skeleton-line-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #e5e7eb 0%, #d4d4d8 50%, #e5e7eb 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton-line--title {
+  width: 40%;
+  height: 18px;
+}
+
+.skeleton-line--short {
+  width: 55%;
+}
+
+.skeleton-line--medium {
+  width: 72%;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .main-messages::-webkit-scrollbar {

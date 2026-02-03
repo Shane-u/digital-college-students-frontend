@@ -20,6 +20,7 @@
         :onSendMessage="sendMessage"
         :onAbortStream="abortCurrentStream"
         :isSidebarOpen="isSidebarOpen"
+        :isLoading="isHistoryLoading"
       />
     </div>
   </div>
@@ -40,6 +41,8 @@ const sessions = ref([])
 const currentSessionId = ref(null)
 const modelMode = ref('fast')
 const currentAbortController = ref(null)
+// 切换会话或进入页面时，历史消息加载中的骨架屏状态
+const isHistoryLoading = ref(false)
 // 流式输出时实时显示的 Markdown 文本（仍用于非直接 DOM 时的回退）
 const streamingContent = ref('')
 // 流式消息内容 DOM 元素 ref，参考 bailian-chat.demo 在循环内直接设置 innerHTML 实现边输出边渲染
@@ -351,8 +354,13 @@ const selectSession = async (id) => {
   console.log('[selectSession] 找到会话:', session)
   
   if (session.chat_id) {
-    // 加载历史消息
-    await loadHistoryMessages(session.chat_id, id)
+    // 加载历史消息时显示骨架屏
+    isHistoryLoading.value = true
+    try {
+      await loadHistoryMessages(session.chat_id, id)
+    } finally {
+      isHistoryLoading.value = false
+    }
   } else {
     console.warn('[selectSession] 会话缺少 chat_id，无法加载历史消息，session:', session)
     ElMessage.warning('该会话缺少会话ID，无法加载历史消息')
@@ -797,7 +805,13 @@ onMounted(async () => {
   if (!sid) return
   const session = sessions.value.find(s => s.id === sid)
   if (session?.chat_id) {
-    await loadHistoryMessages(session.chat_id, sid)
+    // 首次进入页面时，如果需要加载当前会话的历史消息，同样展示骨架屏
+    isHistoryLoading.value = true
+    try {
+      await loadHistoryMessages(session.chat_id, sid)
+    } finally {
+      isHistoryLoading.value = false
+    }
   }
 })
 </script>

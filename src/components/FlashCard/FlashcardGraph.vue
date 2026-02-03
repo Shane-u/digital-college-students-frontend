@@ -1,7 +1,7 @@
 <template>
   <div class="flashcard-graph-container">
     <!-- 工具栏 -->
-    <div class="graph-toolbar">
+    <div v-if="!hideToolbar" class="graph-toolbar">
       <div class="toolbar-left">
         <!-- 搜索框 -->
         <div class="search-wrapper">
@@ -14,6 +14,7 @@
             type="text" 
             placeholder="搜索标题或内容..." 
             class="search-input"
+            @keyup.enter="handleSearch"
           />
         </div>
         
@@ -61,16 +62,16 @@
     </div>
 
     <!-- 图例 -->
-    <div class="graph-legend">
+    <div v-if="!hideToolbar" class="graph-legend">
       <h4 class="legend-title">图谱图例</h4>
       <div class="legend-items">
         <div class="legend-item">
           <span class="legend-dot category"></span>
-          <span class="legend-label">知识分类层级 (Category)</span>
+          <span class="legend-label">知识分类层级</span>
         </div>
         <div class="legend-item">
           <span class="legend-dot flashcard"></span>
-          <span class="legend-label">学习闪卡节点 (Flashcard)</span>
+          <span class="legend-label">学习闪卡节点</span>
         </div>
       </div>
       <div class="legend-hints">
@@ -129,13 +130,15 @@
               <label class="node-edit-label">内容</label>
               <textarea v-model="editForm.content" class="node-edit-textarea" rows="6"></textarea>
             </div>
-            <div class="node-edit-field">
-              <label class="node-edit-label">HTML 内容（可选）</label>
-              <textarea v-model="editForm.htmlContent" class="node-edit-textarea" rows="4" placeholder="留空则使用上面内容渲染"></textarea>
-            </div>
             <div class="node-edit-actions">
               <button type="button" class="node-card-btn node-card-btn-secondary" @click="closeEditModal">取消</button>
-              <button type="submit" class="node-card-btn node-card-btn-primary">保存</button>
+              <button type="submit" class="node-card-btn node-card-btn-primary" :disabled="savingEdit">
+                <span v-if="!savingEdit">保存</span>
+                <span v-else class="btn-loading">
+                  <span class="btn-loading-spinner"></span>
+                  正在保存...
+                </span>
+              </button>
             </div>
           </form>
         </div>
@@ -147,6 +150,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as d3 from 'd3'
+import { ElMessage } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 
@@ -169,10 +173,20 @@ const props = defineProps({
   userId: {
     type: [String, Number],
     default: null
+  },
+  /** 需要高亮的业务闪卡 ID 列表（来自 Neo4j 图谱查询接口结果） */
+  highlightIds: {
+    type: Array,
+    default: () => []
+  },
+  /** 是否隐藏工具栏和图例（对比模式下使用） */
+  hideToolbar: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh'])
+const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh', 'search'])
 
 const searchKeyword = ref('')
 const timeRange = ref('ALL')
@@ -180,9 +194,12 @@ const graphContainer = ref(null)
 const svgRef = ref(null)
 const dimensions = ref({ width: 0, height: 0 })
 const showNodeCard = ref(false)
-const nodeCardData = ref({ id: '', title: '', content: '', htmlContent: '', hierarchyPath: '' })
+// id: 业务闪卡ID（用于后端 update/delete）；graphId: 图谱节点ID（用于从 links 还原层级路径）
+const nodeCardData = ref({ id: '', graphId: '', title: '', content: '', htmlContent: '', hierarchyPath: '' })
 const showEditModal = ref(false)
-const editForm = ref({ id: '', title: '', content: '', htmlContent: '', hierarchyPath: '' })
+const editForm = ref({ id: '', graphId: '', title: '', content: '', htmlContent: '', hierarchyPath: '' })
+const loadingDetail = ref(false)
+const savingEdit = ref(false)
 
 const timeRanges = [
   { value: 'ALL', label: '全部' },
@@ -205,7 +222,7 @@ const filteredFlashcards = computed(() => {
   let result = [...props.flashcards]
   const now = new Date()
   
-  // 时间范围过滤
+  // 时间范围过滤（搜索不再在前端过滤，只用于回车触发后端图谱查询，避免每敲一个字重绘图谱）
   if (timeRange.value !== 'ALL') {
     const ranges = {
       '7D': 7,
@@ -225,19 +242,14 @@ const filteredFlashcards = computed(() => {
     }
   }
   
-  // 搜索过滤（标题、内容、标签）
-  if (searchKeyword.value.trim()) {
-    const keyword = searchKeyword.value.toLowerCase()
-    result = result.filter(c => {
-      const titleMatch = (c.title || '').toLowerCase().includes(keyword)
-      const contentMatch = (c.content || '').toLowerCase().includes(keyword)
-      const tagsMatch = (c.tags || []).some(tag => tag.toLowerCase().includes(keyword))
-      return titleMatch || contentMatch || tagsMatch
-    })
-  }
-  
   return result
 })
+
+// 触发后端图谱搜索（Neo4j），当前仅在按下回车时触发
+const handleSearch = () => {
+  const keyword = searchKeyword.value.trim()
+  emit('search', keyword)
+}
 
 // 更新容器尺寸
 const updateDimensions = () => {
@@ -286,13 +298,160 @@ const getNodeDisplayName = (d) => {
 // 渲染D3图谱（支持 根/课程/名 路径格式，Neo4j 风格节点）
 let simulation = null
 const NEO4J = {
-  categoryFill: '#58c4dc',
+  // 参考图谱模板：整体偏蓝紫色调
+  categoryFill: '#7880f0',
   categoryStroke: '#ffffff',
   flashcardFill: '#F2A73D',
   flashcardStroke: '#ffffff',
+  rootFill: '#A78BFA',
   linkStroke: '#A5ABB6',
   labelFill: '#333333',
   nodeStrokeWidth: 2
+}
+
+// 识别节点层级/类型，用于动态大小与颜色
+const getGraphNodeDepth = (d) => {
+  // 1) Neo4j 的 label：User_xxx_Root / User_xxx_Level1 / Level2 / Level3 / FlashCard
+  const label = (d?.label || '').toString()
+  if (/Root/i.test(label)) return 1
+  const m = label.match(/Level(\d+)/i)
+  if (m && m[1]) {
+    const lv = parseInt(m[1], 10)
+    if (!Number.isNaN(lv)) return lv + 1 // Root=1, Level1=2, Level2=3 ...
+  }
+
+  // 2) 前端构造的分类节点：id = "根/课程/..."
+  const id = d?.id
+  if (typeof id === 'string' && id.includes('/')) return parseHierarchyPath(id).length
+
+  // 3) fallback：用显示名判断根
+  const name = getNodeDisplayName(d)
+  if (name === '根') return 1
+
+  return 2
+}
+
+const isFlashcardNode = (d) => {
+  if (d?.type === 'flashcard') return true
+  const label = (d?.label || '').toString()
+  return /FlashCard|Flashcard/i.test(label)
+}
+
+const isRootNode = (d) => {
+  const label = (d?.label || '').toString()
+  if (/Root/i.test(label)) return true
+  const id = d?.id
+  if (id === '根') return true
+  const name = getNodeDisplayName(d)
+  return name === '根'
+}
+
+// 从当前图谱关系中还原某个节点的层级路径（用于编辑时回填）
+const buildHierarchyPathFromGraph = (graphNodeId) => {
+  if (!graphNodeId) return ''
+  const nodesById = new Map((props.graphNodes || []).map(n => [String(n.id), n]))
+  const links = props.graphLinks || []
+
+  // 通过「指向当前节点」的边，找父节点；兼容 LINK_TO / parent_of / belongs_to 等命名
+  const getParents = (id) => {
+    const pid = String(id)
+    const parents = []
+    for (const l of links) {
+      const src = typeof l.source === 'object' ? l.source?.id : l.source
+      const tgt = typeof l.target === 'object' ? l.target?.id : l.target
+      if (tgt == null || src == null) continue
+      if (String(tgt) !== pid) continue
+      const p = nodesById.get(String(src))
+      if (p) parents.push(p)
+    }
+    return parents
+  }
+
+  const parts = []
+  let cur = nodesById.get(String(graphNodeId))
+  if (!cur) return ''
+
+  // 如果当前节点是闪卡，先找它的父分类节点作为起点
+  const isFlash = (cur.label && /FlashCard|Flashcard/i.test(String(cur.label)))
+  if (isFlash) {
+    const parents = getParents(cur.id).filter(p => !(p.label && /FlashCard|Flashcard/i.test(String(p.label))))
+    if (parents.length > 0) cur = parents[0]
+  }
+
+  const visited = new Set()
+  while (cur && !visited.has(String(cur.id))) {
+    visited.add(String(cur.id))
+    const name = cur.properties?.name || cur.properties?.label || cur.properties?.title || cur.label || ''
+    if (name) parts.push(String(name))
+    if (isRootNode({ id: cur.id, label: cur.label, properties: cur.properties })) break
+    const parents = getParents(cur.id)
+      .filter(p => !(p.label && /FlashCard|Flashcard/i.test(String(p.label))))
+    if (parents.length === 0) break
+    cur = parents[0]
+  }
+
+  const rev = parts.reverse().filter(Boolean)
+  if (rev.length === 0) return ''
+  // 统一成 “根/...” 格式
+  if (rev[0] !== '根') rev.unshift('根')
+  return rev.join('/')
+}
+
+const getNodeRadius = (d) => {
+  // 闪卡节点最小，但不至于太小
+  if (isFlashcardNode(d)) return 14
+
+  const depth = getGraphNodeDepth(d)
+  // 根最大，越往下越小（最低不小于 16）
+  if (depth <= 1) return 30
+  if (depth === 2) return 26
+  if (depth === 3) return 22
+  if (depth === 4) return 19
+  return 16
+}
+
+const getNodeFill = (d) => {
+  if (isFlashcardNode(d)) return NEO4J.flashcardFill
+  if (isRootNode(d)) return NEO4J.rootFill
+  return NEO4J.categoryFill
+}
+
+// 根据层级决定节点在径向布局中的半径（越深越远）
+const radialByDepth = (depth) => {
+  if (depth <= 1) return 0              // 根在中心
+  if (depth === 2) return 180
+  if (depth === 3) return 280
+  if (depth === 4) return 360
+  return 430
+}
+
+const getRadialDistance = (d) => {
+  const depth = getGraphNodeDepth(d)
+  // 闪卡节点统一推到最外圈，让连线朝外延伸，而不是朝根收缩
+  if (isFlashcardNode(d)) return 480
+  return radialByDepth(depth)
+}
+
+const getNodeFontSize = (d) => {
+  if (isRootNode(d)) return 26
+  if (isFlashcardNode(d)) return 13
+  const depth = getGraphNodeDepth(d)
+  if (depth <= 2) return 15
+  if (depth === 3) return 14
+  return 13
+}
+
+const getNodeFontWeight = (d) => (isRootNode(d) ? 900 : 800)
+
+const getNodeTextFill = (d) => {
+  // 根节点：白色文字配紫色背景，其它节点：深灰
+  if (isRootNode(d)) return '#ffffff'
+  return '#111827'
+}
+
+const getNodeTextStroke = (d) => {
+  // 根节点不要描边（纯黑字），其它节点保留白色描边以便阅读
+  return isRootNode(d) ? 'none' : 'rgba(255,255,255,0.85)'
 }
 
 const renderGraph = () => {
@@ -311,7 +470,9 @@ const renderGraph = () => {
     nodes = props.graphNodes.map(n => ({
       id: n.id,
       label: (n.label || 'Node').toString(),
-      properties: n.properties || {}
+      properties: n.properties || {},
+      // 业务闪卡 ID：用于与 Neo4j 查询结果做高亮匹配
+      businessId: n.properties?.id != null ? String(n.properties.id) : (n.id != null ? String(n.id) : null)
     }))
     links = props.graphLinks.map(l => ({
       source: typeof l.source === 'object' ? l.source.id : l.source,
@@ -331,13 +492,14 @@ const renderGraph = () => {
       if (seenNodeIds.has(fullPath)) return
       seenNodeIds.add(fullPath)
       const label = parts[i] || '未分类'
-      nodes.push({
-        id: fullPath,
-        label,
-        type: 'category',
-        color: NEO4J.categoryFill,
-        stroke: NEO4J.categoryStroke
-      })
+        nodes.push({
+          id: fullPath,
+          label,
+          type: 'category',
+          color: NEO4J.categoryFill,
+          stroke: NEO4J.categoryStroke,
+          businessId: null
+        })
     })
     
     // 层级之间的边：父路径 -> 子路径
@@ -362,7 +524,8 @@ const renderGraph = () => {
       type: 'flashcard',
       color: NEO4J.flashcardFill,
       stroke: NEO4J.flashcardStroke,
-      data: card
+      data: card,
+      businessId: card.id != null ? String(card.id) : null
     })
     if (leafPath) {
       links.push({
@@ -386,61 +549,224 @@ const renderGraph = () => {
   })
   
   if (nodes.length === 0) return
+
+  // 高亮集合：来自 Neo4j 图谱查询的业务闪卡 ID
+  const highlightIdSet = new Set(
+    (props.highlightIds || [])
+      .map(id => (id != null ? String(id) : ''))
+      .filter(s => s !== '')
+  )
+
+  // 命中的节点（闪卡节点）以及它们的邻居节点（包括所属层级）
+  const hitNodeIds = new Set()
+  if (highlightIdSet.size > 0) {
+    nodes.forEach(n => {
+      if (n.businessId && highlightIdSet.has(String(n.businessId))) {
+        hitNodeIds.add(n.id)
+      }
+    })
+  }
+
+  const neighborNodeIds = new Set(hitNodeIds)
+  if (hitNodeIds.size > 0) {
+    uniqueLinks.forEach(l => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      if (hitNodeIds.has(sid) || hitNodeIds.has(tid)) {
+        neighborNodeIds.add(sid)
+        neighborNodeIds.add(tid)
+      }
+    })
+  }
+
+  const hasHighlight = highlightIdSet.size > 0 && neighborNodeIds.size > 0
+  const isDimmedNode = (d) => {
+    if (!hasHighlight) return false
+    return !neighborNodeIds.has(d.id)
+  }
   
   const g = svg.append('g')
   const zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', (ev) => g.attr('transform', ev.transform))
   svg.call(zoom)
   
-  // 力导向（与 knowledge-graph 一致）
+  // 力导向 + 温和径向约束：既保持关系结构，又整体呈“圆圈向外扩展”的趋势
   simulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(uniqueLinks).id(d => d.id).distance(180))
-    .force('charge', d3.forceManyBody().strength(-550))
+    .force(
+      'link',
+      d3.forceLink(uniqueLinks)
+        .id(d => d.id)
+        .distance(140)
+        .strength(0.5)
+    )
+    .force('charge', d3.forceManyBody().strength(-260))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(40))
+    .force(
+      'radial',
+      d3.forceRadial(d => getRadialDistance(d), width / 2, height / 2).strength(0.25)
+    )
+    .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 6))
   
   const linkLayer = g.append('g').attr('class', 'links').attr('stroke', '#A5ABB6').attr('stroke-opacity', 0.8)
   const nodeLayer = g.append('g').attr('class', 'nodes')
   const textLayer = g.append('g').attr('class', 'texts')
   
   const link = linkLayer.selectAll('line').data(uniqueLinks).join('line').attr('stroke-width', 2)
-  const node = nodeLayer.selectAll('circle').data(nodes).join('circle')
-    .attr('r', 20)
-    .attr('fill', d => (d.label && /FlashCard|Flashcard/i.test(d.label)) ? NEO4J.flashcardFill : NEO4J.categoryFill)
-    .attr('stroke', '#fff')
+    .style('opacity', d => {
+      if (!hasHighlight) return 0.8
+      const sid = typeof d.source === 'object' ? d.source.id : d.source
+      const tid = typeof d.target === 'object' ? d.target.id : d.target
+      return (neighborNodeIds.has(sid) && neighborNodeIds.has(tid)) ? 0.9 : 0.1
+    })
+
+  // 每个节点用 <g> 包一组：外圈圆环 + 内圈实心圆 + 可选高亮光晕，模仿模板中的双圆样式
+  const nodeGroup = nodeLayer
+    .selectAll('g.graph-node')
+    .data(nodes)
+    .join('g')
+    .attr('class', 'graph-node')
+    .style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
+    .call(
+      d3.drag()
+        .on('start', (ev) => {
+          if (!ev.active) simulation.alphaTarget(0.3).restart()
+          ev.subject.fx = ev.subject.x
+          ev.subject.fy = ev.subject.y
+        })
+        .on('drag', (ev) => {
+          ev.subject.fx = ev.x
+          ev.subject.fy = ev.y
+        })
+        .on('end', (ev) => {
+          if (!ev.active) simulation.alphaTarget(0)
+          ev.subject.fx = null
+          ev.subject.fy = null
+        })
+    )
+
+  // 高亮用的外层光晕圈（默认透明，hover 时放大+显现）
+  nodeGroup
+    .append('circle')
+    .attr('class', 'node-halo')
+    .attr('r', d => getNodeRadius(d) + 8)
+    .attr('fill', 'none')
+    .attr('stroke', 'rgba(255,255,255,0.5)')
     .attr('stroke-width', 2)
-    .call(d3.drag()
-      .on('start', (ev) => { if (!ev.active) simulation.alphaTarget(0.3).restart(); ev.subject.fx = ev.subject.x; ev.subject.fy = ev.subject.y })
-      .on('drag', (ev) => { ev.subject.fx = ev.x; ev.subject.fy = ev.y })
-      .on('end', (ev) => { if (!ev.active) simulation.alphaTarget(0); ev.subject.fx = null; ev.subject.fy = null }))
+    .attr('stroke-dasharray', d => (isRootNode(d) ? '4 4' : '0'))
+    .style('opacity', 0)
+
+  // 外圈彩色圆环
+  nodeGroup
+    .append('circle')
+    .attr('class', 'node-outer')
+    .attr('r', d => getNodeRadius(d))
+    .attr('fill', 'none')
+    .attr('stroke', d => getNodeFill(d))
+    .attr('stroke-width', d => (isRootNode(d) ? 6 : 4))
+
+  // 内圈实心圆
+  nodeGroup
+    .append('circle')
+    .attr('class', 'node-inner')
+    .attr('r', d => getNodeRadius(d) - 4)
+    .attr('fill', d => (isRootNode(d) ? NEO4J.rootFill : getNodeFill(d)))
+    .attr('stroke', '#f8fafc')
+    .attr('stroke-width', 1.5)
   
-  node.append('title').text(getNodeDisplayName)
+  nodeGroup.append('title').text(getNodeDisplayName)
   const text = textLayer.selectAll('text').data(nodes).join('text')
     .text(getNodeDisplayName)
-    .attr('font-size', '12px')
+    .attr('font-size', d => `${getNodeFontSize(d)}px`)
+    .attr('font-weight', getNodeFontWeight)
     .attr('text-anchor', 'middle')
-    .attr('dy', '0.35em')
-    .style('fill', NEO4J.labelFill)
+    .attr('dy', 0)
+    .style('font-family', '"KaiTi", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif')
+    .style('fill', d => {
+      const base = getNodeTextFill(d)
+      if (!hasHighlight || !isDimmedNode(d)) return base
+      // 未命中节点文字整体降为更浅的灰
+      return '#cbd5e1'
+    })
+    // 文字描边/光晕：提升对比度（尤其是“根”）
+    .style('paint-order', 'stroke')
+    .style('stroke', d => {
+      if (!hasHighlight || !isDimmedNode(d)) return getNodeTextStroke(d)
+      // 变暗节点的描边也减弱
+      return 'rgba(255,255,255,0.4)'
+    })
+    .style('stroke-width', d => {
+      if (isRootNode(d)) return 0
+      return hasHighlight && isDimmedNode(d) ? 1.5 : 3
+    })
+    .style('stroke-linejoin', 'round')
     .style('pointer-events', 'none')
+    .style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   
   // 点击节点显示 content 小卡片
-  node.on('click', (ev, d) => {
+  nodeGroup.on('click', (ev, d) => {
     ev.stopPropagation()
     const content = (d.properties && d.properties.content) || ''
     if (content) {
       showNodeCardFunc(ev, d, content)
     }
   })
+  // hover 高亮：外圈加粗 + 光晕圈显现，模仿模板鼠标悬浮效果
+  nodeGroup
+    .on('mouseover', function (ev, d) {
+      const gSel = d3.select(this)
+      gSel
+        .select('.node-outer')
+        .attr('stroke', 'rgba(100,250,100,1)')
+        .attr('stroke-width', isRootNode(d) ? 8 : 6)
+      gSel
+        .select('.node-halo')
+        .transition()
+        .duration(150)
+        .attr('r', getNodeRadius(d) + 14)
+        .style('opacity', 1)
+      gSel.style('filter', 'drop-shadow(0 0 18px rgba(100,250,100,0.85))')
+    })
+    .on('mouseout', function (ev, d) {
+      const gSel = d3.select(this)
+      gSel
+        .select('.node-outer')
+        .attr('stroke', getNodeFill(d))
+        .attr('stroke-width', isRootNode(d) ? 6 : 4)
+      gSel
+        .select('.node-halo')
+        .transition()
+        .duration(150)
+        .attr('r', getNodeRadius(d) + 8)
+        .style('opacity', 0)
+      gSel.style('filter', 'none')
+    })
   
   simulation.on('tick', () => {
-    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y)
-    node.attr('cx', d => d.x).attr('cy', d => d.y)
-    text.attr('x', d => d.x).attr('y', d => d.y)
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y)
+
+    nodeGroup.attr('transform', d => `translate(${d.x},${d.y})`)
+    text
+      .attr('x', d => d.x)
+      .attr('y', d => {
+        // 根节点文字放在圆圈内部，其它节点仍在下方
+        if (isRootNode(d)) return d.y + 4
+        return d.y + getNodeRadius(d) + 14
+      })
   })
 }
 
 // 仅在有数据变化时渲染一次（不监听 dimensions，避免卡死）
 watch(
-  () => [props.graphNodes?.length, props.graphLinks?.length, filteredFlashcards.value.length],
+  () => [
+    props.graphNodes?.length,
+    props.graphLinks?.length,
+    filteredFlashcards.value.length,
+    // 高亮 ID 变化时需要重新渲染以更新明暗状态
+    (props.highlightIds || []).join(',')
+  ],
   () => {
     if (simulation) simulation.stop()
     nextTick(renderGraph)
@@ -482,6 +808,7 @@ const showNodeCardFunc = (event, node, content) => {
   const apiId = props_.id ?? data.id ?? node.id
   nodeCardData.value = {
     id: apiId != null ? String(apiId) : '',
+    graphId: node.id != null ? String(node.id) : '',
     title: props_.title ?? data.title ?? title,
     content: props_.content ?? data.content ?? content ?? '暂无内容',
     htmlContent: props_.htmlContent ?? data.htmlContent ?? props_.content ?? data.content ?? '',
@@ -493,17 +820,35 @@ const showNodeCardFunc = (event, node, content) => {
 // 关闭节点卡片
 const closeNodeCard = () => {
   showNodeCard.value = false
-  nodeCardData.value = { id: '', title: '', content: '', htmlContent: '', hierarchyPath: '' }
+  nodeCardData.value = { id: '', graphId: '', title: '', content: '', htmlContent: '', hierarchyPath: '' }
 }
 
 // 打开编辑弹窗
 const openEditModal = () => {
   editForm.value = {
     id: nodeCardData.value.id,
+    graphId: nodeCardData.value.graphId,
     title: nodeCardData.value.title,
     content: nodeCardData.value.content,
     htmlContent: nodeCardData.value.htmlContent,
     hierarchyPath: nodeCardData.value.hierarchyPath
+  }
+  // 1) 先用图谱结构回填层级路径（最可靠，不依赖详情接口）
+  if (!editForm.value.hierarchyPath && editForm.value.graphId) {
+    const hp = buildHierarchyPathFromGraph(editForm.value.graphId)
+    if (hp) editForm.value.hierarchyPath = hp
+  }
+  // 若当前未拿到层级路径，尝试从详情接口补全
+  if (!editForm.value.hierarchyPath && editForm.value.id) {
+    loadingDetail.value = true
+    flashCardApi.getDetail(editForm.value.id).then((detail) => {
+      if (!detail) return
+      const hp = detail.hierarchyPath || detail.category || ''
+      if (hp) editForm.value.hierarchyPath = hp
+      if (!editForm.value.title && detail.title) editForm.value.title = detail.title
+      if (!editForm.value.content && detail.content) editForm.value.content = detail.content
+      if (!editForm.value.htmlContent && detail.htmlContent) editForm.value.htmlContent = detail.htmlContent
+    }).catch(() => {}).finally(() => { loadingDetail.value = false })
   }
   showEditModal.value = true
 }
@@ -519,11 +864,14 @@ const submitEdit = async () => {
   const idStr = id != null ? String(id) : ''
   if (!idStr.trim()) return
   try {
+    savingEdit.value = true
     await flashCardApi.update({
       id: idStr,
       title: title || '',
       content: content || '',
-      htmlContent: htmlContent ?? content ?? ''
+      htmlContent: htmlContent ?? content ?? '',
+      // 新增：把层级路径一并传给后端，用于同步 Neo4j 层级结构
+      hierarchyPath: (hierarchyPath || '').trim() || undefined
     })
     nodeCardData.value = {
       ...nodeCardData.value,
@@ -533,10 +881,13 @@ const submitEdit = async () => {
       hierarchyPath: hierarchyPath || nodeCardData.value.hierarchyPath
     }
     closeEditModal()
+    ElMessage && ElMessage.success('保存成功')
     emit('refresh')
   } catch (err) {
     console.error('保存失败', err)
     alert(err?.message || err?.response?.data?.message || '保存失败，请重试')
+  } finally {
+    savingEdit.value = false
   }
 }
 
@@ -673,13 +1024,14 @@ const sanitizedContent = computed(() => {
 }
 
 .btn-compare {
-  background: #1e293b;
+  background: #5b52f9;
   color: white;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(91, 82, 249, 0.3);
 }
 
 .btn-compare:hover {
-  background: #0f172a;
+  background: #4a42d9;
+  box-shadow: 0 6px 12px rgba(91, 82, 249, 0.4);
 }
 
 .btn-temp {
@@ -784,7 +1136,8 @@ const sanitizedContent = computed(() => {
 }
 
 .legend-dot.category {
-  background: #58c4dc;
+  /* 与根/分类节点主色系统一为紫色系小点 */
+  background: #A78BFA;
   border: 2px solid #fff;
   box-sizing: border-box;
 }
@@ -992,8 +1345,11 @@ const sanitizedContent = computed(() => {
   background: white;
   border-radius: 12px;
   width: 100%;
-  max-width: 560px;
-  max-height: 90vh;
+  /* 编辑弹窗更大更宽 */
+  max-width: 700px;
+  /* 更高一些，仍保留可滚动 */
+  height: 86vh;
+  max-height: 94vh;
   overflow-y: auto;
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.15);
 }
@@ -1067,7 +1423,8 @@ const sanitizedContent = computed(() => {
 
 .node-edit-textarea {
   resize: vertical;
-  min-height: 80px;
+  /* 内容区更大一些，跟随弹窗宽度已经是 100%，这里提高默认高度方便编辑长文案 */
+  min-height: 340px;
 }
 
 .node-edit-actions {
@@ -1077,6 +1434,33 @@ const sanitizedContent = computed(() => {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid #e5e6eb;
+}
+
+.node-card-btn-primary[disabled] {
+  opacity: 0.85;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-top-color: #ffffff;
+  animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
 

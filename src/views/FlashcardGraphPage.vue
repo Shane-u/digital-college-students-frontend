@@ -1,67 +1,84 @@
 <template>
   <div class="flashcard-graph-page">
-    <!-- 视图状态：TEMP_ZONE | GRAPH | REVIEW | EDIT | COMPARE -->
-    <!-- 暂存区 -->
-    <FlashcardTempZone 
-      v-if="viewState === 'TEMP_ZONE'"
-      :flashcards="tempZoneFlashcards"
-      @confirm-save="handleConfirmSave"
-      @preview="handlePreview"
-      @delete="handleDeleteTemp"
-      @card-click="handleCardClick"
-    />
+    <!-- 全局加载态：避免刷新时闪现错误视图 -->
+    <div v-if="pageLoading" class="flashcard-page-loading">
+      <div class="flashcard-page-loading-inner">
+        <div class="flashcard-page-spinner"></div>
+        <div class="flashcard-page-loading-text">正在加载闪卡数据...</div>
+      </div>
+    </div>
     
-    <!-- 图谱（key 确保有 nodes 时重新挂载并渲染） -->
-    <FlashcardGraph 
-      v-else-if="viewState === 'GRAPH'"
-      :key="'graph-' + (graphData.nodes?.length || 0)"
-      :flashcards="savedFlashcards"
-      :graph-nodes="graphData.nodes"
-      :graph-links="graphData.links"
-      :user-id="currentUserId"
-      @node-click="handleNodeClick"
-      @go-to-temp="viewState = 'TEMP_ZONE'"
-      @compare="viewState = 'COMPARE'"
-      @refresh="loadSavedFlashcards"
-    />
-    
-    <!-- 复习 -->
-    <FlashcardReview 
-      v-else-if="viewState === 'REVIEW'"
-      :card="currentCard"
-      :total-cards="reviewCards.length"
-      :current-index="currentReviewIndex"
-      @back="viewState = 'GRAPH'"
-      @review="handleReview"
-      @next="handleNextReview"
-    />
-    
-    <!-- 编辑 -->
-    <FlashcardEdit 
-      v-else-if="viewState === 'EDIT'"
-      :card="currentCard"
-      @back="viewState = 'GRAPH'"
-      @saved="handleSaved"
-      @deleted="handleDeleted"
-    />
-    
-    <!-- 对比 -->
-    <CompareView 
-      v-else-if="viewState === 'COMPARE'"
-      :flashcards="savedFlashcards"
-      @close="viewState = 'GRAPH'"
-      @node-click="handleNodeClick"
-      @go-to-temp="viewState = 'TEMP_ZONE'"
-    />
-    
-    <!-- 层级标签选择页面 -->
-    <CategoryHierarchySelect
-      v-else-if="viewState === 'CATEGORY_SELECT'"
-      :card="pendingSaveCard"
-      :category-tree="categoryTree"
-      @confirm="handleCategoryHierarchyConfirm"
-      @back="handleCategoryHierarchyBack"
-    />
+    <template v-else>
+      <!-- 视图状态：TEMP_ZONE | GRAPH | REVIEW | EDIT | COMPARE -->
+      <!-- 暂存区 -->
+      <FlashcardTempZone 
+        v-if="viewState === 'TEMP_ZONE'"
+        :flashcards="tempZoneFlashcards"
+        @confirm-save="handleConfirmSave"
+        @preview="handlePreview"
+        @delete="handleDeleteTemp"
+        @card-click="handleCardClick"
+        @back-to-graph="handleBackToGraph"
+      />
+      
+      <!-- 图谱（key 确保有 nodes 时重新挂载并渲染） -->
+      <FlashcardGraph 
+        v-else-if="viewState === 'GRAPH'"
+        :key="'graph-' + (graphData.nodes?.length || 0)"
+        :flashcards="savedFlashcards"
+        :graph-nodes="graphData.nodes"
+        :graph-links="graphData.links"
+        :user-id="currentUserId"
+        :highlight-ids="highlightIds"
+        @node-click="handleNodeClick"
+        @go-to-temp="goToTemp"
+        @compare="viewState = 'COMPARE'"
+        @refresh="loadSavedFlashcards"
+        @search="handleGraphSearch"
+      />
+      
+      <!-- 复习 -->
+      <FlashcardReview 
+        v-else-if="viewState === 'REVIEW'"
+        :card="currentCard"
+        :total-cards="reviewCards.length"
+        :current-index="currentReviewIndex"
+        @back="viewState = 'GRAPH'"
+        @review="handleReview"
+        @next="handleNextReview"
+      />
+      
+      <!-- 编辑 -->
+      <FlashcardEdit 
+        v-else-if="viewState === 'EDIT'"
+        :card="currentCard"
+        @back="viewState = 'GRAPH'"
+        @saved="handleSaved"
+        @deleted="handleDeleted"
+      />
+      
+      <!-- 对比 -->
+      <CompareView 
+        v-else-if="viewState === 'COMPARE'"
+        :flashcards="savedFlashcards"
+        :graph-nodes="graphData.nodes"
+        :graph-links="graphData.links"
+        :user-id="currentUserId"
+        :highlight-ids="highlightIds"
+        @close="viewState = 'GRAPH'"
+        @node-click="handleNodeClick"
+        @go-to-temp="goToTemp"
+      />
+      
+      <!-- 层级标签选择页面 -->
+      <CategoryHierarchySelect
+        v-else-if="viewState === 'CATEGORY_SELECT'"
+        :card="pendingSaveCard"
+        :category-tree="categoryTree"
+        @confirm="handleCategoryHierarchyConfirm"
+        @back="handleCategoryHierarchyBack"
+      />
+    </template>
     
     <!-- 分类选择对话框（保留作为备用） -->
     <CategorySelectDialog
@@ -114,7 +131,13 @@ const route = useRoute()
 const router = useRouter()
 
 // 视图状态：TEMP_ZONE（暂存区）| GRAPH（图谱）| REVIEW（复习）| EDIT（编辑）| COMPARE（对比）| CATEGORY_SELECT（层级标签选择）
-const viewState = ref('GRAPH')
+// 初始状态根据当前路由同步决定，避免刷新 /flashcard-temp 时先闪一下图谱视图
+const initialView =
+  (route.path === '/flashcard-temp' || route.query.view === 'temp')
+    ? 'TEMP_ZONE'
+    : 'GRAPH'
+const viewState = ref(initialView)
+const pageLoading = ref(true)
 const tempZoneFlashcards = ref([])
 const savedFlashcards = ref([])
 const currentCard = ref(null)
@@ -129,6 +152,8 @@ const previewCard = ref(null)
 const graphData = ref({ nodes: [], links: [] })
 // 当前用户 ID，用于 Neo4j 图谱编辑/删除时指定数据库
 const currentUserId = ref(null)
+// 图谱查询命中的闪卡业务 ID 列表，用于前端高亮节点
+const highlightIds = ref([])
 
 // 检查是否有正在生成的闪卡
 const hasGeneratingCards = computed(() => {
@@ -144,10 +169,28 @@ const isFirstTimeAfterGenerate = computed(() => {
 
 // 初始化视图状态
 const initViewState = () => {
+  // 单独的暂存区路由：直接进入暂存区视图
+  if (route.path === '/flashcard-temp') {
+    viewState.value = 'TEMP_ZONE'
+    return
+  }
+  
   // 如果路由显式指定了视图（例如 ?view=temp），优先使用
   const viewFromQuery = route.query.view
   if (viewFromQuery === 'temp') {
     viewState.value = 'TEMP_ZONE'
+    return
+  }
+  if (viewFromQuery === 'graph') {
+    viewState.value = 'GRAPH'
+    return
+  }
+
+  // 其次：使用上一次停留的视图（刷新后保持在同一个子页面）
+  const lastView = localStorage.getItem('flashcard_last_view')
+  const allowedViews = ['TEMP_ZONE', 'GRAPH', 'REVIEW', 'EDIT', 'COMPARE', 'CATEGORY_SELECT']
+  if (lastView && allowedViews.includes(lastView)) {
+    viewState.value = lastView
     return
   }
   
@@ -240,48 +283,25 @@ const updateCardProgress = (cardId, progress, isGenerating, message) => {
 // 加载已保存的闪卡（并行请求用户信息和图谱数据，提升响应速度）
 const loadSavedFlashcards = async () => {
   try {
-    // 并行请求：先不传 userId 快速显示图谱，用户信息返回后再更新
-    const [userResult, listResult] = await Promise.allSettled([
-      getMyProfile().catch(() => null),
-      flashCardApi.getGraphData({})
-    ])
-    
-    // 处理用户信息
+    // 先并行获取用户信息（决定是否走 Neo4j 图谱接口）
+    const userResult = await Promise.allSettled([getMyProfile().catch(() => null)])
+
     let userId = null
-    if (userResult.status === 'fulfilled' && userResult.value) {
-      userId = userResult.value?.id ?? userResult.value?.userId ?? null
-      currentUserId.value = userId
+    if (userResult[0].status === 'fulfilled' && userResult[0].value) {
+      userId = userResult[0].value?.id ?? userResult[0].value?.userId ?? null
     }
-    
-    // 处理图谱数据
-    if (listResult.status === 'fulfilled') {
-      const list = listResult.value
-      if (list && Array.isArray(list.nodes) && Array.isArray(list.links)) {
-        graphData.value = { nodes: list.nodes, links: list.links }
-        savedFlashcards.value = list.cards || []
-      } else {
-        graphData.value = { nodes: [], links: [] }
-        savedFlashcards.value = Array.isArray(list) ? list : []
-      }
-      
-      // 如果用户信息已返回且有 userId，且之前未传 userId，则重新加载一次（可选，避免重复请求）
-      // 这里先不重新加载，因为图谱已显示，用户信息主要用于编辑/删除时的权限
+    currentUserId.value = userId
+
+    // 有 userId：优先走 Neo4j 代理返回 nodes/links（能渲染完整层级节点）
+    // 没有 userId：回退到后端 list（可能只渲染闪卡节点）
+    const params = userId != null ? { userId } : {}
+    const list = await flashCardApi.getGraphData(params)
+    if (list && Array.isArray(list.nodes) && Array.isArray(list.links)) {
+      graphData.value = { nodes: list.nodes, links: list.links }
+      savedFlashcards.value = list.cards || []
     } else {
-      // 如果图谱请求失败，尝试用 userId 再请求一次（如果用户信息已返回）
-      if (userId) {
-        try {
-          const list = await flashCardApi.getGraphData({ userId })
-          if (list && Array.isArray(list.nodes) && Array.isArray(list.links)) {
-            graphData.value = { nodes: list.nodes, links: list.links }
-            savedFlashcards.value = list.cards || []
-          } else {
-            graphData.value = { nodes: [], links: [] }
-            savedFlashcards.value = Array.isArray(list) ? list : []
-          }
-        } catch (e) {
-          console.error('使用 userId 重新加载图谱失败:', e)
-        }
-      }
+      graphData.value = { nodes: [], links: [] }
+      savedFlashcards.value = Array.isArray(list) ? list : []
     }
   } catch (error) {
     console.error('加载闪卡图谱失败:', error)
@@ -381,6 +401,32 @@ const saveCardWithCategory = async (card, categoryPath, categoryPathString) => {
   }
 }
 
+// 图谱搜索：对接 Neo4j 闪卡图谱查询接口（/flash-card/neo4j/search）
+// 仅在图谱视图下使用，keyword 为空时清除高亮；不重新加载图谱数据
+const handleGraphSearch = async (keyword) => {
+  const kw = (keyword || '').trim()
+  // 没有关键词：清空高亮，保持原图谱
+  if (!kw) {
+    highlightIds.value = []
+    return
+  }
+  try {
+    const list = await flashCardApi.searchInNeo4j({
+      type: 'FLASHCARD',
+      keyword: kw
+    })
+    const arr = Array.isArray(list) ? list : (list?.data || [])
+    // 记录命中的业务闪卡 ID，用于前端高亮节点（通过节点 properties.id 或 data.id 匹配）
+    highlightIds.value = arr
+      .map(item => item && (item.id ?? item.flashcardId ?? item.cardId))
+      .filter(id => id != null && String(id).trim() !== '')
+      .map(id => String(id))
+  } catch (error) {
+    console.error('图谱搜索失败:', error)
+    ElMessage.error(error?.message || '图谱搜索失败，请重试')
+  }
+}
+
 // 预览
 const handlePreview = async (card) => {
   // 如果卡片没有 htmlContent，尝试从接口获取完整数据
@@ -453,6 +499,14 @@ const getPreviewContent = (card) => {
   return ''
 }
 
+// 跳转到暂存区视图，并同步路由到 /flashcard-temp
+const goToTemp = () => {
+  viewState.value = 'TEMP_ZONE'
+  if (route.path !== '/flashcard-temp') {
+    router.replace({ path: '/flashcard-temp' })
+  }
+}
+
 
 // 删除暂存区卡片
 const handleDeleteTemp = async (id) => {
@@ -514,12 +568,22 @@ const handleDeleted = () => {
   viewState.value = 'GRAPH'
 }
 
+// 从暂存页头部“返回图谱页面”按钮返回
+const handleBackToGraph = () => {
+  viewState.value = 'GRAPH'
+  if (route.path !== '/flashcard-graph') {
+    router.replace({ path: '/flashcard-graph' })
+  }
+}
+
 onMounted(async () => {
+  pageLoading.value = true
   await Promise.all([
     loadTempZone(),
     loadSavedFlashcards()
   ])
   initViewState()
+  pageLoading.value = false
   // 添加 ESC 键监听
   window.addEventListener('keydown', handleEscKey)
 })
@@ -531,10 +595,19 @@ onUnmounted(() => {
 
 // 监听路由变化（从其他页面进入时）
 watch(() => route.path, (newPath) => {
-  if (newPath === '/flashcard-graph') {
+  if (newPath === '/flashcard-graph' || newPath === '/flashcard-temp') {
     initViewState()
   }
 })
+
+// 持久化当前视图状态，刷新后保持在最近一次页面（包括图谱 / 暂存区 / 对比等）
+watch(
+  viewState,
+  (val) => {
+    localStorage.setItem('flashcard_last_view', val)
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -546,6 +619,37 @@ watch(() => route.path, (newPath) => {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.flashcard-page-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flashcard-page-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.flashcard-page-spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(148, 163, 184, 0.35);
+  border-top-color: #4f46e5;
+  animation: flashcard-page-spin 0.7s linear infinite;
+}
+
+@keyframes flashcard-page-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 预览弹窗样式 */

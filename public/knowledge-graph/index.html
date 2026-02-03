@@ -658,6 +658,50 @@
 	<script type="text/javascript">
 		document.addEventListener('DOMContentLoaded', function() {
 			// -----------------------------
+			// 0. 检查对比模式参数，隐藏额外组件
+			// -----------------------------
+			const urlParams = new URLSearchParams(window.location.search);
+			const isCompareMode = urlParams.get('compareMode') === 'true';
+			
+			if (isCompareMode) {
+				// 隐藏知识助手面板
+				const assistantPanel = document.getElementById('assistantPanel');
+				if (assistantPanel) {
+					assistantPanel.style.display = 'none';
+				}
+				
+				// 隐藏控制栏（全屏、还原、放大、缩小、设置）
+				const graphControls = document.getElementById('graphControls');
+				if (graphControls) {
+					graphControls.style.display = 'none';
+				}
+				
+				// 隐藏搜索按钮（顶部右侧的搜索图标）
+				const searchToggle = document.getElementById('graphSearchToggle');
+				if (searchToggle) {
+					searchToggle.style.display = 'none';
+				}
+				
+				// 隐藏设置提示
+				const settingsHint = document.getElementById('graphSettingsHint');
+				if (settingsHint) {
+					settingsHint.style.display = 'none';
+				}
+				
+				// 隐藏节点信息面板（左下角）
+				const nodeInfoPanel = document.getElementById('nodeInfoPanel');
+				if (nodeInfoPanel) {
+					nodeInfoPanel.style.display = 'none';
+				}
+				
+				// 隐藏搜索覆盖层（如果打开的话）
+				const searchOverlay = document.getElementById('searchOverlay');
+				if (searchOverlay) {
+					searchOverlay.style.display = 'none';
+				}
+			}
+			
+			// -----------------------------
 			// 1. 助手功能逻辑 (保持功能不变)
 			// -----------------------------
 			const TEXT2CYPHER_ENDPOINT = 'http://localhost:8121/api/mcp/text2cypher';
