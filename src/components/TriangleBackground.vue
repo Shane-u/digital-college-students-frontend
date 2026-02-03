@@ -96,19 +96,19 @@ export default {
       }
     }
 
-    // 初始化画布
+    // 初始化画布（注意：需要在卸载时移除 resize 监听，否则路由切换后会对 null canvas 操作）
+    const resizeCanvas = () => {
+      if (!canvas.value) return
+      canvas.value.width = window.innerWidth
+      canvas.value.height = window.innerHeight
+      createTriangles()
+    }
+
     const initCanvas = () => {
-      const ctx = canvas.value.getContext('2d')
-      const resizeCanvas = () => {
-        canvas.value.width = window.innerWidth
-        canvas.value.height = window.innerHeight
-        createTriangles()
-      }
-      
+      if (!canvas.value) return
+      // 触发一次尺寸初始化
       resizeCanvas()
       window.addEventListener('resize', resizeCanvas)
-
-      return { ctx, resizeCanvas }
     }
 
     // 创建三角形 - 使用预定义配置
@@ -174,6 +174,7 @@ export default {
       if (animationId) {
         cancelAnimationFrame(animationId)
       }
+      window.removeEventListener('resize', resizeCanvas)
       window.removeEventListener('scroll', handleScroll)
     })
 

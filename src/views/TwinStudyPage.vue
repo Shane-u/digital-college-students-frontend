@@ -32,6 +32,7 @@ import Sidebar from '../components/TwinStudy/Sidebar.vue'
 import MainContent from '../components/TwinStudy/MainContent.vue'
 import { apiService } from '../services/twinStudy/apiService'
 import { renderMarkdownToHtml } from '../utils/markdownRender'
+import { createFlashCardGenerationState } from '../composables/useFlashCardGeneration'
 
 // 状态管理
 const isSidebarOpen = ref(true)
@@ -44,6 +45,9 @@ const streamingContent = ref('')
 // 流式消息内容 DOM 元素 ref，参考 bailian-chat.demo 在循环内直接设置 innerHTML 实现边输出边渲染
 const streamingContentElRef = ref(null)
 provide('streamingContentElRef', streamingContentElRef)
+
+// 创建闪卡生成状态管理（提供给子组件使用）
+const flashCardGenerationState = createFlashCardGenerationState()
 
 // ============ 内容处理函数 ============
 /**

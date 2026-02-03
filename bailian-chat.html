@@ -1497,7 +1497,7 @@
                         // 即使WebSocket连接，也启动一个备用轮询（防止WebSocket消息丢失）
                         window.flashCardCheckInterval = setTimeout(() => {
                             if (!window.flashCardGenerated) {
-                                checkFlashCardProgress(result.data);    // 传递String类型的flashCardId
+                                checkFlashCardProgress(result.data); // 传递String类型的flashCardId
                             }
                         }, 10000); // 10秒后如果还没收到通知，开始轮询
                     }

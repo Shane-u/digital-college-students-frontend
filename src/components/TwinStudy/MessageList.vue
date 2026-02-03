@@ -128,6 +128,7 @@ import WorkflowSteps from './WorkflowSteps.vue'
 import { renderMarkdownToHtml } from '../../utils/markdownRender'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
+import { useFlashCardGeneration } from '../../composables/useFlashCardGeneration'
 
 const SparklesIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'currentColor' }, [
   h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })
@@ -362,6 +363,82 @@ function getDisplayContent(msg) {
 }
 const flashCardGenerating = ref(false)
 
+// 使用闪卡生成状态
+const flashCardState = useFlashCardGeneration()
+
+// 轮询闪卡生成进度
+let progressPollInterval = null
+const pollFlashCardProgress = async (flashCardId) => {
+  const maxAttempts = 120 // 最多轮询120次（每次2秒，共4分钟）
+  let attempts = 0
+  
+  const poll = async () => {
+    if (attempts >= maxAttempts || !flashCardState.isGenerating.value) {
+      if (progressPollInterval) {
+        clearInterval(progressPollInterval)
+        progressPollInterval = null
+      }
+      if (attempts >= maxAttempts) {
+        // 超时
+        flashCardState.isGenerating.value = false
+        flashCardState.progress.value = 0
+        flashCardState.progressMessage.value = '生成超时'
+      }
+      return
+    }
+    
+    try {
+      const response = await fetch(`/api/flash-card/progress?flashCardId=${flashCardId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.code === 0 && result.data) {
+          const progressData = result.data
+          
+          // 更新进度
+          flashCardState.progress.value = progressData.progress || 0
+          flashCardState.progressMessage.value = progressData.message || '正在生成中...'
+          
+          if (progressData.status === 'COMPLETED') {
+            // 生成完成
+            flashCardState.isGenerating.value = false
+            flashCardState.progress.value = 100
+            if (progressPollInterval) {
+              clearInterval(progressPollInterval)
+              progressPollInterval = null
+            }
+            return
+          } else if (progressData.status === 'FAILED') {
+            // 生成失败
+            flashCardState.isGenerating.value = false
+            flashCardState.progress.value = 0
+            flashCardState.progressMessage.value = progressData.message || '生成失败'
+            if (progressPollInterval) {
+              clearInterval(progressPollInterval)
+              progressPollInterval = null
+            }
+            return
+          }
+        }
+      }
+    } catch (error) {
+      console.error('查询闪卡进度失败:', error)
+    }
+    
+    attempts++
+  }
+  
+  // 立即执行一次
+  await poll()
+  
+  // 每2秒轮询一次
+  progressPollInterval = setInterval(poll, 2000)
+}
+
 /** 知识库引用弹窗：图二内容 + 图三样式 */
 const showKnowledgeModal = ref(false)
 const modalParagraphs = ref([])
@@ -417,10 +494,13 @@ const copyToClipboard = async (text) => {
 }
 
 const generateFlashCard = async (content) => {
-  if (flashCardGenerating.value) return
+  if (flashCardGenerating.value || flashCardState.isGenerating.value) return
   
   try {
     flashCardGenerating.value = true
+    flashCardState.isGenerating.value = true
+    flashCardState.progress.value = 0
+    flashCardState.progressMessage.value = '正在提交生成请求...'
     
     // 使用原生fetch以便检查HTTP状态码
     const response = await fetch('/api/flash-card/generate', {
@@ -436,30 +516,22 @@ const generateFlashCard = async (content) => {
     
     // 使用HTTP状态码200来判断成功
     if (response.ok && response.status === 200) {
-      // 设置首次生成标记
-      localStorage.setItem('flashcard_first_generate', 'true')
+      const result = await response.json()
+      const flashCardId = result.data || result.flashCardId
       
-      // 显示成功消息
-      const notification = document.createElement('div')
-      notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        background: #10B981;
-        color: white;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        z-index: 10000;
-        animation: slideIn 0.3s ease;
-      `
-      notification.textContent = '闪卡生成中，完成后会通知您'
-      document.body.appendChild(notification)
-      
-      setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease'
-        setTimeout(() => notification.remove(), 300)
-      }, 3000)
+      if (flashCardId) {
+        flashCardState.currentFlashCardId.value = flashCardId
+        flashCardState.progress.value = 10
+        flashCardState.progressMessage.value = '已提交，正在生成中...'
+        
+        // 设置首次生成标记
+        localStorage.setItem('flashcard_first_generate', 'true')
+        
+        // 开始轮询进度
+        await pollFlashCardProgress(flashCardId)
+      } else {
+        throw new Error('未获取到闪卡ID')
+      }
     } else {
       // HTTP状态码不是200，尝试解析错误信息
       let errorMessage = '生成失败'
@@ -473,26 +545,14 @@ const generateFlashCard = async (content) => {
     }
   } catch (error) {
     console.error('生成闪卡失败:', error)
-    const notification = document.createElement('div')
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 12px 20px;
-      background: #EF4444;
-      color: white;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      z-index: 10000;
-      animation: slideIn 0.3s ease;
-    `
-    notification.textContent = `生成闪卡失败: ${error.message}`
-    document.body.appendChild(notification)
+    flashCardState.isGenerating.value = false
+    flashCardState.progress.value = 0
+    flashCardState.progressMessage.value = `生成失败: ${error.message}`
     
-    setTimeout(() => {
-      notification.style.animation = 'slideOut 0.3s ease'
-      setTimeout(() => notification.remove(), 300)
-    }, 3000)
+    if (progressPollInterval) {
+      clearInterval(progressPollInterval)
+      progressPollInterval = null
+    }
   } finally {
     flashCardGenerating.value = false
   }
@@ -529,6 +589,11 @@ onUnmounted(() => {
   const el = endRef.value?.parentElement
   if (el) {
     el.removeEventListener('scroll', handleScroll)
+  }
+  // 清理进度轮询
+  if (progressPollInterval) {
+    clearInterval(progressPollInterval)
+    progressPollInterval = null
   }
 })
 </script>

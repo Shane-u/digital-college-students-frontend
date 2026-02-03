@@ -223,6 +223,7 @@ const handleCardClick = (card) => {
 
 .expiry-text {
   display: block;
+  color: #90b8ec;
 }
 
 .card-body {

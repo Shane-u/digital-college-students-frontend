@@ -295,16 +295,12 @@ const switchMode = (mode) => {
 const loadFlashCards = async () => {
   loading.value = true
   try {
-    const result = await flashCardApi.list()
-    console.log(result);
-    if (result.code === 0) {
-      flashCards.value = result.data || []
-    } else {
-      showNotification('加载闪卡失败: ' + result.message, 'error')
-    }
+    // flashCardApi.list() 经过 request 封装后，直接返回 data（数组），出错会抛异常
+    const data = await flashCardApi.list()
+    flashCards.value = Array.isArray(data) ? data : (data?.data || [])
   } catch (error) {
     console.error('加载闪卡失败:', error)
-    showNotification('加载闪卡失败: ' + error.message, 'error')
+    showNotification('加载闪卡失败: ' + (error?.message || '未知错误'), 'error')
   } finally {
     loading.value = false
   }
@@ -313,16 +309,12 @@ const loadFlashCards = async () => {
 const loadReviewCards = async () => {
   loading.value = true
   try {
-    const result = await flashCardApi.reviewList()
-    if (result.code === 0) {
-      reviewCards.value = result.data || []
-      currentReviewIndex.value = 0
-    } else {
-      showNotification('加载复习闪卡失败: ' + result.message, 'error')
-    }
+    const data = await flashCardApi.reviewList()
+    reviewCards.value = Array.isArray(data) ? data : (data?.data || [])
+    currentReviewIndex.value = 0
   } catch (error) {
     console.error('加载复习闪卡失败:', error)
-    showNotification('加载复习闪卡失败: ' + error.message, 'error')
+    showNotification('加载复习闪卡失败: ' + (error?.message || '未知错误'), 'error')
   } finally {
     loading.value = false
   }
@@ -374,17 +366,13 @@ const closeEditModal = () => {
 
 const saveEdit = async () => {
   try {
-    const result = await flashCardApi.update(editingCard.value)
-    if (result.code === 0) {
-      showNotification('保存成功', 'success')
-      closeEditModal()
-      loadFlashCards()
-    } else {
-      showNotification('保存失败: ' + result.message, 'error')
-    }
+    await flashCardApi.update(editingCard.value)
+    showNotification('保存成功', 'success')
+    closeEditModal()
+    loadFlashCards()
   } catch (error) {
     console.error('保存失败:', error)
-    showNotification('保存失败: ' + error.message, 'error')
+    showNotification('保存失败: ' + (error?.message || '未知错误'), 'error')
   }
 }
 
@@ -402,17 +390,13 @@ const closeAiModal = () => {
 
 const saveAiAssist = async () => {
   try {
-    const result = await flashCardApi.aiAssist(aiCardId.value, aiPrompt.value)
-    if (result.code === 0) {
-      showNotification('AI辅助处理中，请稍候...', 'success')
-      closeAiModal()
-      loadFlashCards()
-    } else {
-      showNotification('AI辅助失败: ' + result.message, 'error')
-    }
+    await flashCardApi.aiAssist(aiCardId.value, aiPrompt.value)
+    showNotification('AI辅助处理中，请稍候...', 'success')
+    closeAiModal()
+    loadFlashCards()
   } catch (error) {
     console.error('AI辅助失败:', error)
-    showNotification('AI辅助失败: ' + error.message, 'error')
+    showNotification('AI辅助失败: ' + (error?.message || '未知错误'), 'error')
   }
 }
 
@@ -420,16 +404,12 @@ const deleteCard = async (cardId) => {
   if (!confirm('确定要删除这个闪卡吗？')) return
 
   try {
-    const result = await flashCardApi.delete(cardId)
-    if (result.code === 0) {
-      showNotification('删除成功', 'success')
-      loadFlashCards()
-    } else {
-      showNotification('删除失败: ' + result.message, 'error')
-    }
+    await flashCardApi.delete(cardId)
+    showNotification('删除成功', 'success')
+    loadFlashCards()
   } catch (error) {
     console.error('删除失败:', error)
-    showNotification('删除失败: ' + error.message, 'error')
+    showNotification('删除失败: ' + (error?.message || '未知错误'), 'error')
   }
 }
 
@@ -438,15 +418,11 @@ const reviewCard = async (difficultyLevel) => {
   if (!card) return
 
   try {
-    const result = await flashCardApi.review(card.id, difficultyLevel)
-    if (result.code === 0) {
-      currentReviewIndex.value++
-    } else {
-      showNotification('复习失败: ' + result.message, 'error')
-    }
+    await flashCardApi.review(card.id, difficultyLevel)
+    currentReviewIndex.value++
   } catch (error) {
     console.error('复习失败:', error)
-    showNotification('复习失败: ' + error.message, 'error')
+    showNotification('复习失败: ' + (error?.message || '未知错误'), 'error')
   }
 }
 

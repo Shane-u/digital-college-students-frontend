@@ -45,8 +45,21 @@ export default defineConfig({
     fs: {
       strict: false
     },
-    // 配置代理解决跨域问题
+    // 配置代理解决跨域问题（更具体的路径放前面，避免被 /api 抢走）
     proxy: {
+      // Neo4j 图谱代理：update/delete 必须走 8122，否则后端 8121 会 404
+      '/api/neo4j-graph/update': {
+        target: 'http://localhost:8122',
+        changeOrigin: true
+      },
+      '/api/neo4j-graph/delete': {
+        target: 'http://localhost:8122',
+        changeOrigin: true
+      },
+      '/api/neo4j-graph': {
+        target: 'http://localhost:8122',
+        changeOrigin: true
+      },
       '/api': {
         target: 'http://localhost:8121', // 后端服务地址
         changeOrigin: true, // 允许跨域

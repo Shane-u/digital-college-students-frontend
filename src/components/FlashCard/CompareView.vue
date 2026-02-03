@@ -92,7 +92,19 @@ onMounted(async () => {
   // 加载闪卡图谱数据
   try {
     const data = await flashCardApi.getGraphData()
-    flashcardData.value = data.flashcards || props.flashcards || []
+    // 兼容多种返回结构：
+    // - 直接返回数组
+    // - 返回 { flashcards: [...] }
+    // - 返回 { data: [...] }
+    if (Array.isArray(data)) {
+      flashcardData.value = data
+    } else if (data && Array.isArray(data.flashcards)) {
+      flashcardData.value = data.flashcards
+    } else if (data && Array.isArray(data.data)) {
+      flashcardData.value = data.data
+    } else {
+      flashcardData.value = props.flashcards || []
+    }
   } catch (error) {
     console.error('加载闪卡图谱数据失败:', error)
     flashcardData.value = props.flashcards || []

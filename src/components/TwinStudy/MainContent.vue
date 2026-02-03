@@ -5,7 +5,25 @@
         孪孪伴学<span class="main-header-disclaimer">（内容由AI生成，仅供参考）</span>
       </div>
       <div class="main-header-actions">
-        <button @click="openFlashCardPage" class="header-action-btn" title="记忆闪卡">
+        <button @click="openFlashCardPage" class="header-action-btn flashcard-btn-wrapper" title="记忆闪卡">
+          <!-- 进度条（环形）：生成中 或 已生成待查看 时都显示 -->
+          <svg
+            v-if="flashCardState.isGenerating.value || flashCardState.progress.value === 100"
+            class="progress-ring"
+            viewBox="0 0 36 36"
+          >
+            <circle
+              class="progress-ring-circle"
+              stroke="#CE89D1"
+              stroke-width="3"
+              fill="none"
+              :stroke-dasharray="circumference"
+              :stroke-dashoffset="progressOffset"
+              cx="18"
+              cy="18"
+              r="15"
+            />
+          </svg>
           <FlashCardHeaderIcon />
         </button>
         <div v-if="userAvatar" class="user-avatar-small">
@@ -94,10 +112,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch, computed } from 'vue'
 import { h } from 'vue'
 import { useRouter } from 'vue-router'
 import MessageList from './MessageList.vue'
+import { useFlashCardGeneration } from '../../composables/useFlashCardGeneration'
 import ModelSelector from './ModelSelector.vue'
 import VintageCardGallery from './VintageCardGallery.vue'
 import { getMyProfile } from '../../api/user'
@@ -295,26 +314,152 @@ const handleInput = (e) => {
 
 const router = useRouter()
 
-const openFlashCardPage = async () => {
-  // 检查是否有正在生成的闪卡或首次生成标记
-  try {
-    // 检查暂存区是否有生成中的卡片
-    const tempCards = await fetch('/api/flash-card/temp-zone/list').then(r => r.json()).then(d => d.data || []).catch(() => [])
-    const hasGenerating = tempCards.some(c => c.isGenerating)
-    const isFirstTime = localStorage.getItem('flashcard_first_generate') === 'true'
-    
-    if (hasGenerating || isFirstTime) {
-      // 跳转到闪卡图谱页面，会自动显示暂存区
-      router.push('/flashcard-graph')
-    } else {
-      // 跳转到闪卡图谱页面（显示图谱）
-      router.push('/flashcard-graph')
+// 使用闪卡生成状态
+const flashCardState = useFlashCardGeneration()
+
+// 计算进度条相关值
+const circumference = 2 * Math.PI * 15 // r=15
+const progressOffset = computed(() => {
+  const progress = flashCardState.progress.value
+  return circumference - (progress / 100) * circumference
+})
+
+// 监听闪卡生成状态变化，显示弹窗
+watch(() => flashCardState.isGenerating.value, (isGenerating, wasGenerating) => {
+  if (isGenerating && !wasGenerating) {
+    // 开始生成
+    showToast('闪卡开始生成，完成后会通知您', 'info')
+  } else if (!isGenerating && wasGenerating) {
+    // 生成完成（保留 100% 进度，直到用户点进闪卡页面）
+    showToast('闪卡生成完毕，点击右上角的闪卡按钮，即可查看具体内容', 'success')
+  }
+})
+
+// 监听进度变化
+watch(() => flashCardState.progress.value, (progress) => {
+  // 进度更新时不需要额外操作，进度条会自动更新
+})
+
+// 弹窗组件
+let toastElement = null
+const showToast = (message, type = 'info') => {
+  // 移除之前的弹窗
+  if (toastElement) {
+    toastElement.remove()
+    toastElement = null
+  }
+
+  // 创建绿色圆形图标（带白色对勾）
+  const successIconSvg = `
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="10" fill="#10B981"/>
+      <path d="M6 10L9 13L14 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `
+  
+  // 创建信息图标（绿色圆形带提示）
+  const infoIconSvg = `
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="10" cy="10" r="10" fill="#10B981"/>
+      <circle cx="10" cy="7" r="1.5" fill="white"/>
+      <path d="M10 9.5V14.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  `
+
+  const iconSvg = type === 'success' ? successIconSvg : infoIconSvg
+
+  toastElement = document.createElement('div')
+  toastElement.className = 'flashcard-toast'
+  toastElement.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: #D1FAE5;
+    color: #10B981;
+    padding: 12px 20px;
+    border-radius: 9999px;
+    box-shadow: none;
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    max-width: 500px;
+    animation: toastSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  `
+  toastElement.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+      ${iconSvg}
+    </div>
+    <span style="letter-spacing: 0.02em; white-space: nowrap;">${message}</span>
+  `
+  document.body.appendChild(toastElement)
+
+  // 添加动画样式
+  if (!document.getElementById('toast-styles')) {
+    const style = document.createElement('style')
+    style.id = 'toast-styles'
+    style.textContent = `
+      @keyframes toastSlideIn {
+        from {
+          transform: translateX(-50%) translateY(-120px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(-50%) translateY(0);
+          opacity: 1;
+        }
+      }
+      @keyframes toastSlideOut {
+        from {
+          transform: translateX(-50%) translateY(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(-50%) translateY(-120px);
+          opacity: 0;
+        }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
+  // 3秒后自动消失
+  setTimeout(() => {
+    if (toastElement) {
+      toastElement.style.animation = 'toastSlideOut 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+      setTimeout(() => {
+        if (toastElement) {
+          toastElement.remove()
+          toastElement = null
+        }
+      }, 300)
     }
-  } catch (error) {
-    // 出错时默认跳转到图谱页面
+  }, 3000)
+}
+
+const openFlashCardPage = async () => {
+  // 如果当前正在生成闪卡或有刚生成的闪卡，优先进入暂存区视图
+  if (flashCardState.isGenerating.value || flashCardState.progress.value === 100) {
+    router.push({ path: '/flashcard-graph', query: { view: 'temp' } })
+  } else {
     router.push('/flashcard-graph')
   }
+
+  // 用户点击进入后，清理“新生成”提示状态
+  flashCardState.progress.value = 0
+  flashCardState.currentFlashCardId.value = null
+  flashCardState.progressMessage.value = ''
 }
+
+onUnmounted(() => {
+  if (toastElement) {
+    toastElement.remove()
+    toastElement = null
+  }
+})
 
 const toggleRecording = async () => {
   if (!isRecording.value) {
@@ -778,5 +923,24 @@ onUnmounted(() => {
 
 .main-messages::-webkit-scrollbar-thumb:hover {
   background: #bdbdbd;
+}
+
+/* 闪卡按钮进度条样式 */
+.flashcard-btn-wrapper {
+  position: relative;
+}
+
+.progress-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+}
+
+.progress-ring-circle {
+  transition: stroke-dashoffset 0.3s ease;
 }
 </style>
