@@ -52,7 +52,7 @@
           <component v-if="msg.role === 'model' && !msg.isStreaming && msg.knowledgeParagraphs && msg.knowledgeParagraphs.length > 0" :is="KnowledgeSourceComponent" :paragraphs="msg.knowledgeParagraphs" @open-modal="openKnowledgeModal(msg)" />
 
           <span v-if="msg.isStreaming && !msg.content && !msg.workflow && !msg.thought" class="streaming-indicator">
-            Generating...
+            正在生成...
           </span>
         </div>
         
