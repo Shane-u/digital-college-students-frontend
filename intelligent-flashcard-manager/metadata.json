@@ -1,7 +1,0 @@
-{
-  "name": "Intelligent Flashcard Manager",
-  "description": "A refined UI for managing pending flashcards with enhanced button aesthetics, expiration tracking, and navigation to the knowledge graph.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
