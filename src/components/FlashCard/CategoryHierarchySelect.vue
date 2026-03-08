@@ -26,15 +26,29 @@
       <section class="hierarchy-section">
         <h3 class="section-title">所属课程</h3>
         <div class="course-grid">
-          <button 
-            v-for="course in filteredCourses" 
+          <div
+            v-for="course in filteredCourses"
             :key="course.id"
-            :class="['course-card', { active: selectedL2?.id === course.id }]"
-            @click="handleSelectL2(course)"
+            class="tag-wrapper"
           >
-            <span class="course-name">{{ course.label || course.name }}</span>
-          </button>
-          <button 
+            <button
+              :class="['course-card', { active: selectedL2?.id === course.id }]"
+              @click="handleSelectL2(course)"
+            >
+              <span class="course-name">{{ course.label || course.name }}</span>
+            </button>
+            <button
+              type="button"
+              class="tag-delete-btn"
+              aria-label="删除"
+              @click="deleteL2(course, $event)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          <button
             class="course-card add-course-card"
             @click="showAddDialog('L2')"
           >
@@ -49,15 +63,29 @@
       >
         <h3 class="section-title">选择大类</h3>
         <div class="category-tags">
-          <button 
+          <div
             v-for="category in selectedL2?.children || []"
             :key="category.id"
-            :class="['category-tag', { active: selectedL3?.id === category.id }]"
-            @click="handleSelectL3(category)"
+            class="tag-wrapper tag-wrapper-inline"
           >
-            {{ category.label || category.name }}
-          </button>
-          <button 
+            <button
+              :class="['category-tag', { active: selectedL3?.id === category.id }]"
+              @click="handleSelectL3(category)"
+            >
+              {{ category.label || category.name }}
+            </button>
+            <button
+              type="button"
+              class="tag-delete-btn"
+              aria-label="删除"
+              @click="deleteL3(category, $event)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          <button
             class="category-tag add-tag"
             @click="showAddDialog('L3')"
           >
@@ -66,22 +94,36 @@
         </div>
       </section>
 
-      <!-- 选择小类（L4，可选） -->
+      <!-- 选择小类（L4，可选）：只要选了大类就显示，无子类时也可通过「+ 增加分类」创建 -->
       <section 
-        v-if="selectedL3 && selectedL3.children && selectedL3.children.length > 0"
+        v-if="selectedL3"
         class="hierarchy-section"
       >
         <h3 class="section-title">选择小类（可选）</h3>
         <div class="category-tags">
-          <button 
-            v-for="subCategory in selectedL3.children"
+          <div
+            v-for="subCategory in (selectedL3.children || [])"
             :key="subCategory.id"
-            :class="['category-tag', { active: selectedL4?.id === subCategory.id }]"
-            @click="handleSelectL4(subCategory)"
+            class="tag-wrapper tag-wrapper-inline"
           >
-            {{ subCategory.label || subCategory.name }}
-          </button>
-          <button 
+            <button
+              :class="['category-tag', { active: selectedL4?.id === subCategory.id }]"
+              @click="handleSelectL4(subCategory)"
+            >
+              {{ subCategory.label || subCategory.name }}
+            </button>
+            <button
+              type="button"
+              class="tag-delete-btn"
+              aria-label="删除"
+              @click="deleteL4(subCategory, $event)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14" />
+              </svg>
+            </button>
+          </div>
+          <button
             class="category-tag add-tag"
             @click="showAddDialog('L4')"
           >
@@ -136,9 +178,18 @@ const props = defineProps({
 const emit = defineEmits(['confirm', 'back'])
 
 // 课程列表：移除内置“其他课程”，只保留“+ 增加其他课程”按钮入口
-const filteredCourses = computed(() =>
+const filteredCoursesFromTree = computed(() =>
   (props.categoryTree || []).filter(c => (c?.label || c?.name) !== '其他课程')
 )
+
+// 用户通过「增加其他课程」新增的课程，保留在页面上显示
+const customCourses = ref([])
+// 用户删除的树内课程 id（不展示，不修改 prop）
+const deletedL2Ids = ref(new Set())
+const filteredCourses = computed(() => {
+  const fromTree = filteredCoursesFromTree.value.filter(c => !deletedL2Ids.value.has(c.id))
+  return [...fromTree, ...customCourses.value]
+})
 
 const selectedL2 = ref(null)
 const selectedL3 = ref(null)
@@ -163,21 +214,36 @@ const canConfirm = computed(() => {
   return selectedL2.value && selectedL3.value
 })
 
-// 选择 L2（课程）
+// 选择 L2（课程）；再次点击已选中的则取消选中
 const handleSelectL2 = (course) => {
+  if (selectedL2.value?.id === course.id) {
+    selectedL2.value = null
+    selectedL3.value = null
+    selectedL4.value = null
+    return
+  }
   selectedL2.value = course
   selectedL3.value = null
   selectedL4.value = null
 }
 
-// 选择 L3（大类）
+// 选择 L3（大类）；再次点击已选中的则取消选中
 const handleSelectL3 = (category) => {
+  if (selectedL3.value?.id === category.id) {
+    selectedL3.value = null
+    selectedL4.value = null
+    return
+  }
   selectedL3.value = category
   selectedL4.value = null
 }
 
-// 选择 L4（小类）
+// 选择 L4（小类）；再次点击已选中的则取消选中
 const handleSelectL4 = (subCategory) => {
+  if (selectedL4.value?.id === subCategory.id) {
+    selectedL4.value = null
+    return
+  }
   selectedL4.value = subCategory
 }
 
@@ -212,9 +278,8 @@ const handleAddCategory = () => {
   }
   
   if (addingLevel.value === 'L2') {
-    // 添加到课程列表（需要访问 categoryTree，但它是 prop，不能直接修改）
-    // 这里只能添加到本地状态，实际保存需要父组件处理
-    // 暂时先选中新添加的课程
+    // 添加到本地课程列表并保留在页面上显示
+    customCourses.value.push(newCategory)
     selectedL2.value = newCategory
     selectedL3.value = null
     selectedL4.value = null
@@ -258,6 +323,43 @@ const handleConfirm = () => {
 // 返回
 const handleBack = () => {
   emit('back')
+}
+
+// 判断是否为自定义（本地）课程
+const isCustomCourse = (course) => (course?.id && String(course.id).startsWith('custom-'))
+
+// 删除 L2（课程）
+const deleteL2 = (course, e) => {
+  e.stopPropagation()
+  if (isCustomCourse(course)) {
+    customCourses.value = customCourses.value.filter(c => c.id !== course.id)
+  } else {
+    deletedL2Ids.value = new Set([...deletedL2Ids.value, course.id])
+  }
+  if (selectedL2.value?.id === course.id) {
+    selectedL2.value = null
+    selectedL3.value = null
+    selectedL4.value = null
+  }
+}
+
+// 删除 L3（大类）
+const deleteL3 = (category, e) => {
+  e.stopPropagation()
+  if (!selectedL2.value?.children) return
+  selectedL2.value.children = selectedL2.value.children.filter(c => c.id !== category.id)
+  if (selectedL3.value?.id === category.id) {
+    selectedL3.value = null
+    selectedL4.value = null
+  }
+}
+
+// 删除 L4（小类）
+const deleteL4 = (subCategory, e) => {
+  e.stopPropagation()
+  if (!selectedL3.value?.children) return
+  selectedL3.value.children = selectedL3.value.children.filter(c => c.id !== subCategory.id)
+  if (selectedL4.value?.id === subCategory.id) selectedL4.value = null
 }
 </script>
 
@@ -365,10 +467,53 @@ const handleBack = () => {
   margin: 0;
 }
 
+/* 标签容器：悬停时显示右上角删除按钮，紧贴标签框 */
+.tag-wrapper {
+  position: relative;
+}
+
+/* 课程网格里让包装器紧贴卡片，减号才能贴在卡片右上角 */
+.course-grid .tag-wrapper {
+  width: fit-content;
+}
+
+.tag-wrapper-inline {
+  display: inline-flex;
+}
+
+.tag-wrapper .tag-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s, color 0.2s;
+}
+
+.tag-wrapper:hover .tag-delete-btn {
+  opacity: 1;
+}
+
+.tag-wrapper .tag-delete-btn:hover {
+  background: #f87171;
+  color: white;
+}
+
 .course-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
 }
 
 .course-card {

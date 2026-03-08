@@ -297,6 +297,31 @@ const getNodeDisplayName = (d) => {
 
 // 渲染D3图谱（支持 根/课程/名 路径格式，Neo4j 风格节点）
 let simulation = null
+let zoomBehavior = null
+let gRoot = null
+let linkSel = null
+let nodeSel = null
+let textSel = null
+
+// 交互状态：用于“初始全显示 + 双击收起/展开”
+const nodeUiState = new Map() // id -> { expanded:boolean, oldX:number, oldY:number }
+let masterGraph = { nodes: [], links: [] } // 全量数据快照（渲染时更新）
+let visibleNodeIds = new Set() // 当前可见节点集合（初始为全量）
+let prevMasterNodeIds = new Set() // 上一轮全量节点 id，用于识别“新节点”并默认显示
+let savedNodePositions = new Map() // id -> {x,y} 收起后保留剩余节点位置，避免弹动
+
+const FAST_FORCE = {
+  frictionAlphaTarget: 0.35,
+  linkDistance: 120,
+  linkStrength: 0.55,
+  charge: -320,
+  radialStrength: 0.18,
+  collisionPadding: 6
+}
+
+// 动画参数（与参考组件一致：duration 900-1000ms, easeOutQuad）
+const ANIM_DURATION = 1000
+const ANIM_EASING = d3.easeQuadOut
 const NEO4J = {
   // 参考图谱模板：整体偏蓝紫色调
   categoryFill: '#7880f0',
@@ -550,6 +575,43 @@ const renderGraph = () => {
   
   if (nodes.length === 0) return
 
+  // 更新全量图谱快照 + 初始化可见集合（保留“初始显示全部节点”逻辑）
+  masterGraph = { nodes: [...nodes], links: [...uniqueLinks] }
+  const currentMasterIds = new Set(masterGraph.nodes.map(n => n.id))
+
+  if (visibleNodeIds.size === 0) {
+    visibleNodeIds = new Set(currentMasterIds)
+  } else {
+    // 清理已不存在的节点 id
+    visibleNodeIds = new Set([...visibleNodeIds].filter(id => currentMasterIds.has(id)))
+    // 仅将「新出现的节点」加入可见（后端刷新后新增的节点），不把用户故意收起的节点加回
+    currentMasterIds.forEach(id => {
+      if (!prevMasterNodeIds.has(id)) visibleNodeIds.add(id)
+    })
+  }
+  prevMasterNodeIds = new Set(currentMasterIds)
+
+  // 当前渲染用可见子集，并恢复上次保存的位置（收起后避免弹动）
+  const visibleNodes = masterGraph.nodes.filter(n => visibleNodeIds.has(n.id))
+  const cx = width / 2
+  const cy = height / 2
+  visibleNodes.forEach(n => {
+    const pos = savedNodePositions.get(n.id)
+    if (pos != null) {
+      n.x = pos.x
+      n.y = pos.y
+    } else if (n.x == null || n.y == null) {
+      n.x = cx
+      n.y = cy
+    }
+  })
+  const visibleNodeIdSet = new Set(visibleNodes.map(n => n.id))
+  const visibleLinks = masterGraph.links.filter(l => {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source
+    const tid = typeof l.target === 'object' ? l.target.id : l.target
+    return visibleNodeIdSet.has(sid) && visibleNodeIdSet.has(tid)
+  })
+
   // 高亮集合：来自 Neo4j 图谱查询的业务闪卡 ID
   const highlightIdSet = new Set(
     (props.highlightIds || [])
@@ -585,15 +647,35 @@ const renderGraph = () => {
     return !neighborNodeIds.has(d.id)
   }
   
-  const g = svg.append('g')
-  const zoom = d3.zoom().scaleExtent([0.1, 4]).on('zoom', (ev) => g.attr('transform', ev.transform))
-  svg.call(zoom)
+  gRoot = svg.append('g')
+  zoomBehavior = d3.zoom().scaleExtent([0.1, 10]).on('zoom', (ev) => gRoot.attr('transform', ev.transform))
+  svg.call(zoomBehavior)
+
+  // 平滑缩放至适应视口并居中（参考组件 zoomFit，展开/收缩后调用）
+  const smoothZoomFit = (nodesToFit, duration = ANIM_DURATION) => {
+    if (!nodesToFit || nodesToFit.length === 0) return
+    const pad = 80
+    const xs = nodesToFit.map(n => n.x ?? n.oldX ?? width / 2).filter(Number.isFinite)
+    const ys = nodesToFit.map(n => n.y ?? n.oldY ?? height / 2).filter(Number.isFinite)
+    if (xs.length === 0 || ys.length === 0) return
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const bw = Math.max(maxX - minX, 1)
+    const bh = Math.max(maxY - minY, 1)
+    const scale = Math.min(width / (bw + pad), height / (bh + pad), 2)
+    const midX = (minX + maxX) / 2
+    const midY = (minY + maxY) / 2
+    const target = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-midX, -midY)
+    svg.transition().duration(duration).ease(ANIM_EASING).call(zoomBehavior.transform, target)
+  }
   
   // 力导向 + 温和径向约束：既保持关系结构，又整体呈“圆圈向外扩展”的趋势
-  simulation = d3.forceSimulation(nodes)
+  simulation = d3.forceSimulation(visibleNodes)
     .force(
       'link',
-      d3.forceLink(uniqueLinks)
+      d3.forceLink(visibleLinks)
         .id(d => d.id)
         .distance(140)
         .strength(0.5)
@@ -606,23 +688,44 @@ const renderGraph = () => {
     )
     .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 6))
   
-  const linkLayer = g.append('g').attr('class', 'links').attr('stroke', '#A5ABB6').attr('stroke-opacity', 0.8)
-  const nodeLayer = g.append('g').attr('class', 'nodes')
-  const textLayer = g.append('g').attr('class', 'texts')
+  const linkLayer = gRoot.append('g').attr('class', 'links').attr('stroke', '#A5ABB6').attr('stroke-opacity', 0.8)
+  const nodeLayer = gRoot.append('g').attr('class', 'nodes')
+  const textLayer = gRoot.append('g').attr('class', 'texts')
+
+  const computeLinkOpacity = (d) => {
+    if (!hasHighlight) return 0.8
+    const sid = typeof d.source === 'object' ? d.source.id : d.source
+    const tid = typeof d.target === 'object' ? d.target.id : d.target
+    return (neighborNodeIds.has(sid) && neighborNodeIds.has(tid)) ? 0.9 : 0.1
+  }
   
-  const link = linkLayer.selectAll('line').data(uniqueLinks).join('line').attr('stroke-width', 2)
-    .style('opacity', d => {
-      if (!hasHighlight) return 0.8
+  linkSel = linkLayer
+    .selectAll('line')
+    .data(visibleLinks, d => {
       const sid = typeof d.source === 'object' ? d.source.id : d.source
       const tid = typeof d.target === 'object' ? d.target.id : d.target
-      return (neighborNodeIds.has(sid) && neighborNodeIds.has(tid)) ? 0.9 : 0.1
+      return `${sid}\0${tid}`
     })
+    .join('line')
+    .attr('stroke-width', 2)
+    .style('opacity', computeLinkOpacity)
 
   // 每个节点用 <g> 包一组：外圈圆环 + 内圈实心圆 + 可选高亮光晕，模仿模板中的双圆样式
-  const nodeGroup = nodeLayer
+  nodeSel = nodeLayer
     .selectAll('g.graph-node')
-    .data(nodes)
-    .join('g')
+    .data(visibleNodes, d => d.id)
+    .join(
+      enter => {
+        // 新出现节点：从透明渐入，位置若未初始化则先放到画布中心
+        const g = enter.append('g')
+          .attr('class', 'graph-node')
+          .style('opacity', 0)
+        g.transition().duration(220).style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
+        return g
+      },
+      update => update,
+      exit => exit.remove()
+    )
     .attr('class', 'graph-node')
     .style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
     .call(
@@ -631,6 +734,8 @@ const renderGraph = () => {
           if (!ev.active) simulation.alphaTarget(0.3).restart()
           ev.subject.fx = ev.subject.x
           ev.subject.fy = ev.subject.y
+          // 拖拽时隐藏连线（参考组件交互）
+          if (linkSel) linkSel.style('opacity', 0)
         })
         .on('drag', (ev) => {
           ev.subject.fx = ev.x
@@ -640,11 +745,12 @@ const renderGraph = () => {
           if (!ev.active) simulation.alphaTarget(0)
           ev.subject.fx = null
           ev.subject.fy = null
+          if (linkSel) linkSel.style('opacity', computeLinkOpacity)
         })
     )
 
   // 高亮用的外层光晕圈（默认透明，hover 时放大+显现）
-  nodeGroup
+  nodeSel
     .append('circle')
     .attr('class', 'node-halo')
     .attr('r', d => getNodeRadius(d) + 8)
@@ -655,7 +761,7 @@ const renderGraph = () => {
     .style('opacity', 0)
 
   // 外圈彩色圆环
-  nodeGroup
+  nodeSel
     .append('circle')
     .attr('class', 'node-outer')
     .attr('r', d => getNodeRadius(d))
@@ -664,7 +770,7 @@ const renderGraph = () => {
     .attr('stroke-width', d => (isRootNode(d) ? 6 : 4))
 
   // 内圈实心圆
-  nodeGroup
+  nodeSel
     .append('circle')
     .attr('class', 'node-inner')
     .attr('r', d => getNodeRadius(d) - 4)
@@ -672,8 +778,12 @@ const renderGraph = () => {
     .attr('stroke', '#f8fafc')
     .attr('stroke-width', 1.5)
   
-  nodeGroup.append('title').text(getNodeDisplayName)
-  const text = textLayer.selectAll('text').data(nodes).join('text')
+  nodeSel.append('title').text(getNodeDisplayName)
+  textSel = textLayer.selectAll('text').data(visibleNodes, d => d.id).join(
+    enter => enter.append('text').style('opacity', 0),
+    update => update,
+    exit => exit.remove()
+  )
     .text(getNodeDisplayName)
     .attr('font-size', d => `${getNodeFontSize(d)}px`)
     .attr('font-weight', getNodeFontWeight)
@@ -700,17 +810,299 @@ const renderGraph = () => {
     .style('stroke-linejoin', 'round')
     .style('pointer-events', 'none')
     .style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
+  textSel.transition().duration(220).style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   
   // 点击节点显示 content 小卡片
-  nodeGroup.on('click', (ev, d) => {
+  nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
     const content = (d.properties && d.properties.content) || ''
     if (content) {
       showNodeCardFunc(ev, d, content)
     }
   })
+
+  const hideElementText = () => {
+    if (!textSel) return
+    textSel.interrupt()
+    textSel.transition().duration(120).style('opacity', 0)
+  }
+  const showElementText = () => {
+    if (!textSel) return
+    textSel.interrupt()
+    textSel.transition().duration(180).style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
+  }
+
+  // 用于从全量图谱中找某节点的一层子节点（source -> target）
+  const findOneLevelChildren = (nodeId) => {
+    const out = []
+    for (const l of masterGraph.links) {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      if (String(sid) === String(nodeId)) out.push(tid)
+    }
+    return [...new Set(out)]
+  }
+
+  // 递归收集当前可见的后代节点（用于收起时渐隐删除）
+  const collectVisibleDescendants = (rootId) => {
+    const stack = [rootId]
+    const visited = new Set([rootId])
+    const result = []
+    while (stack.length) {
+      const cur = stack.pop()
+      const children = findOneLevelChildren(cur)
+      for (const cid of children) {
+        if (visited.has(cid)) continue
+        visited.add(cid)
+        if (visibleNodeIds.has(cid)) {
+          result.push(cid)
+          stack.push(cid)
+        }
+      }
+    }
+    return result
+  }
+
+  const applyFastForce = () => {
+    if (!simulation) return
+    simulation.force('link').distance(FAST_FORCE.linkDistance).strength(FAST_FORCE.linkStrength)
+    simulation.force('charge').strength(FAST_FORCE.charge)
+    simulation.force('radial').strength(FAST_FORCE.radialStrength)
+    simulation.force('collision').radius(d => getNodeRadius(d) + FAST_FORCE.collisionPadding)
+    simulation.alpha(0.6).alphaTarget(0.02).restart()
+    setTimeout(() => {
+      if (simulation) simulation.alphaTarget(0)
+    }, 800)
+  }
+
+  // 双击：展开/收起（严格参考组件：平滑动画、无震动、展开/收缩后 zoomFit 居中）
+  nodeSel.on('dblclick', (ev, d) => {
+    ev.stopPropagation()
+    if (isFlashcardNode(d)) return
+    const id = d.id
+    const st = nodeUiState.get(id) || { expanded: true, oldX: d.x, oldY: d.y }
+    st.oldX = d.x
+    st.oldY = d.y
+
+    const isExpanded = st.expanded !== false
+    const targetX = st.oldX
+    const targetY = st.oldY
+
+    if (isExpanded) {
+      // 收缩：参考 contractChildNode - 画布平滑移至节点原始位置，子节点平滑收拢至父节点后删除
+      st.expanded = false
+      nodeUiState.set(id, st)
+
+      const descendantIds = collectVisibleDescendants(id)
+      if (descendantIds.length === 0) return
+
+      hideElementText()
+
+      const toRemove = new Set(descendantIds)
+      const remaining = visibleNodes.filter(n => !toRemove.has(n.id))
+
+      remaining.forEach(n => {
+        savedNodePositions.set(n.id, { x: n.x, y: n.y })
+      })
+
+      if (simulation) simulation.stop()
+
+      // 父节点平滑回到原始位置（900ms easeOutQuad）
+      nodeSel
+        .filter(n => n.id === id)
+        .transition()
+        .duration(900)
+        .ease(ANIM_EASING)
+        .attrTween('transform', function () {
+          const n = d
+          const startX = n.x
+          const startY = n.y
+          return (t) => {
+            n.x = startX + (targetX - startX) * t
+            n.y = startY + (targetY - startY) * t
+            return `translate(${n.x},${n.y})`
+          }
+        })
+
+      // 子节点平滑收拢至父节点后渐隐（1000ms easeOutQuad）
+      nodeSel
+        .filter(n => toRemove.has(n.id))
+        .transition()
+        .duration(ANIM_DURATION)
+        .ease(ANIM_EASING)
+        .attrTween('transform', function (n) {
+          const startX = n.x
+          const startY = n.y
+          return (t) => {
+            n.x = startX + (targetX - startX) * t
+            n.y = startY + (targetY - startY) * t
+            return `translate(${n.x},${n.y})`
+          }
+        })
+        .style('opacity', 0)
+
+      if (textSel) {
+        textSel
+          .filter(n => toRemove.has(n.id))
+          .transition()
+          .duration(ANIM_DURATION)
+          .ease(ANIM_EASING)
+          .style('opacity', 0)
+      }
+
+      linkLayer
+        .selectAll('line')
+        .filter(l => {
+          const sid = typeof l.source === 'object' ? l.source.id : l.source
+          const tid = typeof l.target === 'object' ? l.target.id : l.target
+          return toRemove.has(sid) || toRemove.has(tid)
+        })
+        .transition()
+        .duration(ANIM_DURATION)
+        .ease(ANIM_EASING)
+        .style('opacity', 0)
+
+      if (linkSel) {
+        linkSel.filter(l => {
+          const sid = typeof l.source === 'object' ? l.source.id : l.source
+          const tid = typeof l.target === 'object' ? l.target.id : l.target
+          return toRemove.has(sid) || toRemove.has(tid)
+        }).transition().duration(ANIM_DURATION).ease(ANIM_EASING).style('opacity', 0)
+      }
+
+      // 同步更新连线坐标（动画期间）
+      const tickLinks = () => {
+        linkSel.attr('x1', l => l.source.x).attr('y1', l => l.source.y).attr('x2', l => l.target.x).attr('y2', l => l.target.y)
+      }
+      const tickTexts = () => {
+        textSel.attr('x', n => n.x).attr('y', n => (isRootNode(n) ? n.y + 4 : n.y + getNodeRadius(n) + 14))
+      }
+      const ticker = setInterval(() => {
+        tickLinks()
+        tickTexts()
+      }, 16)
+      setTimeout(() => {
+        clearInterval(ticker)
+        descendantIds.forEach(cid => visibleNodeIds.delete(cid))
+        savedNodePositions.forEach((_, nid) => {
+          if (!visibleNodeIds.has(nid)) savedNodePositions.delete(nid)
+        })
+        nextTick(() => {
+          renderGraph()
+          const remainNodes = masterGraph.nodes.filter(n => visibleNodeIds.has(n.id))
+          nextTick(() => {
+            const nodesForFit = simulation ? simulation.nodes() : remainNodes
+            if (nodesForFit && nodesForFit.length > 0) {
+              setTimeout(() => {
+                smoothZoomFit(nodesForFit)
+                if (simulation) simulation.stop()
+              }, 100)
+            }
+            setTimeout(() => {
+              if (simulation) simulation.stop()
+              showElementText()
+            }, 150)
+          })
+        })
+      }, ANIM_DURATION + 50)
+      return
+    }
+
+    // 展开：子节点从父节点位置平滑散开（与收缩对称，同 duration/easing）
+    st.expanded = true
+    nodeUiState.set(id, st)
+
+    const childIds = findOneLevelChildren(id)
+    if (childIds.length === 0) return
+
+    hideElementText()
+
+    childIds.forEach(cid => visibleNodeIds.add(cid))
+    childIds.forEach(cid => {
+      const cs = nodeUiState.get(cid) || { expanded: true, oldX: d.x, oldY: d.y }
+      cs.oldX = d.x
+      cs.oldY = d.y
+      nodeUiState.set(cid, cs)
+    })
+
+    const parentX = d.x
+    const parentY = d.y
+    childIds.forEach(cid => savedNodePositions.set(cid, { x: parentX, y: parentY }))
+
+    if (simulation) simulation.stop()
+    nextTick(() => {
+      renderGraph()
+      requestAnimationFrame(() => {
+        if (!simulation || !nodeSel) return
+        const newNodes = visibleNodes.filter(n => childIds.includes(n.id))
+        const N = newNodes.length
+        if (N > 0) {
+          const radius = 130
+          newNodes.forEach((n, i) => {
+            const angle = (2 * Math.PI * i) / N
+            const tx = parentX + radius * Math.cos(angle)
+            const ty = parentY + radius * Math.sin(angle)
+            n._targetX = tx
+            n._targetY = ty
+          })
+        }
+        const newNodeSel = nodeLayer.selectAll('g.graph-node').filter(n => childIds.includes(n.id))
+        if (newNodeSel.size() > 0 && N > 0) {
+          newNodeSel
+            .style('opacity', 0)
+            .transition()
+            .duration(ANIM_DURATION)
+            .ease(ANIM_EASING)
+            .attrTween('transform', function (n) {
+              const startX = parentX
+              const startY = parentY
+              const endX = n._targetX ?? parentX
+              const endY = n._targetY ?? parentY
+              return (t) => {
+                n.x = startX + (endX - startX) * t
+                n.y = startY + (endY - startY) * t
+                return `translate(${n.x},${n.y})`
+              }
+            })
+            .style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
+            .on('end', function () {
+              newNodes.forEach(n => {
+                delete n._targetX
+                delete n._targetY
+              })
+              const nodesForFit = simulation ? simulation.nodes() : visibleNodes
+              if (nodesForFit && nodesForFit.length > 0) {
+                setTimeout(() => {
+                  smoothZoomFit(nodesForFit)
+                  if (simulation) simulation.stop()
+                }, 100)
+              } else if (simulation) {
+                simulation.stop()
+              }
+              setTimeout(() => {
+                showElementText()
+              }, 150)
+            })
+        } else {
+          const nodesForFit = simulation ? simulation.nodes() : visibleNodes
+          if (nodesForFit && nodesForFit.length > 0) {
+            setTimeout(() => {
+              smoothZoomFit(nodesForFit)
+              if (simulation) simulation.stop()
+            }, 100)
+          } else if (simulation) {
+            simulation.stop()
+          }
+          setTimeout(() => {
+            showElementText()
+          }, 150)
+        }
+      })
+    })
+  })
+
   // hover 高亮：外圈加粗 + 光晕圈显现，模仿模板鼠标悬浮效果
-  nodeGroup
+  nodeSel
     .on('mouseover', function (ev, d) {
       const gSel = d3.select(this)
       gSel
@@ -741,20 +1133,23 @@ const renderGraph = () => {
     })
   
   simulation.on('tick', () => {
-    link
+    linkSel
       .attr('x1', d => d.source.x)
       .attr('y1', d => d.source.y)
       .attr('x2', d => d.target.x)
       .attr('y2', d => d.target.y)
 
-    nodeGroup.attr('transform', d => `translate(${d.x},${d.y})`)
-    text
+    nodeSel.attr('transform', d => `translate(${d.x},${d.y})`)
+    textSel
       .attr('x', d => d.x)
       .attr('y', d => {
         // 根节点文字放在圆圈内部，其它节点仍在下方
         if (isRootNode(d)) return d.y + 4
         return d.y + getNodeRadius(d) + 14
       })
+
+    // 布局稳定后立即停止力导向，避免图谱持续微抖
+    if (simulation.alpha() < 0.02) simulation.stop()
   })
 }
 

@@ -1,5 +1,6 @@
 <template>
   <div class="home-page">
+    <MouseFollower />
     <TriangleBackground class="triangle-background"/>
     <!-- 使用共享导航组件 -->
     <NavBar :transparent="true" />
@@ -130,11 +131,13 @@ import ChengzhangGuiji from "../components/ChengzhangGuiji.vue";
 import Relax from "../components/Relax.vue";
 import Star from "../components/Star.vue";
 import TriangleBackground from "../components/TriangleBackground.vue";
+import MouseFollower from "../components/MouseFollower.vue";
 import { getGrowthRecordList } from "../api/growthRecord";
 import { buildTimelineFromRecords } from "../utils/timeline";
 export default {
   name: "HomePage",
   components: {
+    MouseFollower,
     TriangleBackground,
     Competition,
     Shalou,

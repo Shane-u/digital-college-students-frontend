@@ -1,6 +1,5 @@
 <template>
   <div id="app">
-    <MouseFollower />
     <router-view v-slot="{ Component }">
       <transition name="page-fade" mode="out-in">
         <component :is="Component" />
@@ -19,7 +18,6 @@
 
 <script>
 import WankoAssistant from './components/WankoAssistant.vue';
-import MouseFollower from './components/MouseFollower.vue';
 import VoiceModeButton from './components/VoiceModeButton.vue';
 import VoiceWsBridge from './components/VoiceWsBridge.vue';
 import CommandListener from './components/CommandListener.vue';
@@ -28,7 +26,6 @@ export default {
   name: 'App',
   components: {
     WankoAssistant,
-    MouseFollower,
     VoiceModeButton,
     VoiceWsBridge,
     CommandListener
