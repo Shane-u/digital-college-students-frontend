@@ -56,6 +56,13 @@
           </div>
         </div>
       </div>
+      <div v-else-if="isStudyPathScene && (pathMessageList.length > 0 || isPathStreaming)" class="path-conversation-wrap">
+        <LearningPathMessageList
+          :messages="pathMessageList"
+          @confirm="handlePathConfirm"
+          @polish="focusPathInput"
+        />
+      </div>
       <div v-else-if="!currentSession || currentSession.messages.length === 0" class="welcome-screen">
         <div class="welcome-content">
           <div class="welcome-title">
@@ -63,9 +70,9 @@
             <span>你好！{{ userName }}</span>
           </div>
           <div class="welcome-subtitle">
-            <span>孪孪伴学，智识相协</span>
+            <span>{{ welcomeSubtitleText }}</span>
           </div>
-          <VintageCardGallery @cardClick="handleCardClick" />
+          <VintageCardGallery :scene="scene" @cardClick="handleCardClick" />
         </div>
       </div>
       <MessageList v-else :messages="currentSession.messages" :streamingContent="streamingContent" />
@@ -75,9 +82,10 @@
       <div class="input-container">
         <div class="input-wrapper">
           <textarea
+            ref="inputTextareaRef"
             v-model="inputValue"
             @keydown="handleKeyDown"
-            :placeholder="`问孪孪伴学...`"
+            :placeholder="placeholderText"
             rows="1"
             class="input-textarea"
             @input="handleInput"
@@ -107,14 +115,14 @@
                 <MicIcon />
               </button>
               <button 
-                v-if="inputValue.trim() && !isSending"
+                v-if="inputValue.trim() && !effectiveSending"
                 @click="handleSend"
                 class="send-button"
               >
                 <ArrowRightIcon />
               </button>
               <button
-                v-if="isSending"
+                v-if="effectiveSending"
                 @click="handleAbort"
                 class="send-button stop-button"
                 title="终止"
@@ -138,6 +146,7 @@ import { ref, onMounted, nextTick, onUnmounted, watch, computed } from 'vue'
 import { h } from 'vue'
 import { useRouter } from 'vue-router'
 import MessageList from './MessageList.vue'
+import LearningPathMessageList from '../LearningPath/LearningPathMessageList.vue'
 import { useFlashCardGeneration } from '../../composables/useFlashCardGeneration'
 import ModelSelector from './ModelSelector.vue'
 import VintageCardGallery from './VintageCardGallery.vue'
@@ -219,8 +228,32 @@ const props = defineProps({
   isLoading: {
     type: Boolean,
     default: false
+  },
+  // 使用场景：默认对话 / 学习路径规划
+  scene: {
+    type: String,
+    default: 'default'
+  },
+  // 学习路径场景：对话列表（{ role, content?, pathJson?, isStreaming? }[]）
+  learningPathMessages: {
+    type: Array,
+    default: () => []
+  },
+  // 学习路径流式生成中
+  isPathStreaming: {
+    type: Boolean,
+    default: false
+  },
+  // 学习路径生成错误信息
+  pathStreamError: {
+    type: String,
+    default: null
   }
 })
+
+const emit = defineEmits(['clearPathError', 'pathConfirm'])
+
+const inputTextareaRef = ref(null)
 
 const inputValue = ref('')
 const userAvatar = ref('')
@@ -233,6 +266,44 @@ let audioChunks = []
 
 const setInputValue = (value) => {
   inputValue.value = value
+}
+
+const isStudyPathScene = computed(() => props.scene === 'learningPath')
+
+const effectiveSending = computed(() => {
+  return props.isPathStreaming || isSending.value
+})
+
+// 学习路径对话展示列表：含进行中的占位条
+const pathMessageList = computed(() => {
+  const list = [...(props.learningPathMessages || [])]
+  if (props.isPathStreaming) {
+    list.push({ id: 'streaming', role: 'model', isStreaming: true })
+  }
+  return list
+})
+
+const placeholderText = computed(() => {
+  return isStudyPathScene.value
+    ? '请在这里输入与你“学习路径规划”相关的问题...'
+    : '问孪孪伴学...'
+})
+
+const welcomeSubtitleText = computed(() => {
+  return isStudyPathScene.value
+    ? '一起为你制定专属的学习路径规划'
+    : '孪孪伴学，智识相协'
+})
+
+const focusPathInput = () => {
+  nextTick(() => {
+    const el = inputTextareaRef.value || document.querySelector('.input-textarea')
+    if (el) el.focus()
+  })
+}
+
+const handlePathConfirm = (pathJson) => {
+  emit('pathConfirm', pathJson)
 }
 
 const handleCardClick = (content) => {
@@ -288,7 +359,7 @@ onMounted(() => {
 
 const handleSend = () => {
   if (inputValue.value.trim()) {
-    isSending.value = true // 设置为发送中
+    if (props.scene !== 'learningPath') isSending.value = true
     props.onSendMessage(inputValue.value)
     inputValue.value = ''
     const textarea = document.querySelector('.input-textarea')
@@ -326,7 +397,7 @@ const handleKeyDown = (e) => {
   }
   // Enter（无 Shift）：发送
   e.preventDefault()
-  if (!isSending.value) {
+  if (!effectiveSending.value) {
     handleSend()
   } else {
     handleAbort()
@@ -766,6 +837,99 @@ onUnmounted(() => {
 
 .main-messages::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.3);
+}
+
+.path-conversation-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.path-inline-error {
+  margin: 12px 24px 0;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: #dc2626;
+}
+
+.path-inline-error-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: 1px solid #dc2626;
+  background: transparent;
+  color: #dc2626;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.path-inline-error-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.path-loading-screen,
+.path-error-screen {
+  width: 100%;
+  max-width: 64rem;
+  padding: 60px 24px 24px 24px;
+  margin: 0 auto;
+}
+
+.path-loading-content,
+.path-error-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.path-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(147, 51, 234, 0.2);
+  border-top-color: #9333ea;
+  border-radius: 50%;
+  animation: path-spin 0.8s linear infinite;
+}
+
+@keyframes path-spin {
+  to { transform: rotate(360deg); }
+}
+
+.path-loading-text {
+  font-size: 15px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.path-error-text {
+  font-size: 15px;
+  color: #dc2626;
+  margin: 0;
+  text-align: center;
+}
+
+.path-error-retry {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid #9333ea;
+  background: transparent;
+  color: #7c3aed;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.path-error-retry:hover {
+  background: rgba(147, 51, 234, 0.08);
 }
 
 .welcome-screen {

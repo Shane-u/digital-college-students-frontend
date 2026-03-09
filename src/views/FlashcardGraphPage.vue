@@ -1,5 +1,8 @@
 <template>
   <div class="flashcard-graph-page">
+    <button class="flashcard-back-button" type="button" @click="goBack">
+      返回
+    </button>
     <!-- 全局加载态：避免刷新时闪现错误视图 -->
     <div v-if="pageLoading" class="flashcard-page-loading">
       <div class="flashcard-page-loading-inner">
@@ -29,6 +32,8 @@
         :graph-nodes="graphData.nodes"
         :graph-links="graphData.links"
         :user-id="currentUserId"
+        :user-avatar="currentUserAvatar"
+        :user-nickname="currentUserNickname"
         :highlight-ids="highlightIds"
         @node-click="handleNodeClick"
         @go-to-temp="goToTemp"
@@ -126,6 +131,7 @@ import { getMyProfile } from '../api/user'
 import { ElMessage, ElDialog } from 'element-plus'
 import { sanitizeHtml } from '../utils/sanitizeHtml'
 import { renderMarkdownToHtml } from '../utils/markdownRender'
+import { normalizeProfile } from '../utils/profile'
 
 const route = useRoute()
 const router = useRouter()
@@ -152,6 +158,9 @@ const previewCard = ref(null)
 const graphData = ref({ nodes: [], links: [] })
 // 当前用户 ID，用于 Neo4j 图谱编辑/删除时指定数据库
 const currentUserId = ref(null)
+// 当前用户头像/昵称（用于右侧悬挂彩带头像显示）
+const currentUserAvatar = ref('')
+const currentUserNickname = ref('U')
 // 图谱查询命中的闪卡业务 ID 列表，用于前端高亮节点
 const highlightIds = ref([])
 
@@ -288,7 +297,13 @@ const loadSavedFlashcards = async () => {
 
     let userId = null
     if (userResult[0].status === 'fulfilled' && userResult[0].value) {
+      const p = normalizeProfile(userResult[0].value || {})
       userId = userResult[0].value?.id ?? userResult[0].value?.userId ?? null
+      currentUserAvatar.value = p.avatar || ''
+      currentUserNickname.value = p.nickname || 'U'
+    } else {
+      currentUserAvatar.value = ''
+      currentUserNickname.value = 'U'
     }
     currentUserId.value = userId
 
@@ -576,6 +591,10 @@ const handleBackToGraph = () => {
   }
 }
 
+const goBack = () => {
+  router.back()
+}
+
 onMounted(async () => {
   pageLoading.value = true
   await Promise.all([
@@ -620,6 +639,33 @@ watch(
   display: flex;
   flex-direction: column;
 }
+
+.flashcard-back-button {
+  position: fixed;
+  top: 18px;
+  left: 24px;
+  z-index: 1100;
+  padding: 8px 24px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f9fafb;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+  transition:
+    background 0.16s ease,
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.flashcard-back-button:hover {
+  background: #374151;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.4);
+}
+
 
 .flashcard-page-loading {
   flex: 1;

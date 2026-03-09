@@ -106,6 +106,20 @@ const routes = [
     name: 'FlashcardTemp',
     component: () => import('../views/FlashcardGraphPage.vue')
   },
+  {
+    path: '/learning-path',
+    redirect: '/learning-path-graph'
+  },
+  {
+    path: '/learning-path-graph',
+    name: 'LearningPathGraph',
+    component: () => import('../views/LearningPathGraphPage.vue')
+  },
+  {
+    path: '/learning-path-graph/:pathId',
+    name: 'LearningPathGraphDetail',
+    component: () => import('../views/LearningPathGraphPage.vue')
+  },
 ]
 
 const router = createRouter({

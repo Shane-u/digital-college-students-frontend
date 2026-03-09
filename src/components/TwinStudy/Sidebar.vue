@@ -20,7 +20,24 @@
         <PlusIcon />
         <span v-if="isOpen">新的对话</span>
       </button>
+      <div
+        v-if="isOpen"
+        :class="['learning-path-row', { 'learning-path-row-active': scene === 'learningPath' }]"
+        @click="handleLearningPathClick"
+      >
+        <img :src="learningPathIcon" alt="学习路径规划" class="learning-path-icon" />
+        <span class="learning-path-text">学习路径规划</span>
+      </div>
+      <router-link
+        v-if="isOpen"
+        to="/learning-path"
+        class="learning-path-row learning-path-link"
+      >
+        <span class="learning-path-link-text">我的学习路径</span>
+      </router-link>
     </div>
+
+    <div v-if="isOpen" class="sidebar-section-divider"></div>
 
     <div v-if="isOpen" class="sidebar-content">
 
@@ -130,6 +147,7 @@
 
 <script setup>
 import { h, ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import learningPathIcon from '../../assets/fonts/学习路径.png'
 
 // 状态管理
 const showMenu = ref(false)
@@ -245,6 +263,14 @@ const props = defineProps({
     type: Function,
     required: true
   },
+  onNewStudyPathChat: {
+    type: Function,
+    default: null
+  },
+  scene: {
+    type: String,
+    default: 'default'
+  },
   onSelectSession: {
     type: Function,
     required: true
@@ -252,6 +278,14 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['updateSession', 'deleteSession', 'deleteSessions'])
+
+const handleLearningPathClick = () => {
+  if (typeof props.onNewStudyPathChat === 'function') {
+    props.onNewStudyPathChat()
+  } else if (typeof props.onNewChat === 'function') {
+    props.onNewChat()
+  }
+}
 
 // 计算属性：排序后的会话列表（置顶的在前）
 const sortedSessions = computed(() => {
@@ -441,6 +475,9 @@ onUnmounted(() => {
 .sidebar-new-chat {
   padding: 12px;
   margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .new-chat-btn {
@@ -466,6 +503,56 @@ onUnmounted(() => {
 
 .new-chat-btn:hover {
   background: #d3d9e0;
+}
+
+.learning-path-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.learning-path-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 14px;
+  cursor: pointer;
+  /* color: #1a73e8; */
+  font-size: 15px;
+  /* border-radius: 9999px;
+  background: #e8f0fe; */
+}
+
+/* .learning-path-text {
+  font-weight: 600;
+} */
+
+.learning-path-row:hover .learning-path-text {
+  text-decoration: none;
+}
+
+.learning-path-row-active {
+  background: rgba(147, 51, 234, 0.12);
+  border-radius: 12px;
+}
+
+.learning-path-link {
+  text-decoration: none;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.learning-path-link:hover {
+  color: #9333ea;
+}
+
+.learning-path-link-text {
+  font-size: 14px;
+}
+
+.sidebar-section-divider {
+  margin: 4px 12px 6px;
+  border-bottom: 1px solid #a2a3a3;
 }
 
 .sidebar-content {

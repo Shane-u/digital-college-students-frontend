@@ -1,27 +1,46 @@
 <template>
   <div class="twin-study-page">
+    <SavePathDialog
+      :visible="showSavePathDialog"
+      :pathJson="pathToSave"
+      :userId="getUserId()"
+      @update:visible="showSavePathDialog = $event"
+      @saved="onPathSaved"
+      @error="onPathSaveError"
+    />
     <div class="flex h-screen w-full bg-white overflow-hidden text-[#1f1f1f]">
       <Sidebar 
         :isOpen="isSidebarOpen" 
         :toggleOpen="() => isSidebarOpen = !isSidebarOpen"
         :sessions="sessions"
         :currentSessionId="currentSessionId"
+        :scene="scene"
         :onNewChat="startNewChat"
+        :onNewStudyPathChat="startLearningPathChat"
         :onSelectSession="selectSession"
         @updateSession="handleUpdateSession"
         @deleteSession="handleDeleteSession"
         @deleteSessions="handleDeleteSessions"
       />
-      <MainContent 
-        :currentSession="currentSession"
-        :streamingContent="streamingContent"
-        :modelMode="modelMode"
-        :setModelMode="setModelMode"
-        :onSendMessage="sendMessage"
-        :onAbortStream="abortCurrentStream"
-        :isSidebarOpen="isSidebarOpen"
-        :isLoading="isHistoryLoading"
-      />
+      <Transition name="scene-switch" mode="out-in">
+        <MainContent 
+          :key="scene"
+          :currentSession="currentSession"
+          :streamingContent="streamingContent"
+          :modelMode="modelMode"
+          :setModelMode="setModelMode"
+          :onSendMessage="sendMessage"
+          :onAbortStream="abortCurrentStream"
+          :isSidebarOpen="isSidebarOpen"
+          :isLoading="isHistoryLoading"
+          :scene="scene"
+          :learningPathMessages="learningPathMessages"
+          :isPathStreaming="isPathStreaming"
+          :pathStreamError="pathStreamError"
+          @clearPathError="pathStreamError = null"
+          @pathConfirm="handlePathConfirm"
+        />
+      </Transition>
     </div>
   </div>
 </template>
@@ -31,15 +50,20 @@ import { ref, computed, onMounted, nextTick, provide } from 'vue'
 import { ElMessage } from 'element-plus'
 import Sidebar from '../components/TwinStudy/Sidebar.vue'
 import MainContent from '../components/TwinStudy/MainContent.vue'
+import SavePathDialog from '../components/LearningPath/SavePathDialog.vue'
 import { apiService } from '../services/twinStudy/apiService'
 import { renderMarkdownToHtml } from '../utils/markdownRender'
 import { createFlashCardGenerationState } from '../composables/useFlashCardGeneration'
+import { planStreamFlux } from '../api/learningPath'
+import { tryParseLearningPathJson } from '../utils/learningPathJson'
 
 // 状态管理
 const isSidebarOpen = ref(true)
 const sessions = ref([])
 const currentSessionId = ref(null)
 const modelMode = ref('fast')
+// 当前场景：默认对话 / 学习路径规划
+const scene = ref('default')
 const currentAbortController = ref(null)
 // 切换会话或进入页面时，历史消息加载中的骨架屏状态
 const isHistoryLoading = ref(false)
@@ -48,6 +72,13 @@ const streamingContent = ref('')
 // 流式消息内容 DOM 元素 ref，参考 bailian-chat.demo 在循环内直接设置 innerHTML 实现边输出边渲染
 const streamingContentElRef = ref(null)
 provide('streamingContentElRef', streamingContentElRef)
+
+// 学习路径规划场景状态：对话列表（用户右、AI左）
+const learningPathMessages = ref([])
+const isPathStreaming = ref(false)
+const pathStreamError = ref(null)
+const showSavePathDialog = ref(false)
+const pathToSave = ref(null)
 
 // 创建闪卡生成状态管理（提供给子组件使用）
 const flashCardGenerationState = createFlashCardGenerationState()
@@ -332,8 +363,45 @@ const currentSession = computed(() => {
 // 方法：点击「新的对话」时只清除当前会话，不创建新会话
 // 等用户发送第一条消息时，才创建会话并添加到列表，标题根据消息内容命名
 const startNewChat = () => {
+  scene.value = 'default'
   currentSessionId.value = null
   saveSessionsToStorage()
+}
+
+const startLearningPathChat = () => {
+  scene.value = 'learningPath'
+  currentSessionId.value = null
+  learningPathMessages.value = []
+  isPathStreaming.value = false
+  pathStreamError.value = null
+  saveSessionsToStorage()
+}
+
+// 学习路径确认保存：打开保存弹窗
+const handlePathConfirm = (pathJson) => {
+  if (!pathJson || !pathJson.nodes) {
+    ElMessage.warning('暂无有效路径数据')
+    return
+  }
+  pathToSave.value = pathJson
+  showSavePathDialog.value = true
+}
+
+const onPathSaved = () => {
+  ElMessage.success('学习路径已保存')
+}
+
+const onPathSaveError = (err) => {
+  ElMessage.error(err?.message || '保存失败，请重试')
+}
+
+// 获取当前路径 JSON（用于润色请求）：最后一条 model 消息的 pathJson
+const getCurrentPathJsonForPolish = () => {
+  const list = learningPathMessages.value
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i].role === 'model' && list[i].pathJson) return list[i].pathJson
+  }
+  return null
 }
 
 const selectSession = async (id) => {
@@ -456,7 +524,87 @@ const setModelMode = (mode) => {
   modelMode.value = mode
 }
 
+/**
+ * 学习路径场景：调用流式接口生成/润色路径，对话式展示（用户右、AI左）
+ */
+const handleLearningPathSend = async (content) => {
+  const trimmed = (content || '').trim()
+  if (!trimmed) return
+
+  const currentPath = getCurrentPathJsonForPolish()
+  const isPolish = !!currentPath
+  const userPrompt = isPolish
+    ? `当前想要润色（${trimmed}），请给出润色后的学习路径。`
+    : trimmed
+
+  learningPathMessages.value.push({
+    id: `user-${Date.now()}`,
+    role: 'user',
+    content: trimmed
+  })
+  isPathStreaming.value = true
+  pathStreamError.value = null
+
+  const abortController = new AbortController()
+  currentAbortController.value = abortController
+
+  try {
+    let accumulated = ''
+    const userId = getUserId()
+    let parsedPath = null
+
+    for await (const chunk of planStreamFlux({
+      userPrompt,
+      currentPathJson: isPolish ? currentPath : null,
+      userId,
+      signal: abortController.signal
+    })) {
+      accumulated += chunk
+      const { parsed } = tryParseLearningPathJson(accumulated)
+      if (parsed && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+        parsedPath = parsed
+        break
+      }
+    }
+
+    if (!parsedPath) {
+      const { parsed } = tryParseLearningPathJson(accumulated)
+      if (parsed && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) parsedPath = parsed
+    }
+
+    if (parsedPath) {
+      learningPathMessages.value.push({
+        id: `model-${Date.now()}`,
+        role: 'model',
+        pathJson: parsedPath
+      })
+    } else {
+      learningPathMessages.value.push({
+        id: `model-${Date.now()}`,
+        role: 'model',
+        content: '未能解析到有效的学习路径数据，请重试或换一种描述方式。'
+      })
+    }
+  } catch (err) {
+    if (err?.name === 'AbortError') return
+    console.error('[handleLearningPathSend]', err)
+    learningPathMessages.value.push({
+      id: `model-${Date.now()}`,
+      role: 'model',
+      content: err?.message || '生成学习路径失败，请稍后重试。'
+    })
+  } finally {
+    isPathStreaming.value = false
+    currentAbortController.value = null
+  }
+}
+
 const sendMessage = async (content) => {
+  if (scene.value === 'learningPath') {
+    await handleLearningPathSend(content)
+    return
+  }
+
   let activeSessionId = currentSessionId.value
   
   const userMessage = {
@@ -820,6 +968,23 @@ onMounted(async () => {
 .twin-study-page {
   min-height: 100vh;
   background: white;
+}
+
+.scene-switch-enter-active,
+.scene-switch-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.scene-switch-enter-from,
+.scene-switch-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.scene-switch-enter-to,
+.scene-switch-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .flex {

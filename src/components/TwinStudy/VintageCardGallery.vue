@@ -46,9 +46,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import VintageCard from './VintageCard.vue'
 import TwineString from './TwineString.vue'
+
+const props = defineProps({
+  scene: { type: String, default: 'default' }
+})
 
 const VINTAGE_COLORS = [
   '#E2D1C3', // Muted beige
@@ -85,6 +89,21 @@ const WEB_DEV_SNIPPETS = [
   "前端路由的实现\n原理是什么？\n如何实现？",
 ]
 
+const LEARNING_PATH_SNIPPETS = [
+  "当前想要学习 Vue，\n请给出学习 Vue 的\n学习路径。",
+  "当前想要学习 Java，\n请给出学习 Java 的\n学习路径。",
+  "当前想要学习 Python，\n请给出学习 Python 的\n学习路径。",
+  "当前想要学习 React，\n请给出学习 React 的\n学习路径。",
+  "当前想要学习 数据结构，\n请给出学习 数据结构 的\n学习路径。",
+  "当前想要学习 机器学习，\n请给出学习 机器学习 的\n学习路径。",
+  "当前想要学习 TypeScript，\n请给出学习 TypeScript 的\n学习路径。",
+  "当前想要学习 计算机网络，\n请给出学习 计算机网络 的\n学习路径。",
+]
+
+const snippets = computed(() =>
+  props.scene === 'learningPath' ? LEARNING_PATH_SNIPPETS : WEB_DEV_SNIPPETS
+)
+
 const cards = ref([])
 const isRefreshing = ref(false)
 const gradientId = ref(`purpleGradient-${Math.random().toString(36).substring(7)}`)
@@ -92,16 +111,17 @@ const gradientId = ref(`purpleGradient-${Math.random().toString(36).substring(7)
 const generateBatch = () => {
   const count = 5
   const usedIndices = new Set()
-  
+  const list = snippets.value
+
   return Array.from({ length: count }).map((_, i) => {
     // 确保每个卡片内容不重复
     let snippetIndex
     do {
-      snippetIndex = Math.floor(Math.random() * WEB_DEV_SNIPPETS.length)
-    } while (usedIndices.has(snippetIndex) && usedIndices.size < WEB_DEV_SNIPPETS.length)
+      snippetIndex = Math.floor(Math.random() * list.length)
+    } while (usedIndices.has(snippetIndex) && usedIndices.size < list.length)
     usedIndices.add(snippetIndex)
-    
-    const content = WEB_DEV_SNIPPETS[snippetIndex]
+
+    const content = list[snippetIndex]
     const lines = content.split('\n')
     const lineCount = lines.length
     
@@ -167,6 +187,11 @@ const handleCardClick = (content) => {
 }
 
 onMounted(() => {
+  cards.value = generateBatch()
+})
+
+// 当 scene 变化时重新生成批次
+watch(() => props.scene, () => {
   cards.value = generateBatch()
 })
 </script>

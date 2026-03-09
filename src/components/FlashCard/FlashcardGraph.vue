@@ -1,55 +1,25 @@
 <template>
   <div class="flashcard-graph-container">
-    <!-- 工具栏 -->
-    <div v-if="!hideToolbar" class="graph-toolbar">
-      <div class="toolbar-left">
-        <!-- 搜索框 -->
-        <div class="search-wrapper">
-          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
-          </svg>
-          <input 
-            v-model="searchKeyword"
-            type="text" 
-            placeholder="搜索标题或内容..." 
-            class="search-input"
-            @keyup.enter="handleSearch"
-          />
-        </div>
-        
-        <!-- 时间范围选择 -->
-        <div class="time-range-group">
-          <button 
-            v-for="range in timeRanges"
-            :key="range.value"
-            :class="['time-range-btn', { active: timeRange === range.value }]"
-            @click="timeRange = range.value"
-          >
-            {{ range.label }}
-          </button>
-        </div>
+    <!-- 顶部标题条：闪卡图谱 -->
+    <header class="graph-header">
+      <div class="graph-header__inner">
+        <div class="graph-header__title">闪 卡 图 谱</div>
       </div>
-      
-      <div class="toolbar-right">
-        <button class="action-btn btn-compare" @click="handleCompare">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="3" width="20" height="14" rx="2" />
-            <line x1="8" y1="21" x2="16" y2="21" />
-            <line x1="12" y1="17" x2="12" y2="21" />
-          </svg>
-          对比模式
-        </button>
-        <button class="action-btn btn-temp" @click="handleGoToTemp">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M3 9h18" />
-            <path d="M9 21V9" />
-          </svg>
-          暂存区
-        </button>
-      </div>
-    </div>
+    </header>
+
+    <!-- 右侧悬挂彩带（默认展开，点头像收起到右上角） -->
+    <FlashcardRibbonMenu
+      v-if="!hideToolbar"
+      :avatar-url="userAvatar"
+      :nickname="userNickname"
+      :legend-active="showLegend"
+      @search="handleRibbonSearch"
+      @filter="toggleFilterPopover"
+      @compare="handleCompare"
+      @temp="handleGoToTemp"
+      @stats="openStats"
+      @legend="toggleLegend"
+    />
 
     <!-- 图谱区域（有 Neo4j nodes/links 或闪卡列表即显示图谱） -->
     <div ref="graphContainer" class="graph-area">
@@ -62,7 +32,7 @@
     </div>
 
     <!-- 图例 -->
-    <div v-if="!hideToolbar" class="graph-legend">
+    <div v-if="!hideToolbar && showLegend" class="graph-legend">
       <h4 class="legend-title">图谱图例</h4>
       <div class="legend-items">
         <div class="legend-item">
@@ -79,6 +49,97 @@
         <p>🔍 滚轮缩放图谱视野</p>
       </div>
     </div>
+
+    <!-- 彩带弹出：节点搜索 -->
+    <Teleport to="body">
+      <div
+        v-if="!hideToolbar && showSearchPopover"
+        class="ribbon-popover-overlay"
+        @click="closeSearch"
+      >
+        <div class="ribbon-popover search" @click.stop>
+          <div class="ribbon-popover-title">节点搜索</div>
+          <input
+            v-model="searchKeyword"
+            type="text"
+            class="ribbon-search-input"
+            placeholder="输入标题或内容关键字，回车搜索"
+            @keyup.enter="confirmSearch"
+          />
+          <div class="ribbon-popover-actions">
+            <button type="button" class="ribbon-popover-close" @click="closeSearch">取消</button>
+            <button type="button" class="ribbon-popover-primary" @click="confirmSearch">搜索</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 彩带弹出：筛选（时间范围） -->
+    <Teleport to="body">
+      <div
+        v-if="!hideToolbar && showFilterPopover"
+        class="ribbon-popover-overlay"
+        @click="showFilterPopover = false"
+      >
+        <div class="ribbon-popover" @click.stop>
+          <div class="ribbon-popover-title">节点筛选</div>
+          <div class="ribbon-popover-subtitle">时间范围</div>
+          <div class="ribbon-filter-grid">
+            <button
+              v-for="range in timeRanges"
+              :key="range.value"
+              type="button"
+              class="ribbon-filter-btn"
+              :class="{ active: timeRange === range.value }"
+              @click="timeRange = range.value"
+            >
+              {{ range.label }}
+            </button>
+          </div>
+          <div class="ribbon-popover-actions">
+            <button type="button" class="ribbon-popover-close" @click="showFilterPopover = false">关闭</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 彩带弹出：数据统计 -->
+    <Teleport to="body">
+      <div v-if="!hideToolbar && showStatsModal" class="ribbon-popover-overlay" @click="closeStats">
+        <div class="ribbon-popover stats" @click.stop>
+          <div class="ribbon-popover-title">数据统计</div>
+          <div class="stats-list">
+            <div class="stats-row">
+              <span class="stats-k">当前时间范围</span>
+              <span class="stats-v">{{ activeTimeRangeLabel }}</span>
+            </div>
+            <div class="stats-row">
+              <span class="stats-k">闪卡数量</span>
+              <span class="stats-v">{{ graphStats.flashcards }}</span>
+            </div>
+            <div class="stats-row">
+              <span class="stats-k">图谱节点</span>
+              <span class="stats-v">{{ graphStats.masterNodes }}</span>
+            </div>
+            <div class="stats-row">
+              <span class="stats-k">图谱关系</span>
+              <span class="stats-v">{{ graphStats.masterLinks }}</span>
+            </div>
+            <div class="stats-row">
+              <span class="stats-k">当前可见节点</span>
+              <span class="stats-v">{{ graphStats.visibleNodes }}</span>
+            </div>
+            <div class="stats-row">
+              <span class="stats-k">命中高亮闪卡</span>
+              <span class="stats-v">{{ graphStats.highlightHits }}</span>
+            </div>
+          </div>
+          <div class="ribbon-popover-actions">
+            <button type="button" class="ribbon-popover-primary" @click="closeStats">知道了</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
     
     <!-- 节点内容：从左侧滑出的抽屉，不遮挡图谱 -->
     <Transition name="drawer-left">
@@ -153,6 +214,7 @@ import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
+import FlashcardRibbonMenu from './FlashcardRibbonMenu.vue'
 
 const props = defineProps({
   flashcards: {
@@ -183,6 +245,16 @@ const props = defineProps({
   hideToolbar: {
     type: Boolean,
     default: false
+  },
+  /** 用户头像（用于右侧彩带头像） */
+  userAvatar: {
+    type: String,
+    default: ''
+  },
+  /** 用户昵称首字母（头像失败时兜底显示） */
+  userNickname: {
+    type: String,
+    default: 'U'
   }
 })
 
@@ -201,6 +273,20 @@ const editForm = ref({ id: '', graphId: '', title: '', content: '', htmlContent:
 const loadingDetail = ref(false)
 const savingEdit = ref(false)
 
+// 右侧彩带：图例显隐、筛选弹出层、统计弹窗
+const showLegend = ref(true)
+const showSearchPopover = ref(false)
+const showFilterPopover = ref(false)
+const showStatsModal = ref(false)
+
+const graphStats = ref({
+  flashcards: 0,
+  masterNodes: 0,
+  masterLinks: 0,
+  visibleNodes: 0,
+  highlightHits: 0
+})
+
 const timeRanges = [
   { value: 'ALL', label: '全部' },
   { value: '7D', label: '近7天' },
@@ -210,6 +296,11 @@ const timeRanges = [
   { value: '1Y', label: '近一年' },
   { value: 'BEFORE_1Y', label: '一年前' }
 ]
+
+const activeTimeRangeLabel = computed(() => {
+  const r = timeRanges.find(x => x.value === timeRange.value)
+  return r ? r.label : '全部'
+})
 
 // 是否有图谱数据（Neo4j 原始节点或闪卡列表）
 const hasGraphData = computed(() => {
@@ -246,9 +337,40 @@ const filteredFlashcards = computed(() => {
 })
 
 // 触发后端图谱搜索（Neo4j），当前仅在按下回车时触发
-const handleSearch = () => {
-  const keyword = searchKeyword.value.trim()
+const handleRibbonSearch = () => {
+  showSearchPopover.value = true
+  nextTick(() => {
+    const el = document.querySelector('.ribbon-popover.search .ribbon-search-input')
+    if (el && typeof el.focus === 'function') {
+      el.focus()
+    }
+  })
+}
+
+const closeSearch = () => {
+  showSearchPopover.value = false
+}
+
+const confirmSearch = () => {
+  const keyword = (searchKeyword.value || '').trim()
   emit('search', keyword)
+  showSearchPopover.value = false
+}
+
+const toggleFilterPopover = () => {
+  showFilterPopover.value = !showFilterPopover.value
+}
+
+const toggleLegend = () => {
+  showLegend.value = !showLegend.value
+}
+
+const openStats = () => {
+  showStatsModal.value = true
+}
+
+const closeStats = () => {
+  showStatsModal.value = false
 }
 
 // 更新容器尺寸
@@ -577,6 +699,10 @@ const renderGraph = () => {
 
   // 更新全量图谱快照 + 初始化可见集合（保留“初始显示全部节点”逻辑）
   masterGraph = { nodes: [...nodes], links: [...uniqueLinks] }
+  graphStats.value.masterNodes = masterGraph.nodes.length
+  graphStats.value.masterLinks = masterGraph.links.length
+  graphStats.value.flashcards = (props.flashcards || []).length
+  graphStats.value.highlightHits = (props.highlightIds || []).length
   const currentMasterIds = new Set(masterGraph.nodes.map(n => n.id))
 
   if (visibleNodeIds.size === 0) {
@@ -593,6 +719,7 @@ const renderGraph = () => {
 
   // 当前渲染用可见子集，并恢复上次保存的位置（收起后避免弹动）
   const visibleNodes = masterGraph.nodes.filter(n => visibleNodeIds.has(n.id))
+  graphStats.value.visibleNodes = visibleNodes.length
   const cx = width / 2
   const cy = height / 2
   visibleNodes.forEach(n => {
@@ -1159,6 +1286,8 @@ watch(
     props.graphNodes?.length,
     props.graphLinks?.length,
     filteredFlashcards.value.length,
+    // 时间范围变化也需要触发重绘（即使过滤后数量不变）
+    timeRange.value,
     // 高亮 ID 变化时需要重新渲染以更新明暗状态
     (props.highlightIds || []).join(',')
   ],
@@ -1315,129 +1444,46 @@ const sanitizedContent = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+  padding-top: 140px;
   background: #f8fafc;
   position: relative;
   overflow: hidden;
 }
 
-.graph-toolbar {
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 16px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  z-index: 10;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.search-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-icon {
-  position: absolute;
-  left: 16px;
-  color: #94a3b8;
+/* 顶部科技感装饰条（与知识图谱页面风格保持一致） */
+.graph-header {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  height: 120px;
+  background: url('https://lms.cdut.edu.cn/static/assets/images/knowledge-node/234a36768ff31bf18d9f.png') center/cover no-repeat;
+  z-index: 1200;
   pointer-events: none;
 }
 
-.search-input {
-  padding: 10px 16px 10px 44px;
-  background: #f1f5f9;
-  border: 2px solid transparent;
-  border-radius: 16px;
-  font-size: 14px;
-  width: 288px;
-  outline: none;
-  transition: all 0.2s;
-}
-
-.search-input:focus {
-  background: white;
-  border-color: #4f46e5;
-}
-
-.time-range-group {
-  display: flex;
-  background: #f1f5f9;
-  padding: 6px;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  gap: 4px;
-}
-
-.time-range-btn {
-  padding: 8px 20px;
-  font-size: 12px;
-  font-weight: 900;
-  border-radius: 12px;
-  border: none;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.time-range-btn:hover {
-  color: #475569;
-}
-
-.time-range-btn.active {
-  background: white;
-  color: #4f46e5;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.toolbar-right {
+.graph-header__inner {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 16px;
+  pointer-events: none;
+  padding: 0 60px;
+  box-sizing: border-box;
+  position: relative;
 }
 
-.action-btn {
-  padding: 10px 24px;
-  font-size: 14px;
-  border-radius: 16px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.graph-header__title {
+  font-size: 34px;
   font-weight: 700;
-  transition: all 0.2s;
-}
-
-.btn-compare {
-  background: #5b52f9;
-  color: white;
-  box-shadow: 0 4px 6px rgba(91, 82, 249, 0.3);
-}
-
-.btn-compare:hover {
-  background: #4a42d9;
-  box-shadow: 0 6px 12px rgba(91, 82, 249, 0.4);
-}
-
-.btn-temp {
-  background: white;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.btn-temp:hover {
-  background: #f8fafc;
+  letter-spacing: 4px;
+  color: #fff;
+  text-shadow: 0 8px 25px rgba(0, 0, 0, 0.55);
+  text-align: center;
+  flex: none;
 }
 
 .graph-area {
@@ -1856,6 +1902,157 @@ const sanitizedContent = computed(() => {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* 右侧彩带弹出层（筛选 / 统计） */
+.ribbon-popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 96px 22px 22px;
+}
+
+.ribbon-popover {
+  width: 320px;
+  max-width: calc(100vw - 44px);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.25);
+  padding: 16px 16px 14px;
+}
+
+.ribbon-popover.stats {
+  width: 340px;
+}
+
+.ribbon-popover-title {
+  font-size: 14px;
+  font-weight: 900;
+  color: #111827;
+  margin-bottom: 10px;
+}
+
+.ribbon-popover-subtitle {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b7280;
+  margin-bottom: 10px;
+}
+
+.ribbon-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ribbon-filter-btn {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+  color: #4b5563;
+  transition: all 0.15s ease;
+}
+
+.ribbon-filter-btn:hover {
+  border-color: rgba(139, 92, 246, 0.55);
+  color: #6d28d9;
+  background: #faf5ff;
+}
+
+.ribbon-filter-btn.active {
+  border-color: rgba(124, 58, 237, 0.85);
+  background: rgba(124, 58, 237, 0.12);
+  color: #5b21b6;
+}
+
+.ribbon-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ribbon-popover-close {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ribbon-popover-primary {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #ffffff;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 20px rgba(124, 58, 237, 0.25);
+}
+
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.stats-k {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 800;
+}
+
+.stats-v {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 900;
+}
+
+.ribbon-popover.search {
+  width: 360px;
+}
+
+.ribbon-search-input {
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  outline: none;
+  background: #f9fafb;
+  transition: all 0.15s ease;
+}
+
+.ribbon-search-input:focus {
+  border-color: rgba(79, 70, 229, 0.9);
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.16);
 }
 </style>
 

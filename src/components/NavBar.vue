@@ -17,6 +17,15 @@
         <div class="nav-center nav-center-transparent" ref="navLinksRef">
           <router-link to="/home" class="nav-link bold" exact>首页</router-link>
           <div class="nav-dropdown">
+            <span class="nav-link bold">学习图谱</span>
+            <div class="dropdown-menu">
+              <router-link to="/knowledge-graph" class="dropdown-item" exact>技能图谱</router-link>
+              <router-link to="/learning-path-graph" class="dropdown-item" exact>学习路径图谱</router-link>
+              <router-link to="/flashcard-graph" class="dropdown-item" exact>闪卡图谱</router-link>
+            </div>
+          </div>
+          <router-link to="/twin-study" class="nav-link bold" exact>孪孪伴学</router-link>
+          <div class="nav-dropdown">
             <span class="nav-link bold">竞赛活动</span>
             <div class="dropdown-menu">
               <router-link to="/competition/edu" class="dropdown-item" exact>竞赛一览</router-link>
@@ -24,27 +33,19 @@
             </div>
           </div>
           <div class="nav-dropdown">
-            <span class="nav-link bold">职业发展</span>
-            <div class="dropdown-menu">
-              <router-link to="/career/showcase" class="dropdown-item" exact>职业展示</router-link>
-              <router-link to="/career/planning" class="dropdown-item" exact>职业规划</router-link>
-              <router-link to="/career/resume" class="dropdown-item" exact>简历制作</router-link>
-            </div>
-          </div>
-          <div class="nav-dropdown">
-            <span class="nav-link bold">图谱</span>
-            <div class="dropdown-menu">
-              <router-link to="/knowledge-graph" class="dropdown-item" exact>技能图谱</router-link>
-              <router-link to="/flashcard-graph" class="dropdown-item" exact>闪卡图谱</router-link>
-            </div>
-          </div>
-          <router-link to="/twin-study" class="nav-link bold" exact>孪孪伴学</router-link>
-          <div class="nav-dropdown">
             <span class="nav-link bold">成长轨迹</span>
             <div class="dropdown-menu">
               <router-link to="/growth/record" class="dropdown-item" exact>成长记录</router-link>
               <router-link to="/growth/milestone" class="dropdown-item" exact>里程碑</router-link>
               <router-link to="/growth/photo-wall" class="dropdown-item" exact>照片墙</router-link>
+            </div>
+          </div>
+          <div class="nav-dropdown">
+            <span class="nav-link bold">职业规划</span>
+            <div class="dropdown-menu">
+              <router-link to="/career/showcase" class="dropdown-item" exact>职业展示</router-link>
+              <router-link to="/career/planning" class="dropdown-item" exact>职业规划</router-link>
+              <router-link to="/career/resume" class="dropdown-item" exact>简历制作</router-link>
             </div>
           </div>
           <div
