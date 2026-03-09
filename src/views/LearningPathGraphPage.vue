@@ -456,7 +456,7 @@ const loadUserProfile = async () => {
 
 .lp-one-wrap {
   flex: 1;
-  padding-top: 60px;
+  padding-top: 0;
   padding-bottom: 0;
   min-height: 0;
 }

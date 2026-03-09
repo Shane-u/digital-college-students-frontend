@@ -1,5 +1,8 @@
 <template>
   <div class="lp-all-container">
+    <!-- 顶部标题条：学习路径图谱 -->
+    <GraphTopHeader title="学 习 路 径 图 谱" />
+
     <div ref="graphContainer" class="lp-all-area">
       <div v-if="!hasGraphData" class="lp-all-empty">
         <div class="lp-all-empty-icon">📊</div>
@@ -66,6 +69,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { updateJson } from '../../api/learningPath'
+import GraphTopHeader from '../common/GraphTopHeader.vue'
 
 const props = defineProps({
   userId: { type: [String, Number], default: null },
@@ -386,11 +390,16 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   min-height: 0;
+  /* 顶部预留空间：避免节点被标题背景遮住 */
+  /* padding-top: 140px; */
+  background: #f8fafc;
+  position: relative;
+  overflow: hidden;
 }
 
 .lp-all-area {
   width: 100%;
-  height: calc(100vh - 0px);
+  height: 100%;
   background: #ffffff;
 }
 

@@ -1,11 +1,7 @@
 <template>
   <div class="flashcard-graph-container">
     <!-- 顶部标题条：闪卡图谱 -->
-    <header v-if="!hideToolbar" class="graph-header">
-      <div class="graph-header__inner">
-        <div class="graph-header__title">闪 卡 图 谱</div>
-      </div>
-    </header>
+    <GraphTopHeader v-if="!hideToolbar" title="闪 卡 图 谱" />
 
     <!-- 右侧悬挂彩带（默认展开，点头像收起到右上角） -->
     <FlashcardRibbonMenu
@@ -215,6 +211,7 @@ import { ElMessage } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 import FlashcardRibbonMenu from './FlashcardRibbonMenu.vue'
+import GraphTopHeader from '../common/GraphTopHeader.vue'
 
 const props = defineProps({
   flashcards: {
@@ -1444,46 +1441,11 @@ const sanitizedContent = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding-top: 140px;
+  /* 顶部预留空间：避免节点被标题背景遮住 */
+  padding-top: 0px;
   background: #f8fafc;
   position: relative;
   overflow: hidden;
-}
-
-/* 顶部科技感装饰条（与知识图谱页面风格保持一致） */
-.graph-header {
-  position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  height: 120px;
-  background: url('https://lms.cdut.edu.cn/static/assets/images/knowledge-node/234a36768ff31bf18d9f.png') center/cover no-repeat;
-  z-index: 1200;
-  pointer-events: none;
-}
-
-.graph-header__inner {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  pointer-events: none;
-  padding: 0 60px;
-  box-sizing: border-box;
-  position: relative;
-}
-
-.graph-header__title {
-  font-size: 34px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  color: #fff;
-  text-shadow: 0 8px 25px rgba(0, 0, 0, 0.55);
-  text-align: center;
-  flex: none;
 }
 
 .graph-area {
