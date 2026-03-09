@@ -2,8 +2,8 @@
   <div class="lp-graph-container">
     <header class="lp-graph-header">
       <div class="lp-graph-header__inner">
-        <button type="button" class="lp-graph-back" @click="$emit('back')">← 返回</button>
-        <div class="lp-graph-header__title">{{ graphData.topic || '学习路径图谱' }}</div>
+        <button v-if="!embedded" type="button" class="lp-graph-back" @click="$emit('back')">← 返回</button>
+        <div class="lp-graph-header__title">{{ title || graphData.topic || '学习路径图谱' }}</div>
       </div>
     </header>
     <div ref="graphContainer" class="lp-graph-area">
@@ -73,6 +73,12 @@ import { updateJson } from '../../api/learningPath'
 const props = defineProps({
   pathId: { type: String, required: true },
   userId: { type: [String, Number], default: null },
+  title: { type: String, default: '' },
+  embedded: { type: Boolean, default: false },
+  theme: {
+    type: Object,
+    default: () => ({})
+  },
   graphData: {
     type: Object,
     default: () => ({ pathId: '', topic: '', nodes: [], relationships: [] })
@@ -99,11 +105,13 @@ const hasGraphData = computed(() => {
   return nodes.length > 0
 })
 
-const NODE_STYLE = {
-  rootFill: '#A78BFA',
-  categoryFill: '#7880f0',
-  linkStroke: '#A5ABB6'
-}
+const NODE_STYLE = computed(() => ({
+  rootFill: props.theme?.rootFill || '#A78BFA',
+  nodeFill: props.theme?.nodeFill || '#7880f0',
+  linkStroke: props.theme?.linkStroke || '#A5ABB6',
+  bg: props.theme?.bg || '#faf8ff'
+}))
+const nodeBg = computed(() => NODE_STYLE.value.bg)
 
 const updateDimensions = () => {
   if (graphContainer.value) {
@@ -153,7 +161,7 @@ const buildGraphData = () => {
 const getNodeDisplayName = (d) => d?.name || d?.label || d?.id || ''
 const isStartNode = (d) => d?.isStart === true
 const getNodeRadius = (d) => isStartNode(d) ? 26 : 18
-const getNodeFill = (d) => isStartNode(d) ? NODE_STYLE.rootFill : NODE_STYLE.categoryFill
+const getNodeFill = (d) => isStartNode(d) ? NODE_STYLE.value.rootFill : NODE_STYLE.value.nodeFill
 
 const renderGraph = () => {
   updateDimensions()
@@ -189,7 +197,7 @@ const renderGraph = () => {
   linkLayer.selectAll('line')
     .data(links)
     .join('line')
-    .attr('stroke', NODE_STYLE.linkStroke)
+    .attr('stroke', NODE_STYLE.value.linkStroke)
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.7)
 
@@ -349,7 +357,7 @@ onUnmounted(() => {
 .lp-graph-area {
   flex: 1;
   min-height: 0;
-  background: #faf8ff;
+  background: v-bind(nodeBg);
 }
 
 .lp-empty-graph {

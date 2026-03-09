@@ -1,14 +1,11 @@
 <template>
   <div class="compare-view-container">
-    <div class="compare-header">
-      <h2 class="compare-title">对比模式：闪卡图谱 vs 技能图谱</h2>
-      <button class="close-btn" @click="handleClose">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-    </div>
+    <button class="close-btn close-btn-floating" @click="handleClose" aria-label="关闭对比模式" title="关闭对比模式">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18" />
+        <line x1="6" y1="6" x2="18" y2="18" />
+      </svg>
+    </button>
 
     <div class="compare-content" ref="containerRef">
       <!-- 左侧：技能图谱 -->
@@ -302,27 +299,10 @@ const loadFlashcardData = async () => {
 .compare-view-container {
   position: fixed;
   inset: 0;
-  background: #f8fafc;
+  background: transparent;
   z-index: 1000;
   display: flex;
   flex-direction: column;
-}
-
-.compare-header {
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.compare-title {
-  font-size: 20px;
-  font-weight: 900;
-  color: #1e293b;
-  margin: 0;
 }
 
 .close-btn {
@@ -333,6 +313,16 @@ const loadFlashcardData = async () => {
   cursor: pointer;
   color: #64748b;
   transition: all 0.2s;
+}
+
+.close-btn-floating {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1200;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
 }
 
 .close-btn:hover {

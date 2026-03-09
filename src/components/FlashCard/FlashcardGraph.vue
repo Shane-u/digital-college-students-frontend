@@ -1,7 +1,7 @@
 <template>
   <div class="flashcard-graph-container">
     <!-- 顶部标题条：闪卡图谱 -->
-    <header class="graph-header">
+    <header v-if="!hideToolbar" class="graph-header">
       <div class="graph-header__inner">
         <div class="graph-header__title">闪 卡 图 谱</div>
       </div>

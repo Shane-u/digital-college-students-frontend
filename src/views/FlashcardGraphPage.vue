@@ -1,6 +1,6 @@
 <template>
   <div class="flashcard-graph-page">
-    <button class="flashcard-back-button" type="button" @click="goBack">
+    <button v-if="viewState !== 'COMPARE'" class="flashcard-back-button" type="button" @click="goBack">
       返回
     </button>
     <!-- 全局加载态：避免刷新时闪现错误视图 -->
