@@ -89,7 +89,15 @@
               <CheckSquareIcon v-if="selectedSessions.has(session.id)" />
               <SquareIcon v-else />
             </div>
-            <MessageSquareIcon v-else />
+            <template v-else>
+              <img
+                v-if="isLearningPathSession(session)"
+                :src="learningPathIcon"
+                alt="学习路径对话"
+                class="sidebar-chat-session-icon"
+              />
+              <MessageSquareIcon v-else />
+            </template>
             <span class="sidebar-chat-title">{{ session.title }}</span>
             <PinIcon v-if="session.isPinned" class="sidebar-pin" />
             <button 
@@ -315,6 +323,12 @@ const sortedSessions = computed(() => {
     return new Date(b.updatedAt) - new Date(a.updatedAt)
   })
 })
+
+// 学习路径对话：根据标题前缀识别（例如 “学习路径：Java 入门”）
+const isLearningPathSession = (session) => {
+  const title = (session && session.title) || ''
+  return typeof title === 'string' && title.trim().startsWith('学习路径')
+}
 
 // 打开菜单
 const openMenu = (sessionId, event) => {
@@ -701,6 +715,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-chat-session-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .sidebar-pin {

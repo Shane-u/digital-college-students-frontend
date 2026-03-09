@@ -22,25 +22,23 @@
         @deleteSession="handleDeleteSession"
         @deleteSessions="handleDeleteSessions"
       />
-      <Transition name="scene-switch" mode="out-in">
-        <MainContent 
-          :key="scene"
-          :currentSession="currentSession"
-          :streamingContent="streamingContent"
-          :modelMode="modelMode"
-          :setModelMode="setModelMode"
-          :onSendMessage="sendMessage"
-          :onAbortStream="abortCurrentStream"
-          :isSidebarOpen="isSidebarOpen"
-          :isLoading="isHistoryLoading"
-          :scene="scene"
-          :learningPathMessages="learningPathMessages"
-          :isPathStreaming="isPathStreaming"
-          :pathStreamError="pathStreamError"
-          @clearPathError="pathStreamError = null"
-          @pathConfirm="handlePathConfirm"
-        />
-      </Transition>
+      <MainContent 
+        :currentSession="currentSession"
+        :streamingContent="streamingContent"
+        :modelMode="modelMode"
+        :setModelMode="setModelMode"
+        :onSendMessage="sendMessage"
+        :onAbortStream="abortCurrentStream"
+        :isSidebarOpen="isSidebarOpen"
+        :isLoading="isHistoryLoading"
+        :scene="scene"
+        :learningPathMessages="learningPathMessages"
+        :isPathStreaming="isPathStreaming"
+        :pathStreamError="pathStreamError"
+        @clearPathError="pathStreamError = null"
+        @pathConfirm="handlePathConfirm"
+        @pathPolish="handlePathPolish"
+      />
     </div>
   </div>
 </template>
@@ -79,6 +77,8 @@ const isPathStreaming = ref(false)
 const pathStreamError = ref(null)
 const showSavePathDialog = ref(false)
 const pathToSave = ref(null)
+// 当前学习路径规划会话的 sessionId（来自学习路径 SSE 的 meta 事件）
+const learningPathSessionId = ref(null)
 
 // 创建闪卡生成状态管理（提供给子组件使用）
 const flashCardGenerationState = createFlashCardGenerationState()
@@ -370,10 +370,26 @@ const startNewChat = () => {
 
 const startLearningPathChat = () => {
   scene.value = 'learningPath'
-  currentSessionId.value = null
   learningPathMessages.value = []
   isPathStreaming.value = false
   pathStreamError.value = null
+  learningPathSessionId.value = null
+
+  // 在左侧最近对话列表中创建一条“学习路径”会话
+  const id = `lp-${Date.now()}`
+  const now = new Date()
+  const session = {
+    id,
+    chat_id: null,
+    lpSessionId: null,
+    type: 'learningPath',
+    title: '学习路径对话',
+    messages: [],
+    updatedAt: now,
+    lastMessageTime: now.toISOString()
+  }
+  sessions.value = [session, ...sessions.value]
+  currentSessionId.value = id
   saveSessionsToStorage()
 }
 
@@ -420,7 +436,32 @@ const selectSession = async (id) => {
   }
   
   console.log('[selectSession] 找到会话:', session)
-  
+  // 学习路径会话：使用 SSE meta 返回的 sessionId（lpSessionId/chat_id）加载历史，并切换到学习路径场景
+  if (session.type === 'learningPath') {
+    const lpId = session.lpSessionId || session.chat_id
+    if (!lpId) {
+      console.warn('[selectSession] 学习路径会话缺少 sessionId，无法加载历史消息，session:', session)
+      ElMessage.warning('该学习路径会话缺少 sessionId，无法加载历史消息')
+      return
+    }
+    // 先打开骨架屏，再切换场景，避免中间出现空白闪烁
+    isHistoryLoading.value = true
+    scene.value = 'learningPath'
+    learningPathSessionId.value = String(lpId)
+    try {
+      await loadLearningPathHistory(lpId, id)
+    } finally {
+      isHistoryLoading.value = false
+    }
+    return
+  }
+
+  // 普通对话会话：仍按原逻辑使用 chat_id 加载历史
+  // 切回普通对话场景，并清空右侧学习路径消息，避免“串场”
+  scene.value = 'default'
+  learningPathMessages.value = []
+  isPathStreaming.value = false
+
   if (session.chat_id) {
     // 加载历史消息时显示骨架屏
     isHistoryLoading.value = true
@@ -435,7 +476,7 @@ const selectSession = async (id) => {
   }
 }
 
-// 加载历史消息（始终用接口结果更新会话 messages，含空数组）
+// 加载普通对话历史消息（始终用接口结果更新会话 messages，含空数组）
 const loadHistoryMessages = async (chatId, sessionId) => {
   if (!chatId || String(chatId).trim() === '') {
     console.warn('[loadHistoryMessages] chatId 为空，sessionId:', sessionId)
@@ -520,21 +561,90 @@ const loadHistoryMessages = async (chatId, sessionId) => {
   }
 }
 
+// 加载学习路径规划历史消息：使用通用聊天接口，根据内容是否能解析出学习路径 JSON 决定渲染思维导图还是纯文本
+const loadLearningPathHistory = async (lpSessionId, sessionId) => {
+  if (!lpSessionId || String(lpSessionId).trim() === '') {
+    console.warn('[loadLearningPathHistory] lpSessionId 为空，sessionId:', sessionId)
+    ElMessage.warning('学习路径会话ID无效，无法加载历史消息')
+    return
+  }
+
+  const userId = getUserId()
+  console.log('[loadLearningPathHistory] 开始加载学习路径历史消息，lpSessionId:', lpSessionId, 'sessionId:', sessionId, 'userId:', userId)
+
+  try {
+    const messages = await apiService.getChatMessages(lpSessionId, userId)
+    console.log('[loadLearningPathHistory] 获取到消息列表:', messages)
+
+    const rawList = Array.isArray(messages) ? messages : []
+
+    const formatted = rawList.map(msg => {
+      const id = `${msg.id || Date.now()}-${msg.role}`
+      if (msg.role === 'user') {
+        return {
+          id,
+          role: 'user',
+          content: msg.content || ''
+        }
+      }
+
+      const content = msg.content || ''
+      const { parsed } = tryParseLearningPathJson(content)
+      if (parsed && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+        return {
+          id,
+          role: 'model',
+          pathJson: parsed
+        }
+      }
+
+      return {
+        id,
+        role: 'model',
+        content
+      }
+    })
+
+    learningPathMessages.value = formatted
+    // 同步当前学习路径 sessionId，确保后续润色请求能带上正确的 sessionId
+    learningPathSessionId.value = String(lpSessionId)
+
+    // 更新会话的统计信息（不保存具体消息内容）
+    sessions.value = sessions.value.map(s =>
+      s.id === sessionId
+        ? {
+            ...s,
+            lpSessionId: String(lpSessionId),
+            type: s.type || 'learningPath',
+            updatedAt: new Date(),
+            lastMessageTime: new Date().toISOString()
+          }
+        : s
+    )
+    saveSessionsToStorage()
+  } catch (error) {
+    console.error('[loadLearningPathHistory] 加载学习路径历史消息失败:', error)
+    ElMessage.error(`加载学习路径历史消息失败: ${error?.message || '请检查网络连接或稍后重试'}`)
+  }
+}
+
 const setModelMode = (mode) => {
   modelMode.value = mode
 }
 
 /**
  * 学习路径场景：调用流式接口生成/润色路径，对话式展示（用户右、AI左）
+ * @param {string} content 用户输入/系统生成的提示词
+ * @param {{ currentPath?: Object|null }} options 额外配置（如指定要润色的路径 JSON）
  */
-const handleLearningPathSend = async (content) => {
+const handleLearningPathSend = async (content, options = {}) => {
   const trimmed = (content || '').trim()
   if (!trimmed) return
 
-  const currentPath = getCurrentPathJsonForPolish()
+  const currentPath = options.currentPath ?? getCurrentPathJsonForPolish()
   const isPolish = !!currentPath
   const userPrompt = isPolish
-    ? `当前想要润色（${trimmed}），请给出润色后的学习路径。`
+    ? `当前想要在已有学习路径基础上进行「${trimmed}」，请给出润色后的学习路径 JSON。`
     : trimmed
 
   learningPathMessages.value.push({
@@ -542,6 +652,27 @@ const handleLearningPathSend = async (content) => {
     role: 'user',
     content: trimmed
   })
+
+  // 同步更新当前“学习路径对话”在左侧列表中的标题和时间
+  if (currentSessionId.value) {
+    const now = new Date()
+    sessions.value = sessions.value.map(s =>
+      s.id === currentSessionId.value
+        ? {
+            ...s,
+            type: s.type || 'learningPath',
+            title:
+              s.title && s.title !== '学习路径对话'
+                ? s.title
+                : `学习路径：${trimmed.slice(0, 30)}${trimmed.length > 30 ? '...' : ''}`,
+            updatedAt: now,
+            lastMessageTime: now.toISOString()
+          }
+        : s
+    )
+    saveSessionsToStorage()
+  }
+
   isPathStreaming.value = true
   pathStreamError.value = null
 
@@ -552,18 +683,59 @@ const handleLearningPathSend = async (content) => {
     let accumulated = ''
     const userId = getUserId()
     let parsedPath = null
+    const modelId = `model-${Date.now()}`
+
+    // 先插入一条流式 AI 气泡，后续不断更新其中的 pathJson
+    learningPathMessages.value.push({
+      id: modelId,
+      role: 'model',
+      isStreaming: true,
+      pathJson: null
+    })
 
     for await (const chunk of planStreamFlux({
       userPrompt,
       currentPathJson: isPolish ? currentPath : null,
       userId,
+      sessionId: learningPathSessionId.value,
       signal: abortController.signal
     })) {
-      accumulated += chunk
+      // 处理 meta 事件：拿到并保存 sessionId，仅执行一次
+      if (chunk && typeof chunk === 'object' && chunk.type === 'meta') {
+        const meta = chunk.meta || {}
+        const sid = meta.sessionId || meta.sessionID || meta.id || null
+        if (sid && !learningPathSessionId.value) {
+          learningPathSessionId.value = String(sid)
+          console.log('[learningPath] 收到 sessionId:', learningPathSessionId.value)
+          // 反写到当前会话，便于后续从后端拉取学习路径聊天记录
+          if (currentSessionId.value) {
+            sessions.value = sessions.value.map(s =>
+              s.id === currentSessionId.value
+                ? {
+                    ...s,
+                    lpSessionId: learningPathSessionId.value,
+                    chat_id: learningPathSessionId.value,
+                    type: s.type || 'learningPath'
+                  }
+                : s
+            )
+            saveSessionsToStorage()
+          }
+        }
+        continue
+      }
+
+      const textChunk = typeof chunk === 'string' ? chunk : ''
+      if (!textChunk) continue
+
+      accumulated += textChunk
       const { parsed } = tryParseLearningPathJson(accumulated)
       if (parsed && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
         parsedPath = parsed
-        break
+        // 流式更新当前 AI 气泡的思维导图
+        learningPathMessages.value = learningPathMessages.value.map(m =>
+          m.id === modelId ? { ...m, pathJson: parsed } : m
+        )
       }
     }
 
@@ -572,27 +744,44 @@ const handleLearningPathSend = async (content) => {
       if (parsed && Array.isArray(parsed.nodes) && parsed.nodes.length > 0) parsedPath = parsed
     }
 
+    // 流式结束，标记当前 AI 气泡完成；如果始终没解析出有效 JSON，则给出提示文案
     if (parsedPath) {
-      learningPathMessages.value.push({
-        id: `model-${Date.now()}`,
-        role: 'model',
-        pathJson: parsedPath
-      })
+      learningPathMessages.value = learningPathMessages.value.map(m =>
+        m.id === modelId ? { ...m, isStreaming: false, pathJson: parsedPath } : m
+      )
     } else {
-      learningPathMessages.value.push({
-        id: `model-${Date.now()}`,
-        role: 'model',
-        content: '未能解析到有效的学习路径数据，请重试或换一种描述方式。'
-      })
+      learningPathMessages.value = learningPathMessages.value.map(m =>
+        m.id === modelId
+          ? {
+              ...m,
+              isStreaming: false,
+              pathJson: null,
+              content: '未能解析到有效的学习路径数据，请重试或换一种描述方式。'
+            }
+          : m
+      )
     }
   } catch (err) {
-    if (err?.name === 'AbortError') return
+    if (err?.name === 'AbortError') {
+      // 用户主动终止：结束流式状态，不再追加错误消息
+      console.log('[handleLearningPathSend] aborted by user')
+      // 终止时也要关闭当前 AI 气泡的“生成中”状态
+      learningPathMessages.value = learningPathMessages.value.map(m =>
+        m.isStreaming ? { ...m, isStreaming: false } : m
+      )
+      return
+    }
     console.error('[handleLearningPathSend]', err)
-    learningPathMessages.value.push({
-      id: `model-${Date.now()}`,
-      role: 'model',
-      content: err?.message || '生成学习路径失败，请稍后重试。'
-    })
+    learningPathMessages.value = learningPathMessages.value.map(m =>
+      m.isStreaming
+        ? {
+            ...m,
+            isStreaming: false,
+            content: err?.message || '生成学习路径失败，请稍后重试。',
+            pathJson: null
+          }
+        : m
+    )
   } finally {
     isPathStreaming.value = false
     currentAbortController.value = null
@@ -870,6 +1059,10 @@ const abortCurrentStream = () => {
           : s
       )
     }
+    // 学习路径流式生成场景：终止后也要关闭“生成中”状态
+    if (isPathStreaming.value) {
+      isPathStreaming.value = false
+    }
   }
 }
 
@@ -896,12 +1089,25 @@ const handleDeleteSessions = (sessionIds) => {
   saveSessionsToStorage()
 }
 
+// 学习路径：再次润色（从最新一条路径 JSON 出发，生成新的 AI 回复，不覆盖旧气泡）
+const handlePathPolish = async (pathJson) => {
+  const json = pathJson || getCurrentPathJsonForPolish()
+  if (!json) {
+    ElMessage.warning('暂无可润色的学习路径')
+    return
+  }
+  // 这里固定提示词，强调是在当前路径基础上优化
+  await handleLearningPathSend('再次润色当前学习路径', { currentPath: json })
+}
+
 // 保存会话列表与当前会话ID到localStorage（仅元数据，不含消息内容）
 const saveSessionsToStorage = () => {
   try {
     const sessionsToSave = sessions.value.map(s => ({
       id: s.id,
       chat_id: s.chat_id,
+      lpSessionId: s.lpSessionId,
+      type: s.type,
       title: s.title,
       updatedAt: s.updatedAt,
       lastMessageTime: s.lastMessageTime,

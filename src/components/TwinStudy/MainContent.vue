@@ -60,7 +60,7 @@
         <LearningPathMessageList
           :messages="pathMessageList"
           @confirm="handlePathConfirm"
-          @polish="focusPathInput"
+          @polish="handlePathPolish"
         />
       </div>
       <div v-else-if="!currentSession || currentSession.messages.length === 0" class="welcome-screen">
@@ -251,7 +251,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['clearPathError', 'pathConfirm'])
+const emit = defineEmits(['clearPathError', 'pathConfirm', 'pathPolish'])
 
 const inputTextareaRef = ref(null)
 
@@ -276,11 +276,7 @@ const effectiveSending = computed(() => {
 
 // 学习路径对话展示列表：含进行中的占位条
 const pathMessageList = computed(() => {
-  const list = [...(props.learningPathMessages || [])]
-  if (props.isPathStreaming) {
-    list.push({ id: 'streaming', role: 'model', isStreaming: true })
-  }
-  return list
+  return props.learningPathMessages || []
 })
 
 const placeholderText = computed(() => {
@@ -304,6 +300,10 @@ const focusPathInput = () => {
 
 const handlePathConfirm = (pathJson) => {
   emit('pathConfirm', pathJson)
+}
+
+const handlePathPolish = (pathJson) => {
+  emit('pathPolish', pathJson)
 }
 
 const handleCardClick = (content) => {

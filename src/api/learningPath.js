@@ -14,10 +14,11 @@ const REQUEST_BASE = '/learning-path' // axios request 的 baseURL 已是 /api
  * @param {string} params.userPrompt - 用户提示词，如："当前想要学习 Java，请给出学习 Java 的学习路径。"
  * @param {string|null} params.currentPathJson - 当前路径 JSON（润色时传入，首次可为 null）
  * @param {number} [params.userId] - 用户 ID
+ * @param {string|null} [params.sessionId] - 学习路径聊天 sessionId（从 SSE meta 事件中拿到后回传）
  * @param {AbortSignal} [params.signal] - 取消请求
- * @yields {string} 增量 JSON 片段
+ * @yields {string | { type: 'meta', meta: any }} 文本片段或 meta 事件（包含 sessionId）
  */
-export async function* planStreamFlux({ userPrompt, currentPathJson = null, userId, signal }) {
+export async function* planStreamFlux({ userPrompt, currentPathJson = null, userId, sessionId = null, signal }) {
   const res = await fetch(`${API_BASE}/plan/stream/flux`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
@@ -26,7 +27,8 @@ export async function* planStreamFlux({ userPrompt, currentPathJson = null, user
       currentPathJson: currentPathJson != null
         ? (typeof currentPathJson === 'string' ? currentPathJson : JSON.stringify(currentPathJson))
         : null,
-      userId: userId ?? null
+      userId: userId ?? null,
+      sessionId: sessionId || null
     }),
     signal
   })
@@ -37,6 +39,7 @@ export async function* planStreamFlux({ userPrompt, currentPathJson = null, user
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let currentEvent = '' // 记录当前 SSE event 名称（meta / message 等）
 
   try {
     while (true) {
@@ -53,12 +56,34 @@ export async function* planStreamFlux({ userPrompt, currentPathJson = null, user
 
       for (const line of lines) {
         const t = line.trim()
-        if (!t || t.startsWith('event:')) continue
+        if (!t) continue
+
         if (t === 'event:done') continue
+
+        if (t.startsWith('event:')) {
+          currentEvent = t.slice(6).trim()
+          continue
+        }
+
         if (t.startsWith('data:')) {
           const data = t.slice(5).trim()
           if (data === '[DONE]') continue
-          if (data) yield data
+          if (!data) continue
+
+          // meta 事件：一般包含 sessionId 等一次性信息，不参与路径 JSON 解析
+          if (currentEvent === 'meta') {
+            try {
+              const meta = JSON.parse(data)
+              yield { type: 'meta', meta }
+            } catch {
+              // 解析失败时也原样抛给上层
+              yield { type: 'meta', meta: data }
+            }
+            continue
+          }
+
+          // 默认：仍按原来的字符串片段返回，供前端累积解析 JSON
+          yield data
         }
       }
     }

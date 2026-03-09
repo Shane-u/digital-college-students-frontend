@@ -16,16 +16,19 @@
           <span v-else class="path-msg-sparkle">✨</span>
         </div>
         <div class="path-msg-content">
-          <div v-if="msg.isStreaming" class="path-msg-loading">正在生成学习路径...</div>
-          <template v-else-if="msg.pathJson">
+          <template v-if="msg.pathJson">
             <div class="path-msg-bubble path-msg-bubble-model">
               <LearningPathMindmap :pathJson="msg.pathJson" />
             </div>
             <div class="path-msg-actions">
-              <button class="path-action-btn path-action-confirm" @click="$emit('confirm', msg.pathJson)">确认保存</button>
-              <button class="path-action-btn path-action-polish" @click="$emit('polish')">润色修改</button>
+              <div v-if="msg.isStreaming" class="path-msg-loading-inline">正在生成学习路径...</div>
+              <template v-else>
+                <button class="path-action-btn path-action-confirm" @click="$emit('confirm', msg.pathJson)">确认保存</button>
+                <button class="path-action-btn path-action-polish" @click="$emit('polish', msg.pathJson)">润色修改</button>
+              </template>
             </div>
           </template>
+          <div v-else-if="msg.isStreaming" class="path-msg-loading">正在生成学习路径...</div>
           <div v-else-if="msg.content" class="path-msg-bubble path-msg-bubble-model path-msg-bubble-text">
             {{ msg.content }}
           </div>
@@ -157,6 +160,11 @@ const endRef = ref(null)
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
+}
+
+.path-msg-loading-inline {
+  font-size: 13px;
+  color: #64748b;
 }
 
 .path-action-btn {
