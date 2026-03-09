@@ -1,6 +1,6 @@
 <template>
-  <div class="learning-path-graph-page">
-    <button class="lp-back-button" type="button" @click="goBack">返回</button>
+  <div class="learning-path-graph-page" :class="{ 'compare-mode': isCompareMode }">
+    <button v-if="!isCompareMode" class="lp-back-button" type="button" @click="goBack">返回</button>
     <div v-if="pageLoading" class="lp-page-loading">
       <div class="lp-page-loading-inner">
         <div class="lp-page-spinner"></div>
@@ -33,6 +33,7 @@
           :graphs-by-id="graphsById"
           :theme-by-id="themeById"
           :title-by-id="displayNameById"
+          :is-compare-mode="isCompareMode"
           @refreshOne="reloadOneGraph"
         />
       </div>
@@ -84,7 +85,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { list as listApi, remove, getGraph } from '../api/learningPath'
 import LearningPathGraphAll from '../components/LearningPath/LearningPathGraphAll.vue'
 import LearningPathSelectorPanel from '../components/LearningPath/LearningPathSelectorPanel.vue'
@@ -104,6 +105,7 @@ function getUserId() {
 }
 
 const router = useRouter()
+const route = useRoute()
 const userId = computed(() => getUserId())
 const userAvatar = ref('')
 const userNickname = ref('U')
@@ -389,6 +391,9 @@ const loadUserProfile = async () => {
     userNickname.value = 'U'
   }
 }
+
+// 对比模式：通过查询参数 from=compare 判断（供闪卡图谱对比模式 iframe 使用）
+const isCompareMode = computed(() => route.query.from === 'compare')
 </script>
 
 <style scoped>
@@ -400,6 +405,17 @@ const loadUserProfile = async () => {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+}
+
+/* 对比模式下：整体作为嵌入视图使用，隐藏页面滚动条边距等（保留默认即可，如需可在此追加样式） */
+.learning-path-graph-page.compare-mode {
+  overflow: hidden;
+}
+
+/* 对比模式下：左上路径切换面板略窄一些，避免遮挡对比视图 */
+.learning-path-graph-page.compare-mode :deep(.lp-selector-panel) {
+  width: 150px;
+  padding: 14px 10px 10px;
 }
 
 .lp-back-button {

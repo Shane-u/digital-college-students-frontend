@@ -159,6 +159,19 @@ export function updateJson(pathId, body, userId) {
   })
 }
 
+/**
+ * 点击学习路径节点 → 匹配闪卡图谱
+ * POST /learning-path/{pathId}/flashcard/match
+ * @param {string|number} pathId
+ * @param {Object} body - LearningPathFlashcardMatchRequest
+ * @param {string|number} [userId]
+ */
+export function matchFlashcards(pathId, body, userId) {
+  return request.post(`${REQUEST_BASE}/${pathId}/flashcard/match`, body, {
+    params: userId != null ? { userId } : {}
+  })
+}
+
 export const learningPathApi = {
   planStreamFlux,
   save,
@@ -167,5 +180,6 @@ export const learningPathApi = {
   getGraph,
   remove,
   getJson,
-  updateJson
+  updateJson,
+  matchFlashcards
 }

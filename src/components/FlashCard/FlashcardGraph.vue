@@ -24,7 +24,7 @@
         <p class="empty-text">图谱暂无内容</p>
         <p class="empty-hint">请先生成闪卡并保存入库</p>
       </div>
-      <svg v-else ref="svgRef" class="graph-svg"></svg>
+      <svg v-else ref="svgRef" class="graph-svg" @click="handleBackgroundDblClick"></svg>
     </div>
 
     <!-- 图例 -->
@@ -255,7 +255,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh', 'search'])
+const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh', 'search', 'clearHighlight'])
 
 const searchKeyword = ref('')
 const timeRange = ref('ALL')
@@ -283,6 +283,11 @@ const graphStats = ref({
   visibleNodes: 0,
   highlightHits: 0
 })
+
+// 双击空白区域：清除高亮（用于对比模式恢复初始状态，也可在普通图谱下清空搜索高亮）
+const handleBackgroundDblClick = () => {
+  emit('clearHighlight')
+}
 
 const timeRanges = [
   { value: 'ALL', label: '全部' },

@@ -1,7 +1,7 @@
 <template>
   <div class="lp-all-container">
-    <!-- 顶部标题条：学习路径图谱 -->
-    <GraphTopHeader title="学 习 路 径 图 谱" />
+    <!-- 顶部标题条：学习路径图谱（对比模式下隐藏） -->
+    <GraphTopHeader v-if="!isCompareMode" title="学 习 路 径 图 谱" />
 
     <div ref="graphContainer" class="lp-all-area">
       <div v-if="!hasGraphData" class="lp-all-empty">
@@ -68,7 +68,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
-import { updateJson } from '../../api/learningPath'
+import { updateJson, matchFlashcards } from '../../api/learningPath'
 import GraphTopHeader from '../common/GraphTopHeader.vue'
 
 const props = defineProps({
@@ -76,7 +76,9 @@ const props = defineProps({
   pathIds: { type: Array, default: () => [] },
   graphsById: { type: Object, default: () => ({}) },
   themeById: { type: Object, default: () => ({}) },
-  titleById: { type: Object, default: () => ({}) }
+  titleById: { type: Object, default: () => ({}) },
+  // 对比模式：由父页面在 iframe 中使用时传入，用于隐藏顶部大标题背景
+  isCompareMode: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['refreshOne'])
@@ -93,6 +95,14 @@ const deleteNodeConfirm = ref(null)
 let simulation = null
 let zoomBehavior = null
 let gRoot = null
+
+// 学习路径节点匹配闪卡的默认参数
+const MATCH_DEFAULTS = {
+  maxDescendants: 200,
+  maxTokens: 200,
+  topK: 100,
+  ratio: 0.35
+}
 
 const hasGraphData = computed(() => {
   const ids = props.pathIds || []
@@ -190,6 +200,71 @@ const getNodeFill = (d) => {
   return d.isRoot ? (th.rootFill || '#A78BFA') : (th.nodeFill || '#7880f0')
 }
 const getLinkStroke = (pid) => (props.themeById?.[pid]?.linkStroke || '#A5ABB6')
+
+// 将匹配结果发送给父页面（闪卡图谱对比容器）
+const notifyParentFlashcardMatch = (payload) => {
+  try {
+    if (window && window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          source: 'learning-path-graph',
+          type: 'lp-flashcard-match',
+          ...payload
+        },
+        '*'
+      )
+    }
+  } catch (e) {
+    // 忽略 postMessage 过程中可能的安全错误
+    console.warn('notifyParentFlashcardMatch error:', e)
+  }
+}
+
+// 调用后端接口：根据学习路径节点匹配闪卡图谱
+const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
+  try {
+    const body = {
+      clickedNodeId,
+      maxDescendants: MATCH_DEFAULTS.maxDescendants,
+      maxTokens: MATCH_DEFAULTS.maxTokens,
+      topK: MATCH_DEFAULTS.topK,
+      ratio: MATCH_DEFAULTS.ratio
+    }
+    // request 封装已对 code != 0 的情况抛错，这里拿到的就是 data（LearningPathFlashcardMatchVO）
+    const data = await matchFlashcards(pathId, body, props.userId)
+
+    const matchedFlashcardIds = Array.isArray(data?.matchedFlashcardIds)
+      ? data.matchedFlashcardIds
+      : []
+    const keywords = Array.isArray(data?.keywords) ? data.keywords : []
+
+    if (!matchedFlashcardIds.length) {
+      notifyParentFlashcardMatch({
+        success: true,
+        empty: true,
+        pathId,
+        clickedNodeId,
+        keywords
+      })
+      return
+    }
+
+    notifyParentFlashcardMatch({
+      success: true,
+      empty: false,
+      pathId,
+      clickedNodeId,
+      keywords,
+      matchedFlashcardIds
+    })
+  } catch (e) {
+    console.error('triggerFlashcardMatch error:', e)
+    notifyParentFlashcardMatch({
+      success: false,
+      error: e?.message || '学习路径节点匹配闪卡失败'
+    })
+  }
+}
 
 const renderGraph = () => {
   updateDimensions()
@@ -292,11 +367,20 @@ const renderGraph = () => {
     .style('stroke-width', d => (d.isRoot ? 2 : 3))
     .style('pointer-events', 'none')
 
+  // 单击：仅打开节点详情
   nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
     if (d.isRoot) return
     nodeCardData.value = { ...d }
     showNodeCard.value = true
+  })
+
+  // 双击：在对比模式下触发与闪卡图谱的匹配高亮
+  nodeSel.on('dblclick', (ev, d) => {
+    ev.stopPropagation()
+    if (!props.isCompareMode) return
+    if (!d.__pathId || !d.__nodeId) return
+    triggerFlashcardMatch(String(d.__pathId), String(d.__nodeId))
   })
 
   let fitted = false

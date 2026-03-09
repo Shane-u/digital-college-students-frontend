@@ -14,14 +14,17 @@
         :style="{ width: `${leftWidth}%` }"
       >
         <div class="panel-header">
-          <h3 class="panel-title">技能图谱</h3>
+          <h3 class="panel-title">
+            学习路径图谱
+            <span class="panel-subtitle">（双击路径中的节点可在右侧闪卡图谱中尝试匹配并高亮）</span>
+          </h3>
         </div>
         <div class="panel-body">
           <iframe 
-            src="/knowledge-graph/index.html?compareMode=true"
+            src="/learning-path-graph?from=compare"
             class="knowledge-graph-iframe"
             frameborder="0"
-            title="技能图谱"
+            title="学习路径图谱"
           ></iframe>
         </div>
       </div>
@@ -45,10 +48,13 @@
         :style="{ width: `${100 - leftWidth}%` }"
       >
         <div class="panel-header">
-          <h3 class="panel-title">闪卡图谱</h3>
+          <h3 class="panel-title">
+            闪卡图谱
+            <span class="panel-subtitle">（单击空白区域即可清除高亮，恢复初始视图）</span>
+          </h3>
         </div>
         <div class="panel-body">
-          <FlashcardGraph 
+      <FlashcardGraph 
             :flashcards="flashcardData.flashcards"
             :graph-nodes="flashcardData.nodes"
             :graph-links="flashcardData.links"
@@ -59,6 +65,7 @@
             @go-to-temp="handleGoToTemp"
             @compare="() => {}"
             @refresh="loadFlashcardData"
+        @clear-highlight="$emit('clearHighlight')"
           />
         </div>
       </div>
@@ -98,7 +105,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'nodeClick', 'goToTemp'])
+const emit = defineEmits(['close', 'nodeClick', 'goToTemp', 'clearHighlight'])
 
 const flashcardData = ref({ flashcards: [], nodes: [], links: [] })
 const containerRef = ref(null)
@@ -404,10 +411,17 @@ const loadFlashcardData = async () => {
 }
 
 .panel-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: #475569;
   margin: 0;
+}
+
+.panel-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+  margin-left: 8px;
 }
 
 .panel-body {

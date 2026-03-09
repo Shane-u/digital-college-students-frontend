@@ -40,6 +40,7 @@
         @compare="viewState = 'COMPARE'"
         @refresh="loadSavedFlashcards"
         @search="handleGraphSearch"
+        @clear-highlight="highlightIds = []"
       />
       
       <!-- 复习 -->
@@ -595,6 +596,35 @@ const goBack = () => {
   router.back()
 }
 
+// 接收学习路径图谱 iframe 发来的“节点 -> 闪卡匹配”结果
+const handleLearningPathMatchMessage = (event) => {
+  const payload = event?.data
+  if (!payload || payload.type !== 'lp-flashcard-match') return
+  // 仅在对比模式下响应
+  if (viewState.value !== 'COMPARE') return
+
+  if (payload.success === false) {
+    if (payload.error) {
+      ElMessage.error(payload.error)
+    }
+    return
+  }
+
+  const ids = Array.isArray(payload.matchedFlashcardIds)
+    ? payload.matchedFlashcardIds.filter(id => id != null && String(id).trim() !== '')
+    : []
+
+  if (!ids.length || payload.empty) {
+    // 未匹配到任何闪卡：清空高亮并提示
+    highlightIds.value = []
+    ElMessage.success('抱歉，未查询到对应的闪卡节点。')
+    return
+  }
+
+  // 匹配到的闪卡 ID：用于在闪卡图谱中高亮
+  highlightIds.value = ids.map(id => String(id))
+}
+
 onMounted(async () => {
   pageLoading.value = true
   await Promise.all([
@@ -605,11 +635,14 @@ onMounted(async () => {
   pageLoading.value = false
   // 添加 ESC 键监听
   window.addEventListener('keydown', handleEscKey)
+  // 对比模式下，接收学习路径图谱 iframe 的消息
+  window.addEventListener('message', handleLearningPathMatchMessage)
 })
 
 onUnmounted(() => {
   // 移除 ESC 键监听
   window.removeEventListener('keydown', handleEscKey)
+  window.removeEventListener('message', handleLearningPathMatchMessage)
 })
 
 // 监听路由变化（从其他页面进入时）
