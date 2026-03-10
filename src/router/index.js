@@ -10,6 +10,7 @@ import MilestonePage from '../views/MilestonePage.vue'
 import PhotoWallPage from '../views/PhotoWallPage.vue'
 import RecordPreviewPage from '../views/RecordPreviewPage.vue'
 import ResumeBuilderPage from '../views/ResumeBuilderPage.vue'
+import AIInterviewPage from '../views/AIInterviewPage.vue'
 
 const routes = [
   {
@@ -72,6 +73,11 @@ const routes = [
     component: ResumeBuilderPage
   },
   {
+    path: '/career/ai-interview',
+    name: 'AIInterview',
+    component: AIInterviewPage
+  },
+  {
     path: '/career/showcase',
     name: 'CareerShowcase',
     component: () => import('../views/CareerShowcasePage.vue')
@@ -127,6 +133,15 @@ const router = createRouter({
   routes
 })
 
+// 记录进入图谱页面的来源（只允许：首页 / 孪孪伴学）
+const GRAPH_ENTRY_ORIGIN_KEY = 'graph_entry_origin'
+const isAllowedOrigin = (p) => p === '/home' || p === '/twin-study'
+const isGraphPage = (p) =>
+  p === '/flashcard-graph' ||
+  p === '/flashcard-temp' ||
+  p === '/learning-path-graph' ||
+  p?.startsWith('/learning-path-graph/')
+
 // 全局路由守卫
 router.beforeEach((to, from, next) => {
   // 不需要登录的页面
@@ -149,6 +164,16 @@ router.beforeEach((to, from, next) => {
     next();
   }
 });
+
+router.afterEach((to, from) => {
+  try {
+    if (!isGraphPage(to?.path)) return
+    const fromPath = from?.path
+    if (isAllowedOrigin(fromPath)) {
+      sessionStorage.setItem(GRAPH_ENTRY_ORIGIN_KEY, from?.fullPath || fromPath)
+    }
+  } catch (_) {}
+})
 
 export default router
 

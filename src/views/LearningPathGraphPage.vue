@@ -20,6 +20,7 @@
         @select-all="selectedPathId = null"
         @select-path="id => (selectedPathId = id)"
         @open-path-menu="openPathMenu"
+        @open-compare="goToCompareMode"
       />
 
       <!-- 图谱展示：一个容器合并渲染所有路径；选择后只过滤参与渲染的 pathIds -->
@@ -48,13 +49,16 @@
         @click.stop
       >
         <button class="lp-path-menu-item" @click="handlePinPath">
-          置顶
+          <PinMenuIcon class="lp-path-menu-icon" />
+          <span>置顶</span>
         </button>
         <button class="lp-path-menu-item" @click="handleRenamePath">
-          重命名
+          <PencilIcon class="lp-path-menu-icon" />
+          <span>重命名</span>
         </button>
         <button class="lp-path-menu-item danger" @click="handleDeletePath">
-          删除
+          <TrashIcon class="lp-path-menu-icon" />
+          <span>删除</span>
         </button>
       </div>
 
@@ -84,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { h, ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { list as listApi, remove, getGraph } from '../api/learningPath'
 import LearningPathGraphAll from '../components/LearningPath/LearningPathGraphAll.vue'
@@ -92,6 +96,21 @@ import LearningPathSelectorPanel from '../components/LearningPath/LearningPathSe
 import { getMyProfile } from '../api/user'
 import { ElMessage } from 'element-plus'
 import { normalizeProfile } from '../utils/profile'
+
+// 与孪孪伴学「最近对话」更多操作菜单保持同一套 SVG 图标（形状/线宽/尺寸一致）
+const PinMenuIcon = (props = {}) => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, ...props }, [
+  h('line', { x1: 12, y1: 17, x2: 12, y2: 22 }),
+  h('path', { d: 'M5 17h14l-1-7H6z' }),
+  h('path', { d: 'M9 10V4h6v6' })
+])
+const PencilIcon = (props = {}) => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, ...props }, [
+  h('path', { d: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7' }),
+  h('path', { d: 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z' })
+])
+const TrashIcon = (props = {}) => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, ...props }, [
+  h('polyline', { points: '3 6 5 6 21 6' }),
+  h('path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' })
+])
 
 function getUserId() {
   try {
@@ -210,7 +229,23 @@ const loadAllGraphs = async () => {
 }
 
 const goBack = () => {
-  router.back()
+  // 图谱页返回：只允许回到「首页」或「孪孪伴学」，具体取决于从哪里进入
+  let origin = null
+  try {
+    origin = sessionStorage.getItem('graph_entry_origin')
+  } catch (_) {}
+
+  if (origin && typeof origin === 'string') {
+    if (origin.startsWith('/twin-study')) {
+      router.push('/twin-study')
+      return
+    }
+    if (origin.startsWith('/home')) {
+      router.push('/home')
+      return
+    }
+  }
+  router.push('/home')
 }
 
 const toggleSelector = () => {
@@ -394,6 +429,15 @@ const loadUserProfile = async () => {
 
 // 对比模式：通过查询参数 from=compare 判断（供闪卡图谱对比模式 iframe 使用）
 const isCompareMode = computed(() => route.query.from === 'compare')
+
+/** 进入对比模式：跳转到闪卡图谱页的对比视图，与闪卡侧「对比模式」按钮效果一致 */
+const goToCompareMode = () => {
+  // 记录来源：关闭对比模式时应回到学习路径图谱
+  try {
+    sessionStorage.setItem('compare_origin_route', route.fullPath || '/learning-path-graph')
+  } catch (_) {}
+  router.push({ path: '/flashcard-graph', query: { view: 'compare' } })
+}
 </script>
 
 <style scoped>
@@ -678,6 +722,15 @@ const isCompareMode = computed(() => route.query.from === 'compare')
   font-size: 14px;
   color: #1f2937;
   text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lp-path-menu-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .lp-path-menu-item:hover {

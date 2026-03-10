@@ -1,6 +1,11 @@
 <template>
   <div class="flashcard-graph-page">
-    <button v-if="viewState !== 'COMPARE'" class="flashcard-back-button" type="button" @click="goBack">
+    <button
+      v-if="viewState !== 'COMPARE' && viewState !== 'TEMP_ZONE' && viewState !== 'CATEGORY_SELECT'"
+      class="flashcard-back-button"
+      type="button"
+      @click="goBack"
+    >
       返回
     </button>
     <!-- 全局加载态：避免刷新时闪现错误视图 -->
@@ -37,7 +42,7 @@
         :highlight-ids="highlightIds"
         @node-click="handleNodeClick"
         @go-to-temp="goToTemp"
-        @compare="viewState = 'COMPARE'"
+        @compare="handleOpenCompare"
         @refresh="loadSavedFlashcards"
         @search="handleGraphSearch"
         @clear-highlight="highlightIds = []"
@@ -63,15 +68,14 @@
         @deleted="handleDeleted"
       />
       
-      <!-- 对比 -->
+      <!-- 对比（内置 postMessage 与高亮逻辑，不传 highlightIds） -->
       <CompareView 
         v-else-if="viewState === 'COMPARE'"
         :flashcards="savedFlashcards"
         :graph-nodes="graphData.nodes"
         :graph-links="graphData.links"
         :user-id="currentUserId"
-        :highlight-ids="highlightIds"
-        @close="viewState = 'GRAPH'"
+        @close="handleCloseCompare"
         @node-click="handleNodeClick"
         @go-to-temp="goToTemp"
       />
@@ -165,6 +169,30 @@ const currentUserNickname = ref('U')
 // 图谱查询命中的闪卡业务 ID 列表，用于前端高亮节点
 const highlightIds = ref([])
 
+// 暂存区：把过期天数与卡片一次性组装好再渲染，避免先显示兜底值再跳变
+const enrichTempCardsWithExpiration = async (cards) => {
+  if (!Array.isArray(cards) || cards.length === 0) return cards
+  const targets = cards.filter(c => c?.id && !c.isGenerating)
+  if (targets.length === 0) return cards
+  const results = await Promise.allSettled(
+    targets.map(c => flashCardApi.getTempCardExpiration(c.id))
+  )
+  const daysById = new Map()
+  results.forEach((r, idx) => {
+    const id = targets[idx]?.id
+    if (!id) return
+    if (r.status === 'fulfilled') {
+      const n = Number(r.value)
+      daysById.set(id, Number.isFinite(n) && n >= 0 ? n : 0)
+    }
+  })
+  return cards.map(c => {
+    if (!c?.id || c.isGenerating) return c
+    if (!daysById.has(c.id)) return c
+    return { ...c, expirationDays: daysById.get(c.id) }
+  })
+}
+
 // 检查是否有正在生成的闪卡
 const hasGeneratingCards = computed(() => {
   return tempZoneFlashcards.value.some(card => card.isGenerating)
@@ -193,6 +221,10 @@ const initViewState = () => {
   }
   if (viewFromQuery === 'graph') {
     viewState.value = 'GRAPH'
+    return
+  }
+  if (viewFromQuery === 'compare') {
+    viewState.value = 'COMPARE'
     return
   }
 
@@ -227,7 +259,8 @@ const loadTempZone = async () => {
     const result = await flashCardApi.getTempZoneList()
     // API返回格式可能是数组或 { data: [...] }
     const cards = Array.isArray(result) ? result : (result?.data || [])
-    tempZoneFlashcards.value = cards
+    const enriched = await enrichTempCardsWithExpiration(cards)
+    tempZoneFlashcards.value = enriched
     
     // 检查生成中的卡片，轮询进度
     const generatingCards = cards.filter(c => c.isGenerating)
@@ -281,11 +314,25 @@ const pollCardProgress = async (cardId) => {
 const updateCardProgress = (cardId, progress, isGenerating, message) => {
   const index = tempZoneFlashcards.value.findIndex(c => c.id === cardId)
   if (index !== -1) {
+    const prev = tempZoneFlashcards.value[index]
     tempZoneFlashcards.value[index] = {
       ...tempZoneFlashcards.value[index],
       progress,
       isGenerating,
       progressMessage: message
+    }
+    // 从生成中 -> 生成完成：补一次过期天数（拿到后端值后再显示，不使用兜底）
+    if (prev?.isGenerating && !isGenerating) {
+      flashCardApi.getTempCardExpiration(cardId)
+        .then(days => {
+          const n = Number(days)
+          const safe = Number.isFinite(n) && n >= 0 ? n : 0
+          const i2 = tempZoneFlashcards.value.findIndex(c => c.id === cardId)
+          if (i2 !== -1) {
+            tempZoneFlashcards.value[i2] = { ...tempZoneFlashcards.value[i2], expirationDays: safe }
+          }
+        })
+        .catch(() => {})
     }
   }
 }
@@ -593,36 +640,52 @@ const handleBackToGraph = () => {
 }
 
 const goBack = () => {
-  router.back()
+  // 图谱页返回：只允许回到「首页」或「孪孪伴学」，具体取决于从哪里进入
+  let origin = null
+  try {
+    origin = sessionStorage.getItem('graph_entry_origin')
+  } catch (_) {}
+
+  if (origin && typeof origin === 'string') {
+    if (origin.startsWith('/twin-study')) {
+      router.push('/twin-study')
+      return
+    }
+    if (origin.startsWith('/home')) {
+      router.push('/home')
+      return
+    }
+  }
+  router.push('/home')
 }
 
-// 接收学习路径图谱 iframe 发来的“节点 -> 闪卡匹配”结果
-const handleLearningPathMatchMessage = (event) => {
-  const payload = event?.data
-  if (!payload || payload.type !== 'lp-flashcard-match') return
-  // 仅在对比模式下响应
-  if (viewState.value !== 'COMPARE') return
+const handleOpenCompare = () => {
+  // 记录来源：关闭对比模式时回到当前闪卡图谱
+  try {
+    sessionStorage.setItem('compare_origin_route', route.fullPath || '/flashcard-graph')
+  } catch (_) {}
+  viewState.value = 'COMPARE'
+}
 
-  if (payload.success === false) {
-    if (payload.error) {
-      ElMessage.error(payload.error)
-    }
+const handleCloseCompare = () => {
+  // 优先回到进入对比模式的来源图谱
+  let origin = null
+  try {
+    origin = sessionStorage.getItem('compare_origin_route')
+  } catch (_) {}
+
+  // 清理来源，避免下次误跳
+  try {
+    sessionStorage.removeItem('compare_origin_route')
+  } catch (_) {}
+
+  if (origin && typeof origin === 'string' && origin.startsWith('/learning-path-graph')) {
+    router.push(origin)
     return
   }
 
-  const ids = Array.isArray(payload.matchedFlashcardIds)
-    ? payload.matchedFlashcardIds.filter(id => id != null && String(id).trim() !== '')
-    : []
-
-  if (!ids.length || payload.empty) {
-    // 未匹配到任何闪卡：清空高亮并提示
-    highlightIds.value = []
-    ElMessage.success('抱歉，未查询到对应的闪卡节点。')
-    return
-  }
-
-  // 匹配到的闪卡 ID：用于在闪卡图谱中高亮
-  highlightIds.value = ids.map(id => String(id))
+  // 默认：回到闪卡图谱
+  viewState.value = 'GRAPH'
 }
 
 onMounted(async () => {
@@ -633,16 +696,12 @@ onMounted(async () => {
   ])
   initViewState()
   pageLoading.value = false
-  // 添加 ESC 键监听
   window.addEventListener('keydown', handleEscKey)
-  // 对比模式下，接收学习路径图谱 iframe 的消息
-  window.addEventListener('message', handleLearningPathMatchMessage)
 })
 
 onUnmounted(() => {
   // 移除 ESC 键监听
   window.removeEventListener('keydown', handleEscKey)
-  window.removeEventListener('message', handleLearningPathMatchMessage)
 })
 
 // 监听路由变化（从其他页面进入时）

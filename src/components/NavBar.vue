@@ -46,6 +46,7 @@
               <router-link to="/career/showcase" class="dropdown-item" exact>职业展示</router-link>
               <router-link to="/career/planning" class="dropdown-item" exact>职业规划</router-link>
               <router-link to="/career/resume" class="dropdown-item" exact>简历制作</router-link>
+              <router-link to="/career/ai-interview" class="dropdown-item" exact>AI 面试</router-link>
             </div>
           </div>
           <div

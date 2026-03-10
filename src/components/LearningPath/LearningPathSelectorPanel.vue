@@ -55,6 +55,14 @@
               </button>
             </div>
           </div>
+          <div class="lp-selector-divider"></div>
+          <button
+            type="button"
+            class="lp-compare-btn"
+            @click="$emit('open-compare')"
+          >
+            对比模式
+          </button>
         </div>
       </Transition>
     </div>
@@ -91,7 +99,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['toggle-selector', 'select-all', 'select-path', 'open-path-menu'])
+defineEmits(['toggle-selector', 'select-all', 'select-path', 'open-path-menu', 'open-compare'])
 
 const userInitial = computed(() => {
   const name = (props.userNickname || '').trim()
@@ -297,6 +305,34 @@ const userInitial = computed(() => {
 
 .lp-selector-item.active {
   background: rgba(255, 255, 255, 0.22);
+}
+
+.lp-selector-divider {
+  height: 1px;
+  width: 100%;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.lp-compare-btn {
+  width: 100%;
+  padding: 10px 10px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.lp-compare-btn:hover {
+  background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
 }
 
 .lp-selector-slide-enter-active,

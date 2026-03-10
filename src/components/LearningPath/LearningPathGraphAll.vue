@@ -95,6 +95,7 @@ const deleteNodeConfirm = ref(null)
 let simulation = null
 let zoomBehavior = null
 let gRoot = null
+let baseViewBox = { w: 0, h: 0 }
 
 // 学习路径节点匹配闪卡的默认参数
 const MATCH_DEFAULTS = {
@@ -273,7 +274,13 @@ const renderGraph = () => {
   const { nodes, links } = buildCombined()
   const svg = d3.select(svgRef.value)
   svg.selectAll('*').remove()
-  svg.attr('width', width).attr('height', height)
+  // 固定内部坐标系（viewBox），拖拽分栏时只变更外部尺寸，让图谱产生“被压缩/拉伸”的效果
+  baseViewBox = { w: width, h: height }
+  svg
+    .attr('width', width)
+    .attr('height', height)
+    .attr('viewBox', `0 0 ${baseViewBox.w} ${baseViewBox.h}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet')
   if (nodes.length === 0) return
 
   const cx = width / 2
@@ -367,17 +374,30 @@ const renderGraph = () => {
     .style('stroke-width', d => (d.isRoot ? 2 : 3))
     .style('pointer-events', 'none')
 
-  // 单击：仅打开节点详情
+  // 单击与双击防抖：双击时不触发单击，使用延迟区分
+  const clickPending = { timer: null }
+  const DBLCLICK_DELAY_MS = 250
   nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
     if (d.isRoot) return
-    nodeCardData.value = { ...d }
-    showNodeCard.value = true
+    if (clickPending.timer) {
+      clearTimeout(clickPending.timer)
+      clickPending.timer = null
+      return // 说明即将是双击，本次 click 忽略
+    }
+    clickPending.timer = setTimeout(() => {
+      clickPending.timer = null
+      nodeCardData.value = { ...d }
+      showNodeCard.value = true
+    }, DBLCLICK_DELAY_MS)
   })
-
-  // 双击：在对比模式下触发与闪卡图谱的匹配高亮
   nodeSel.on('dblclick', (ev, d) => {
+    ev.preventDefault()
     ev.stopPropagation()
+    if (clickPending.timer) {
+      clearTimeout(clickPending.timer)
+      clickPending.timer = null
+    }
     if (!props.isCompareMode) return
     if (!d.__pathId || !d.__nodeId) return
     triggerFlashcardMatch(String(d.__pathId), String(d.__nodeId))
@@ -458,14 +478,42 @@ watch(
   { deep: true }
 )
 
+let resizeObserver = null
 onMounted(() => {
   renderGraph()
   window.addEventListener('resize', updateDimensions)
+  if (graphContainer.value) {
+    let resizeRaf = null
+    const onResize = () => {
+      updateDimensions()
+      // 拖拽分隔线时频繁触发 resize：只更新画布尺寸，避免清空重绘造成闪烁/抖动
+      if (resizeRaf) cancelAnimationFrame(resizeRaf)
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = null
+        try {
+          if (svgRef.value && dimensions.value.width && dimensions.value.height) {
+            const svg = d3.select(svgRef.value)
+            svg
+              .attr('width', dimensions.value.width)
+              .attr('height', dimensions.value.height)
+              // viewBox 不变：产生整体缩放压缩效果
+              .attr('viewBox', `0 0 ${baseViewBox.w || dimensions.value.width} ${baseViewBox.h || dimensions.value.height}`)
+              .attr('preserveAspectRatio', 'xMidYMid meet')
+          }
+        } catch (_) {}
+      })
+    }
+    resizeObserver = new ResizeObserver(onResize)
+    resizeObserver.observe(graphContainer.value)
+  }
 })
 
 onUnmounted(() => {
   if (simulation) simulation.stop()
   window.removeEventListener('resize', updateDimensions)
+  if (resizeObserver && graphContainer.value) {
+    resizeObserver.disconnect()
+  }
 })
 </script>
 

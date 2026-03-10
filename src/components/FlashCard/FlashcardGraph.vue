@@ -426,6 +426,7 @@ let gRoot = null
 let linkSel = null
 let nodeSel = null
 let textSel = null
+let baseViewBox = { w: 0, h: 0 }
 
 // 交互状态：用于“初始全显示 + 双击收起/展开”
 const nodeUiState = new Map() // id -> { expanded:boolean, oldX:number, oldY:number }
@@ -609,7 +610,13 @@ const renderGraph = () => {
   const { width, height } = dimensions.value
   const svg = d3.select(svgRef.value)
   svg.selectAll('*').remove()
-  svg.attr('width', width).attr('height', height)
+  // 固定内部坐标系（viewBox），拖拽分栏时只变更外部尺寸，让整张图谱产生“被压缩/拉伸”的效果
+  baseViewBox = { w: width, h: height }
+  svg
+    .attr('width', width)
+    .attr('height', height)
+    .attr('viewBox', `0 0 ${baseViewBox.w} ${baseViewBox.h}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet')
   
   let nodes = []
   let links = []
@@ -779,6 +786,20 @@ const renderGraph = () => {
   gRoot = svg.append('g')
   zoomBehavior = d3.zoom().scaleExtent([0.1, 10]).on('zoom', (ev) => gRoot.attr('transform', ev.transform))
   svg.call(zoomBehavior)
+
+  // 背景 rect：捕获空白处单击以清除高亮（在 zoom 层内，确保任何模式下都生效）
+  const bgRect = gRoot.insert('rect', ':first-child')
+    .attr('class', 'graph-bg-hit')
+    .attr('x', -5000)
+    .attr('y', -5000)
+    .attr('width', 10000)
+    .attr('height', 10000)
+    .attr('fill', 'transparent')
+    .style('cursor', 'default')
+  bgRect.on('click', (ev) => {
+    ev.stopPropagation()
+    emit('clearHighlight')
+  })
 
   // 平滑缩放至适应视口并居中（参考组件 zoomFit，展开/收缩后调用）
   const smoothZoomFit = (nodesToFit, duration = ANIM_DURATION) => {
@@ -1282,16 +1303,13 @@ const renderGraph = () => {
   })
 }
 
-// 仅在有数据变化时渲染一次（不监听 dimensions，避免卡死）
+// 结构变化时完整重绘
 watch(
   () => [
     props.graphNodes?.length,
     props.graphLinks?.length,
     filteredFlashcards.value.length,
-    // 时间范围变化也需要触发重绘（即使过滤后数量不变）
-    timeRange.value,
-    // 高亮 ID 变化时需要重新渲染以更新明暗状态
-    (props.highlightIds || []).join(',')
+    timeRange.value
   ],
   () => {
     if (simulation) simulation.stop()
@@ -1300,12 +1318,82 @@ watch(
   { deep: false }
 )
 
+// 仅高亮变化时轻量更新（不重建图谱，避免清除高亮时大幅度震动）
+watch(
+  () => (props.highlightIds || []).join(','),
+  () => {
+    if (!gRoot || !svgRef.value) return
+    const highlightIdSet = new Set(
+      (props.highlightIds || [])
+        .map(id => (id != null ? String(id) : ''))
+        .filter(s => s !== '')
+    )
+    const hitNodeIds = new Set()
+    const nodes = masterGraph.nodes || []
+    if (highlightIdSet.size > 0) {
+      nodes.forEach(n => {
+        if (n.businessId && highlightIdSet.has(String(n.businessId))) hitNodeIds.add(n.id)
+      })
+    }
+    const uniqueLinks = masterGraph.links || []
+    const neighborNodeIds = new Set(hitNodeIds)
+    if (hitNodeIds.size > 0) {
+      uniqueLinks.forEach(l => {
+        const sid = typeof l.source === 'object' ? l.source.id : l.source
+        const tid = typeof l.target === 'object' ? l.target.id : l.target
+        if (hitNodeIds.has(sid) || hitNodeIds.has(tid)) {
+          neighborNodeIds.add(sid)
+          neighborNodeIds.add(tid)
+        }
+      })
+    }
+    const hasHighlight = highlightIdSet.size > 0 && neighborNodeIds.size > 0
+    const isDimmed = (d) => hasHighlight && !neighborNodeIds.has(d.id)
+    const linkOpacity = (d) => {
+      if (!hasHighlight) return 0.8
+      const sid = typeof d.source === 'object' ? d.source.id : d.source
+      const tid = typeof d.target === 'object' ? d.target.id : d.target
+      return neighborNodeIds.has(sid) && neighborNodeIds.has(tid) ? 0.9 : 0.1
+    }
+    const ng = gRoot.select('.nodes')
+    const lg = gRoot.select('.links')
+    const tg = gRoot.select('.texts')
+    if (!ng.empty()) ng.selectAll('.graph-node').transition().duration(120).ease(d3.easeQuadOut).style('opacity', d => (isDimmed(d) ? 0.18 : 1))
+    if (!lg.empty()) lg.selectAll('line').transition().duration(120).ease(d3.easeQuadOut).style('opacity', linkOpacity)
+    if (!tg.empty()) tg.selectAll('text').transition().duration(120).ease(d3.easeQuadOut).style('opacity', d => (hasHighlight && isDimmed(d) ? 0.35 : 1))
+  },
+  { deep: false }
+)
+
 onMounted(() => {
   updateDimensions()
   if (graphContainer.value) {
-    const ro = new ResizeObserver(() => updateDimensions())
+    let resizeRaf = null
+    const onResize = () => {
+      updateDimensions()
+      if (resizeRaf) cancelAnimationFrame(resizeRaf)
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = null
+        // 拖拽分隔线会频繁触发 resize：只更新画布尺寸，不清空重绘，避免“消失又出现/震动”
+        try {
+          if (svgRef.value && dimensions.value.width && dimensions.value.height) {
+            const svg = d3.select(svgRef.value)
+            svg
+              .attr('width', dimensions.value.width)
+              .attr('height', dimensions.value.height)
+              // viewBox 不变：产生整体缩放压缩效果
+              .attr('viewBox', `0 0 ${baseViewBox.w || dimensions.value.width} ${baseViewBox.h || dimensions.value.height}`)
+              .attr('preserveAspectRatio', 'xMidYMid meet')
+          }
+        } catch (_) {}
+      })
+    }
+    const ro = new ResizeObserver(onResize)
     ro.observe(graphContainer.value)
-    onUnmounted(() => ro.disconnect())
+    onUnmounted(() => {
+      ro.disconnect()
+      if (resizeRaf) cancelAnimationFrame(resizeRaf)
+    })
   }
   window.addEventListener('resize', updateDimensions)
   onUnmounted(() => {

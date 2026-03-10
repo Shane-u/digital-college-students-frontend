@@ -193,6 +193,15 @@ export const flashCardApi = {
   getTempCardDetail(id) {
     return request.get(`/flash-card/temp/${id}`)
   },
+
+  /**
+   * 查询单个临时闪卡的剩余过期天数
+   * @param {string} id - 闪卡ID
+   * @returns {Promise<number>} 剩余天数
+   */
+  getTempCardExpiration(id) {
+    return request.get('/flash-card/temp/expiration', { params: { id } })
+  },
   
   // 新增：图谱相关接口（通过 Node 代理接 Neo4j Desktop，数据库名=当前用户 ID）
   /**

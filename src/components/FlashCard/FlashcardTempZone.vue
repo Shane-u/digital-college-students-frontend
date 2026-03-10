@@ -64,12 +64,12 @@
           class="flashcard-card"
         >
           <!-- 右上角过期时间 -->
-          <div class="card-expiry" v-if="!card.isGenerating">
+          <div class="card-expiry" v-if="!card.isGenerating && card.expirationDays != null">
             <svg class="card-expiry-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="8" />
               <path d="M12 8v4l2 2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
-            <span>{{ getExpiryDays(card.createdAt) }}天后过期</span>
+            <span>{{ card.expirationDays }}天后过期</span>
           </div>
 
           <!-- 标题 + 下划线 -->
@@ -239,14 +239,7 @@ const props = defineProps({
 
 const emit = defineEmits(['confirmSave', 'preview', 'delete', 'cardClick', 'backToGraph'])
 
-const getExpiryDays = (createdAt) => {
-  if (!createdAt) return 7
-  const created = new Date(createdAt)
-  const now = new Date()
-  const diffTime = created.getTime() + 7 * 24 * 60 * 60 * 1000 - now.getTime()
-  const diffDays = Math.ceil(diffTime / (24 * 60 * 60 * 1000))
-  return diffDays > 0 ? diffDays : 0
-}
+// 过期天数由父页面在加载暂存区时与卡片一起注入（card.expirationDays），避免显示兜底值造成跳变
 
 const getContentPreview = (content) => {
   if (!content) return '暂无内容'
@@ -342,9 +335,9 @@ const submitEditTemp = async () => {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(255, 255, 255, 0.9);
+  background: #f8fafc;
   backdrop-filter: blur(16px);
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
 }
 
 .temp-page-header-inner {
@@ -365,7 +358,7 @@ const submitEditTemp = async () => {
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: #475569;
+  color: #111827;
   cursor: pointer;
   font-size: 14px;
   font-weight: 700;
@@ -373,8 +366,8 @@ const submitEditTemp = async () => {
 }
 
 .back-btn:hover {
-  background: #eef2ff;
-  color: #4f46e5;
+  background: rgba(15, 23, 42, 0.04);
+  color: #111827;
 }
 
 .back-icon {
@@ -437,7 +430,7 @@ const submitEditTemp = async () => {
 .temp-page-main {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 40px 32px 56px;
+  padding: 22px 32px 56px;
   flex: 1;
 }
 
@@ -446,7 +439,7 @@ const submitEditTemp = async () => {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 40px;
+  margin-bottom: 18px;
 }
 
 .temp-zone-header-left {
@@ -660,6 +653,7 @@ const submitEditTemp = async () => {
   margin-bottom: 24px;
   flex: 1;
   display: -webkit-box;
+  line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;

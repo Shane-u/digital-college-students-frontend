@@ -11,7 +11,7 @@
       <!-- 左侧：技能图谱 -->
       <div 
         class="compare-panel"
-        :style="{ width: `${leftWidth}%` }"
+        :style="{ flexBasis: `${leftWidth}%` }"
       >
         <div class="panel-header">
           <h3 class="panel-title">
@@ -45,7 +45,7 @@
       <!-- 右侧：闪卡图谱 -->
       <div 
         class="compare-panel"
-        :style="{ width: `${100 - leftWidth}%` }"
+        :style="{ flexBasis: `${100 - leftWidth}%` }"
       >
         <div class="panel-header">
           <h3 class="panel-title">
@@ -59,13 +59,13 @@
             :graph-nodes="flashcardData.nodes"
             :graph-links="flashcardData.links"
             :user-id="userId"
-            :highlight-ids="highlightIds"
+            :highlight-ids="effectiveHighlightIds"
             :hide-toolbar="true"
             @node-click="handleFlashcardNodeClick"
             @go-to-temp="handleGoToTemp"
             @compare="() => {}"
             @refresh="loadFlashcardData"
-        @clear-highlight="$emit('clearHighlight')"
+            @clear-highlight="handleClearHighlight"
           />
         </div>
       </div>
@@ -77,7 +77,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import FlashcardGraph from './FlashcardGraph.vue'
 import { flashCardApi } from '../../api/flashCard'
 
@@ -99,15 +100,50 @@ const props = defineProps({
     type: [String, Number],
     default: null
   },
+  /** 可选：父组件传入的高亮 ID，若不传则内部自行管理（通过 postMessage） */
   highlightIds: {
     type: Array,
-    default: () => []
+    default: null
   }
 })
 
 const emit = defineEmits(['close', 'nodeClick', 'goToTemp', 'clearHighlight'])
 
 const flashcardData = ref({ flashcards: [], nodes: [], links: [] })
+/** 内部管理的高亮 ID（学习路径 iframe postMessage 更新） */
+const internalHighlightIds = ref([])
+const useInternalHighlight = computed(() => props.highlightIds == null)
+const effectiveHighlightIds = computed(() =>
+  useInternalHighlight.value ? internalHighlightIds.value : (props.highlightIds || [])
+)
+
+const handleClearHighlight = () => {
+  if (useInternalHighlight.value) {
+    internalHighlightIds.value = []
+  }
+  emit('clearHighlight')
+}
+
+/** 接收学习路径 iframe 发来的「节点 → 闪卡匹配」结果 */
+const handleLearningPathMatchMessage = (event) => {
+  const payload = event?.data
+  if (!payload || payload.type !== 'lp-flashcard-match') return
+  if (!useInternalHighlight.value) return
+
+  if (payload.success === false) {
+    if (payload.error) ElMessage.error(payload.error)
+    return
+  }
+  const ids = Array.isArray(payload.matchedFlashcardIds)
+    ? payload.matchedFlashcardIds.filter(id => id != null && String(id).trim() !== '')
+    : []
+  if (!ids.length || payload.empty) {
+    internalHighlightIds.value = []
+    ElMessage.success('抱歉，未查询到对应的闪卡节点。')
+    return
+  }
+  internalHighlightIds.value = ids.map(id => String(id))
+}
 const containerRef = ref(null)
 const leftWidth = ref(50) // 左侧面板宽度百分比
 const isDragging = ref(false)
@@ -116,6 +152,9 @@ let startX = 0
 let startWidth = 50
 
 onMounted(async () => {
+  if (useInternalHighlight.value) {
+    window.addEventListener('message', handleLearningPathMatchMessage)
+  }
   // 如果父组件已经传入了图谱数据，直接使用
   if (props.graphNodes && props.graphNodes.length > 0) {
     flashcardData.value = {
@@ -176,11 +215,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 清理可能存在的动画帧
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId)
+  if (useInternalHighlight.value) {
+    window.removeEventListener('message', handleLearningPathMatchMessage)
   }
-  // 确保清理事件监听
+  if (rafId !== null) cancelAnimationFrame(rafId)
   window.removeEventListener('mousemove', handleDragMove)
   window.removeEventListener('mouseup', handleDragEnd)
   document.removeEventListener('mouseleave', handleDragEnd)
@@ -199,7 +237,6 @@ const startDragging = (e) => {
   // 设置全局样式
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
-  document.body.style.pointerEvents = 'none'
   
   // 添加事件监听（只在拖动时添加）
   window.addEventListener('mousemove', handleDragMove, { passive: false })
@@ -250,7 +287,6 @@ const handleDragEnd = () => {
   // 恢复全局样式
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
-  document.body.style.pointerEvents = ''
   
   // 移除事件监听
   window.removeEventListener('mousemove', handleDragMove)
@@ -362,7 +398,7 @@ const loadFlashcardData = async () => {
 }
 
 .compare-divider.dragging {
-  background: #9333ea;
+  background: #4f46e5;
 }
 
 .divider-handle {
@@ -400,6 +436,7 @@ const loadFlashcardData = async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 0 0 auto;
   min-width: 0; /* 允许flex子元素缩小 */
   transition: none; /* 拖动时禁用过渡动画 */
 }
