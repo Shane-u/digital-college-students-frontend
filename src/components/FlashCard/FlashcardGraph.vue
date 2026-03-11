@@ -42,100 +42,39 @@
       </div>
       <div class="legend-hints">
         <p>🖱️ 单击节点复习内容</p>
+        <p>👆 双击分类节点收缩/展开</p>
         <p>🔍 滚轮缩放图谱视野</p>
       </div>
     </div>
 
     <!-- 彩带弹出：节点搜索 -->
-    <Teleport to="body">
-      <div
-        v-if="!hideToolbar && showSearchPopover"
-        class="ribbon-popover-overlay"
-        @click="closeSearch"
-      >
-        <div class="ribbon-popover search" @click.stop>
-          <div class="ribbon-popover-title">节点搜索</div>
-          <input
-            v-model="searchKeyword"
-            type="text"
-            class="ribbon-search-input"
-            placeholder="输入标题或内容关键字，回车搜索"
-            @keyup.enter="confirmSearch"
-          />
-          <div class="ribbon-popover-actions">
-            <button type="button" class="ribbon-popover-close" @click="closeSearch">取消</button>
-            <button type="button" class="ribbon-popover-primary" @click="confirmSearch">搜索</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <FlashcardGraphSearchPopover
+      v-if="!hideToolbar"
+      :visible="showSearchPopover"
+      :keyword="searchKeyword"
+      @update:keyword="(val) => (searchKeyword = val)"
+      @confirm="confirmSearch"
+      @close="closeSearch"
+    />
 
     <!-- 彩带弹出：筛选（时间范围） -->
-    <Teleport to="body">
-      <div
-        v-if="!hideToolbar && showFilterPopover"
-        class="ribbon-popover-overlay"
-        @click="showFilterPopover = false"
-      >
-        <div class="ribbon-popover" @click.stop>
-          <div class="ribbon-popover-title">节点筛选</div>
-          <div class="ribbon-popover-subtitle">时间范围</div>
-          <div class="ribbon-filter-grid">
-            <button
-              v-for="range in timeRanges"
-              :key="range.value"
-              type="button"
-              class="ribbon-filter-btn"
-              :class="{ active: timeRange === range.value }"
-              @click="timeRange = range.value"
-            >
-              {{ range.label }}
-            </button>
-          </div>
-          <div class="ribbon-popover-actions">
-            <button type="button" class="ribbon-popover-close" @click="showFilterPopover = false">关闭</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <FlashcardGraphFilterPopover
+      v-if="!hideToolbar"
+      :visible="showFilterPopover"
+      :time-ranges="timeRanges"
+      :time-range="timeRange"
+      @change="handleTimeRangeChange"
+      @close="showFilterPopover = false"
+    />
 
     <!-- 彩带弹出：数据统计 -->
-    <Teleport to="body">
-      <div v-if="!hideToolbar && showStatsModal" class="ribbon-popover-overlay" @click="closeStats">
-        <div class="ribbon-popover stats" @click.stop>
-          <div class="ribbon-popover-title">数据统计</div>
-          <div class="stats-list">
-            <div class="stats-row">
-              <span class="stats-k">当前时间范围</span>
-              <span class="stats-v">{{ activeTimeRangeLabel }}</span>
-            </div>
-            <div class="stats-row">
-              <span class="stats-k">闪卡数量</span>
-              <span class="stats-v">{{ graphStats.flashcards }}</span>
-            </div>
-            <div class="stats-row">
-              <span class="stats-k">图谱节点</span>
-              <span class="stats-v">{{ graphStats.masterNodes }}</span>
-            </div>
-            <div class="stats-row">
-              <span class="stats-k">图谱关系</span>
-              <span class="stats-v">{{ graphStats.masterLinks }}</span>
-            </div>
-            <div class="stats-row">
-              <span class="stats-k">当前可见节点</span>
-              <span class="stats-v">{{ graphStats.visibleNodes }}</span>
-            </div>
-            <div class="stats-row">
-              <span class="stats-k">命中高亮闪卡</span>
-              <span class="stats-v">{{ graphStats.highlightHits }}</span>
-            </div>
-          </div>
-          <div class="ribbon-popover-actions">
-            <button type="button" class="ribbon-popover-primary" @click="closeStats">知道了</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <FlashcardGraphStatsModal
+      v-if="!hideToolbar"
+      :visible="showStatsModal"
+      :active-time-range-label="activeTimeRangeLabel"
+      :stats="graphStats"
+      @close="closeStats"
+    />
     
     <!-- 节点内容：从左侧滑出的抽屉，不遮挡图谱 -->
     <Transition name="drawer-left">
@@ -211,6 +150,9 @@ import { ElMessage } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 import FlashcardRibbonMenu from './FlashcardRibbonMenu.vue'
+import FlashcardGraphSearchPopover from './FlashcardGraphSearchPopover.vue'
+import FlashcardGraphFilterPopover from './FlashcardGraphFilterPopover.vue'
+import FlashcardGraphStatsModal from './FlashcardGraphStatsModal.vue'
 import GraphTopHeader from '../common/GraphTopHeader.vue'
 
 const props = defineProps({
@@ -255,7 +197,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh', 'search', 'clearHighlight'])
+const emit = defineEmits(['nodeClick', 'goToTemp', 'compare', 'refresh', 'search', 'filterByTime', 'clearHighlight'])
 
 const searchKeyword = ref('')
 const timeRange = ref('ALL')
@@ -341,26 +283,26 @@ const filteredFlashcards = computed(() => {
 // 触发后端图谱搜索（Neo4j），当前仅在按下回车时触发
 const handleRibbonSearch = () => {
   showSearchPopover.value = true
-  nextTick(() => {
-    const el = document.querySelector('.ribbon-popover.search .ribbon-search-input')
-    if (el && typeof el.focus === 'function') {
-      el.focus()
-    }
-  })
 }
 
 const closeSearch = () => {
   showSearchPopover.value = false
 }
 
-const confirmSearch = () => {
-  const keyword = (searchKeyword.value || '').trim()
+const confirmSearch = (keywordFromChild) => {
+  const keyword = (keywordFromChild ?? searchKeyword.value ?? '').trim()
   emit('search', keyword)
   showSearchPopover.value = false
 }
 
 const toggleFilterPopover = () => {
   showFilterPopover.value = !showFilterPopover.value
+}
+
+const handleTimeRangeChange = (value) => {
+  timeRange.value = value
+  // 通知上层根据时间范围高亮对应节点
+  emit('filterByTime', value)
 }
 
 const toggleLegend = () => {
@@ -748,18 +690,20 @@ const renderGraph = () => {
     return visibleNodeIdSet.has(sid) && visibleNodeIdSet.has(tid)
   })
 
-  // 高亮集合：来自 Neo4j 图谱查询的业务闪卡 ID
+  // 高亮集合：来自 Neo4j 图谱查询的业务闪卡 ID 或图谱节点 ID
   const highlightIdSet = new Set(
     (props.highlightIds || [])
       .map(id => (id != null ? String(id) : ''))
       .filter(s => s !== '')
   )
 
-  // 命中的节点（闪卡节点）以及它们的邻居节点（包括所属层级）
+  // 命中的节点（包括分类节点 / 根节点 / 闪卡节点），以及它们的邻居节点（包括所属层级）
   const hitNodeIds = new Set()
   if (highlightIdSet.size > 0) {
     nodes.forEach(n => {
-      if (n.businessId && highlightIdSet.has(String(n.businessId))) {
+      const businessId = n.businessId != null ? String(n.businessId) : null
+      const rawId = n.id != null ? String(n.id) : null
+      if ((businessId && highlightIdSet.has(businessId)) || (rawId && highlightIdSet.has(rawId))) {
         hitNodeIds.add(n.id)
       }
     })
@@ -1251,13 +1195,13 @@ const renderGraph = () => {
     })
   })
 
-  // hover 高亮：外圈加粗 + 光晕圈显现，模仿模板鼠标悬浮效果
+  // hover 高亮：外圈加粗 + 光晕圈显现（平台紫主色）
   nodeSel
     .on('mouseover', function (ev, d) {
       const gSel = d3.select(this)
       gSel
         .select('.node-outer')
-        .attr('stroke', 'rgba(100,250,100,1)')
+        .attr('stroke', 'rgba(167, 139, 250, 1)')
         .attr('stroke-width', isRootNode(d) ? 8 : 6)
       gSel
         .select('.node-halo')
@@ -1265,7 +1209,7 @@ const renderGraph = () => {
         .duration(150)
         .attr('r', getNodeRadius(d) + 14)
         .style('opacity', 1)
-      gSel.style('filter', 'drop-shadow(0 0 18px rgba(100,250,100,0.85))')
+      gSel.style('filter', 'drop-shadow(0 0 18px rgba(167, 139, 250, 0.6))')
     })
     .on('mouseout', function (ev, d) {
       const gSel = d3.select(this)
@@ -1308,8 +1252,7 @@ watch(
   () => [
     props.graphNodes?.length,
     props.graphLinks?.length,
-    filteredFlashcards.value.length,
-    timeRange.value
+    filteredFlashcards.value.length
   ],
   () => {
     if (simulation) simulation.stop()
@@ -1332,7 +1275,11 @@ watch(
     const nodes = masterGraph.nodes || []
     if (highlightIdSet.size > 0) {
       nodes.forEach(n => {
-        if (n.businessId && highlightIdSet.has(String(n.businessId))) hitNodeIds.add(n.id)
+        const businessId = n.businessId != null ? String(n.businessId) : null
+        const rawId = n.id != null ? String(n.id) : null
+        if ((businessId && highlightIdSet.has(businessId)) || (rawId && highlightIdSet.has(rawId))) {
+          hitNodeIds.add(n.id)
+        }
       })
     }
     const uniqueLinks = masterGraph.links || []
@@ -1534,9 +1481,8 @@ const sanitizedContent = computed(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* 顶部预留空间：避免节点被标题背景遮住 */
-  padding-top: 0px;
-  background: #f8fafc;
+  padding-top: 0;
+  background: linear-gradient(165deg, #faf8ff 0%, #f5f3ff 45%, #eef2ff 100%);
   position: relative;
   overflow: hidden;
 }
@@ -1545,7 +1491,7 @@ const sanitizedContent = computed(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #f8fafc;
+  background: linear-gradient(165deg, #faf8ff 0%, #f5f3ff 50%, #eef2ff 100%);
 }
 
 .graph-svg {
@@ -1564,55 +1510,73 @@ const sanitizedContent = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #cbd5e1;
+  color: #64748b;
   pointer-events: none;
 }
 
 .empty-icon {
-  font-size: 64px;
-  margin-bottom: 24px;
-  opacity: 0.2;
+  font-size: 56px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+  line-height: 1;
 }
 
 .empty-text {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   margin: 0 0 8px;
+  color: #475569;
+  letter-spacing: 0.02em;
 }
 
 .empty-hint {
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
+/* 图例：白底卡片 */
 .graph-legend {
   position: absolute;
-  bottom: 40px;
-  right: 40px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(12px);
-  padding: 24px;
-  border-radius: 24px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  bottom: 32px;
+  right: 32px;
+  background: #ffffff;
+  padding: 20px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
   z-index: 20;
   pointer-events: none;
-  max-width: 192px;
+  max-width: 200px;
 }
 
 .legend-title {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin: 0 0 16px;
+  letter-spacing: 0.12em;
+  margin: 0 0 14px;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.legend-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: #c4b5fd;
 }
 
 .legend-items {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .legend-item {
@@ -1621,41 +1585,40 @@ const sanitizedContent = computed(() => {
   font-size: 12px;
   font-weight: 700;
   color: #475569;
+  letter-spacing: 0.02em;
 }
 
 .legend-dot {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  margin-right: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-right: 10px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
 }
 
 .legend-dot.category {
-  /* 与根/分类节点主色系统一为紫色系小点 */
-  background: #A78BFA;
-  border: 2px solid #fff;
-  box-sizing: border-box;
+  background: #a78bfa;
 }
 
 .legend-dot.flashcard {
-  background: #F2A73D;
-  border: 2px solid #fff;
-  box-sizing: border-box;
+  background: #fcd34d;
 }
 
 .legend-hints {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #f1f5f9;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .legend-hints p {
   font-size: 10px;
-  color: #94a3b8;
-  line-height: 1.6;
-  margin: 4px 0;
-  font-weight: 500;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 3px 0;
+  font-weight: 600;
 }
 
 .graph-node.neo4j-node:hover circle {
@@ -1692,17 +1655,18 @@ const sanitizedContent = computed(() => {
 }
 
 .node-card-drawer {
-  width: 420px;
+  width: 400px;
   max-width: 85vw;
   height: 80%;
-  background: white;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  box-shadow: 8px 0 40px rgba(46, 16, 101, 0.18), 0 0 0 1px rgba(196, 181, 253, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   pointer-events: auto;
   animation: slideInFromLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  border-radius: 0px 40px 40px 0;
+  border-radius: 0 20px 20px 0;
+  border-left: 4px solid rgba(167, 139, 250, 0.8);
 }
 
 @keyframes slideInFromLeft {
@@ -1718,34 +1682,37 @@ const sanitizedContent = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(196, 181, 253, 0.25);
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 .node-card-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   color: #1e293b;
   margin: 0;
+  letter-spacing: 0.02em;
 }
 
 .node-card-close {
-  background: none;
+  background: rgba(241, 245, 249, 0.8);
   border: none;
-  color: #94a3b8;
+  color: #64748b;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  transition: all 0.2s;
+  border-radius: 10px;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
 .node-card-close:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: #eef2ff;
+  color: #5b21b6;
+  transform: scale(1.05);
 }
 
 .node-card-body {
@@ -1770,66 +1737,70 @@ const sanitizedContent = computed(() => {
   margin-bottom: 0;
 }
 
-/* 卡片底部操作按钮（参考图二样式） */
 .node-card-footer {
   display: flex;
-  gap: 8px;
-  padding: 16px 24px;
-  border-top: 1px solid #e5e6eb;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid rgba(196, 181, 253, 0.2);
   flex-shrink: 0;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .node-card-btn {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
-  border: 1px solid #e5e6eb;
-  background: white;
-  color: #4e5969;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #fff;
+  color: #475569;
+  letter-spacing: 0.02em;
 }
 
 .node-card-btn-edit:hover {
-  border-color: #3370ff;
-  color: #3370ff;
-  background: #f0f5ff;
+  border-color: rgba(129, 140, 248, 0.8);
+  color: #4f46e5;
+  background: #eef2ff;
+  box-shadow: 0 4px 12px rgba(129, 140, 248, 0.2);
 }
 
 .node-card-btn-delete:hover {
-  border-color: #f53f3f;
-  color: #f53f3f;
-  background: #fff1f0;
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #dc2626;
+  background: #fef2f2;
 }
 
 .node-card-btn-primary {
-  background: #3370ff;
-  color: white;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
+  color: #fff;
   border: none;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
 }
 
 .node-card-btn-primary:hover {
-  background: #2b5ed9;
+  filter: brightness(1.05);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
 }
 
 .node-card-btn-secondary {
-  background: white;
-  color: #4e5969;
-  border: 1px solid #e5e6eb;
+  background: #fff;
+  color: #475569;
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .node-card-btn-secondary:hover {
-  background: #f5f7fa;
+  background: #f8fafc;
+  border-color: rgba(196, 181, 253, 0.4);
 }
 
-/* 编辑弹窗 */
+/* 编辑弹窗：与彩带弹窗统一风格 */
 .node-edit-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(29, 33, 41, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(8px);
   z-index: 2000;
   display: flex;
   align-items: center;
@@ -1838,16 +1809,15 @@ const sanitizedContent = computed(() => {
 }
 
 .node-edit-modal {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  border-radius: 20px;
   width: 100%;
-  /* 编辑弹窗更大更宽 */
-  max-width: 700px;
-  /* 更高一些，仍保留可滚动 */
+  max-width: 680px;
   height: 86vh;
   max-height: 94vh;
   overflow-y: auto;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 22px 50px rgba(46, 16, 101, 0.22), 0 0 0 1px rgba(196, 181, 253, 0.15);
+  border: 1px solid rgba(199, 210, 254, 0.5);
 }
 
 .node-edit-modal-header {
@@ -1855,31 +1825,48 @@ const sanitizedContent = computed(() => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #e5e6eb;
+  border-bottom: 1px solid rgba(196, 181, 253, 0.2);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 20px 20px 0 0;
 }
 
 .node-edit-modal-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1d2129;
+  font-size: 17px;
+  font-weight: 800;
+  color: #1e293b;
   margin: 0;
+  letter-spacing: 0.02em;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.node-edit-modal-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #818cf8, #a855f7);
 }
 
 .node-edit-modal-close {
-  background: none;
+  background: rgba(241, 245, 249, 0.8);
   border: none;
-  color: #86909c;
+  color: #64748b;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 10px;
+  transition: background 0.2s, color 0.2s;
 }
 
 .node-edit-modal-close:hover {
-  background: #f2f3f5;
-  color: #4e5969;
+  background: #eef2ff;
+  color: #5b21b6;
 }
 
 .node-edit-form {
@@ -1887,34 +1874,35 @@ const sanitizedContent = computed(() => {
 }
 
 .node-edit-field {
-  margin-bottom: 16px;
+  margin-bottom: 18px;
 }
 
 .node-edit-label {
   display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: #4e5969;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
   margin-bottom: 8px;
+  letter-spacing: 0.02em;
 }
 
 .node-edit-input,
 .node-edit-textarea {
   width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #e5e6eb;
-  border-radius: 6px;
+  padding: 10px 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 10px;
   font-size: 14px;
-  background: #f2f3f5;
-  transition: all 0.2s;
+  background: rgba(248, 250, 252, 0.98);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .node-edit-input:focus,
 .node-edit-textarea:focus {
   outline: none;
-  border-color: #3370ff;
-  background: white;
-  box-shadow: 0 0 0 2px rgba(51, 112, 255, 0.1);
+  border-color: rgba(129, 140, 248, 0.8);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.15);
 }
 
 .node-edit-textarea {
@@ -1925,11 +1913,11 @@ const sanitizedContent = computed(() => {
 
 .node-edit-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-end;
   margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid #e5e6eb;
+  padding-top: 18px;
+  border-top: 1px solid rgba(196, 181, 253, 0.2);
 }
 
 .node-card-btn-primary[disabled] {
@@ -1957,157 +1945,6 @@ const sanitizedContent = computed(() => {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* 右侧彩带弹出层（筛选 / 统计） */
-.ribbon-popover-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1500;
-  background: rgba(15, 23, 42, 0.25);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 96px 22px 22px;
-}
-
-.ribbon-popover {
-  width: 320px;
-  max-width: calc(100vw - 44px);
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.25);
-  padding: 16px 16px 14px;
-}
-
-.ribbon-popover.stats {
-  width: 340px;
-}
-
-.ribbon-popover-title {
-  font-size: 14px;
-  font-weight: 900;
-  color: #111827;
-  margin-bottom: 10px;
-}
-
-.ribbon-popover-subtitle {
-  font-size: 12px;
-  font-weight: 800;
-  color: #6b7280;
-  margin-bottom: 10px;
-}
-
-.ribbon-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.ribbon-filter-btn {
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 900;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  cursor: pointer;
-  color: #4b5563;
-  transition: all 0.15s ease;
-}
-
-.ribbon-filter-btn:hover {
-  border-color: rgba(139, 92, 246, 0.55);
-  color: #6d28d9;
-  background: #faf5ff;
-}
-
-.ribbon-filter-btn.active {
-  border-color: rgba(124, 58, 237, 0.85);
-  background: rgba(124, 58, 237, 0.12);
-  color: #5b21b6;
-}
-
-.ribbon-popover-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.ribbon-popover-close {
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: #ffffff;
-  color: #475569;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.ribbon-popover-primary {
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #7c3aed, #4f46e5);
-  color: #ffffff;
-  font-weight: 900;
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(124, 58, 237, 0.25);
-}
-
-.stats-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
-}
-
-.stats-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: rgba(15, 23, 42, 0.03);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 12px;
-  padding: 10px 12px;
-}
-
-.stats-k {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 800;
-}
-
-.stats-v {
-  font-size: 13px;
-  color: #111827;
-  font-weight: 900;
-}
-
-.ribbon-popover.search {
-  width: 360px;
-}
-
-.ribbon-search-input {
-  width: 100%;
-  margin-top: 6px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  font-size: 14px;
-  outline: none;
-  background: #f9fafb;
-  transition: all 0.15s ease;
-}
-
-.ribbon-search-input:focus {
-  border-color: rgba(79, 70, 229, 0.9);
-  background: #ffffff;
-  box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.16);
 }
 </style>
 

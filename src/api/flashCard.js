@@ -309,6 +309,17 @@ export const flashCardApi = {
       finalParams.type = 'FLASHCARD'
     }
     return request.get('/flash-card/neo4j/search', { params: finalParams })
+  },
+
+  /**
+   * 按更新时间筛选图谱节点（仅返回命中的节点与关系，用于高亮）
+   * 后端接口：GET /flash-card/neo4j/graph-by-updated
+   * Query 参数：
+   *  - range: 时间范围（ALL/全部、近7天、近半个月、近1个月、近半年、近一年、一年前）
+   * @param {Object} params - { range?: string }
+   */
+  filterGraphByUpdated(params = {}) {
+    return request.get('/flash-card/neo4j/graph-by-updated', { params })
   }
 }
 

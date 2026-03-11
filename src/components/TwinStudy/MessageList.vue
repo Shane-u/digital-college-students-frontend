@@ -68,8 +68,8 @@
             v-if="msg.content && msg.content.trim().length > 50" 
             @click="generateFlashCard(msg.content)" 
             class="action-btn flash-card-btn"
-            :disabled="flashCardGenerating"
-            :title="flashCardGenerating ? '生成中...' : '生成记忆闪卡'"
+            :disabled="flashCardGenerating || (props.autoFlashCardEnabled && flashCardState.isGenerating.value)"
+            :title="(props.autoFlashCardEnabled && flashCardState.isGenerating.value) ? '自动生成中，请稍候...' : (flashCardGenerating ? '生成中...' : '生成记忆闪卡')"
           >
             <FlashCardIcon />
           </button>
@@ -337,6 +337,11 @@ const props = defineProps({
   streamingContent: {
     type: String,
     default: ''
+  },
+  /** 输入框开启“闪卡生成”自动模式时，用于禁用手动生成按钮（生成中） */
+  autoFlashCardEnabled: {
+    type: Boolean,
+    default: false
   }
 })
 

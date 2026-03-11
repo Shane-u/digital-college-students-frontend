@@ -10,151 +10,49 @@
     </div>
 
     <div class="grid">
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">上传简历</h3>
-          <p class="card-desc">
-            推荐直接使用「平台简历」，可以保持信息一致、减少重复上传。
-          </p>
-        </div>
+      <ResumeSourceCard
+        v-model:resumeSource="modelSource"
+        :selected-file-name="selectedFileName"
+        :has-platform-resume="hasPlatformResume"
+        :selected-resume-id="selectedResumeId"
+        :uploading="uploading"
+        :user-id="effectiveUserId"
+        @resume="$emit('resume')"
+        @pickFile="openFilePicker"
+        @history="historyOpen = true"
+        @analyze="analyze"
+      />
 
-        <div class="options">
-          <label class="option" :class="{ active: modelSource === 'PLATFORM' }">
-            <input v-model="modelSource" class="radio" type="radio" value="PLATFORM" />
-            <div class="option-body">
-              <div class="option-title-row">
-                <span class="option-main">使用平台中已编辑的简历</span>
-                <span class="badge">推荐</span>
-              </div>
-
-              <p v-if="hasPlatformResume" class="resume-source-status">
-                已检测到平台简历，将使用最新版本。
-              </p>
-              <p v-else class="resume-source-status warn">
-                当前还没有简历，建议先去简历制作里补充。
-              </p>
-              <button type="button" class="link" @click.stop="$emit('resume')">去查看 / 编辑平台简历</button>
-            </div>
-          </label>
-
-          <label class="option" :class="{ active: modelSource === 'UPLOAD' }">
-            <input v-model="modelSource" class="radio" type="radio" value="UPLOAD" />
-            <div class="option-body">
-              <div class="option-title-row">
-                <span class="option-main">上传本地简历文件</span>
-              </div>
-              <p class="option-sub">
-                支持 PDF / Word / Markdown 等常见格式，仅用于本地分析，不会对外泄露。
-              </p>
-
-              <div class="upload">
-                <div class="upload-main">
-                  <span class="upload-icon">⬆️</span>
-                  <div class="upload-text">
-                    <span class="upload-title">拖拽文件到这里，或点击选择</span>
-                    <span class="upload-sub">{{ selectedFileName || '单个文件不超过 10MB' }}</span>
-                  </div>
-                </div>
-                <div class="upload-actions">
-                  <button type="button" class="upload-btn" @click="openFilePicker">选择文件</button>
-                  <span class="upload-tip">支持：.pdf / .docx / .md</span>
-                </div>
-                <input
-                  ref="fileInputRef"
-                  type="file"
-                  class="hidden"
-                  accept=".pdf,.doc,.docx,.md,.txt"
-                  @change="handleFileChange"
-                />
-              </div>
-            </div>
-          </label>
-        </div>
-
-        <div class="summary">
-          <div class="summary-label">当前选择：</div>
-          <div class="summary-main">
-            <span v-if="modelSource === 'PLATFORM'">平台简历（将自动拉取你在本平台中保存的最新简历版本）</span>
-            <span v-else-if="selectedFileName">本地文件：{{ selectedFileName }}</span>
-            <span v-else class="summary-placeholder">尚未选择文件，请先选择简历来源</span>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button type="button" class="btn-primary" :disabled="!canAnalyze" @click="analyze">
-            开始分析简历
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">简历分析结果</h3>
-        </div>
-
-        <div v-if="loading" class="loading">
-          <div class="spinner"></div>
-          <div class="loading-text">正在模拟分析你的简历结构与内容...</div>
-        </div>
-
-        <div v-else-if="result" class="result">
-          <div class="pill-row">
-            <span class="pill">匹配岗位建议</span>
-            <span class="pill subtle" v-if="modelSource === 'PLATFORM'">来源：平台简历</span>
-          </div>
-
-          <ul class="list">
-            <li v-for="(item, idx) in result.matchingSuggestions" :key="idx" class="item">
-              <div class="item-tag">{{ item.tag }}</div>
-              <div class="item-main">
-                <div class="item-title">{{ item.title }}</div>
-                <div class="item-body">{{ item.desc }}</div>
-              </div>
-            </li>
-          </ul>
-
-          <div class="divider"></div>
-
-          <div class="pill-row">
-            <span class="pill danger">简历问题清单</span>
-            <span class="subhint">这些问题也会在后续面试环节被重点追问。</span>
-          </div>
-
-          <ul class="questions">
-            <li v-for="(q, idx) in result.resumeQuestions" :key="idx" class="q-item">
-              <span class="q-index">Q{{ idx + 1 }}</span>
-              <div class="q-main">
-                <div class="q-title">{{ q.question }}</div>
-                <div class="q-hint">{{ q.hint }}</div>
-              </div>
-            </li>
-          </ul>
-
-          <div class="next">
-            <div class="next-main">
-              <div class="next-title">下一步：开启模拟面试</div>
-              <div class="next-desc">分析结果会自动同步到面试环节中，用于生成针对性的提问与评价。</div>
-            </div>
-            <button type="button" class="btn-secondary next-btn" @click="$emit('gotoInterview')">
-              去选择面试方式
-            </button>
-          </div>
-        </div>
-
-        <div v-else class="empty">
-          <div class="empty-icon">✨</div>
-          <p class="empty-title">还没有简历分析结果</p>
-          <p class="empty-desc">
-            先在左侧选择简历来源并点击「开始分析简历」，这里会为你生成个性化的岗位建议与问题清单。
-          </p>
-        </div>
-      </div>
+      <ResumeAnalysisCard
+        :loading="loading"
+        :result="result"
+        :resume-source="modelSource"
+        :target-role="targetRole"
+        :target-level="targetLevel"
+        @update:targetRole="targetRole = $event"
+        @update:targetLevel="targetLevel = $event"
+        @goto-interview="$emit('gotoInterview')"
+      />
     </div>
+
+    <ResumeHistoryModal v-model="historyOpen" :user-id="effectiveUserId" @select="handleSelectHistory" />
+
+    <input
+      ref="fileInputRef"
+      type="file"
+      class="hidden"
+      accept=".pdf,.doc,.docx,.md,.txt"
+      @change="handleFileChange"
+    />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import ResumeSourceCard from './resume/ResumeSourceCard.vue'
+import ResumeAnalysisCard from './resume/ResumeAnalysisCard.vue'
+import ResumeHistoryModal from './resume/ResumeHistoryModal.vue'
+import { aiInterviewApi } from '../../api/aiInterview'
 
 const props = defineProps({
   resumeSource: { type: String, default: 'PLATFORM' },
@@ -166,8 +64,13 @@ const emit = defineEmits(['update:resumeSource', 'analysis', 'resume', 'gotoInte
 const fileInputRef = ref(null)
 const selectedFileName = ref('')
 const loading = ref(false)
+const uploading = ref(false)
 const result = ref(props.analysisResult)
 const platformResume = ref(null)
+const selectedResumeId = ref(null) // 后端 resumeId（用于分析接口）
+const historyOpen = ref(false)
+const targetRole = ref('')
+const targetLevel = ref('')
 
 const modelSource = computed({
   get: () => props.resumeSource,
@@ -175,6 +78,11 @@ const modelSource = computed({
 })
 
 const hasPlatformResume = computed(() => !!platformResume.value)
+const effectiveUserId = computed(() => {
+  const user = JSON.parse(localStorage.getItem('userInfo') || '{}')
+  // 后端文档：未登录需要 userId；已登录可不传。这里优先不传，除非本地明确有数值/字符串 id。
+  return user?.userId ?? null
+})
 
 watch(
   () => props.analysisResult,
@@ -184,13 +92,12 @@ watch(
 )
 
 const canAnalyze = computed(() => {
-  if (modelSource.value === 'PLATFORM') return true
-  return Boolean(selectedFileName.value)
+  if (loading.value || uploading.value) return false
+  if (modelSource.value === 'PLATFORM') return Boolean(selectedResumeId.value)
+  return Boolean(selectedResumeId.value) || Boolean(selectedFileName.value)
 })
 
-const openFilePicker = () => {
-  fileInputRef.value?.click?.()
-}
+const openFilePicker = () => fileInputRef.value?.click?.()
 
 const handleFileChange = (event) => {
   const files = event?.target?.files
@@ -199,6 +106,7 @@ const handleFileChange = (event) => {
     return
   }
   selectedFileName.value = files[0].name
+  uploadResume(files[0])
 }
 
 const loadPlatformResume = () => {
@@ -215,49 +123,117 @@ const loadPlatformResume = () => {
   }
 }
 
-const analyze = () => {
-  if (!canAnalyze.value || loading.value) return
+const safeJsonParse = (raw) => {
+  if (!raw) return null
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw
+  } catch {
+    return null
+  }
+}
+
+// 将后端 analysisJson 归一化为当前 UI 需要的数据结构
+const normalizeAnalysis = (analysisJson) => {
+  const obj = safeJsonParse(analysisJson) || {}
+  const strengths = obj.strengths || obj.advantages || obj.highlights || []
+  const questions = obj.questions || obj.interviewQuestions || obj.possibleQuestions || []
+  const suggestions = obj.suggestions || obj.matchingSuggestions || obj.roleSuggestions || []
+
+  const toTextArr = (x) => (Array.isArray(x) ? x : []).map((t) => String(t || '').trim()).filter(Boolean)
+  const normalizeSuggestion = (s) => {
+    if (!s) return null
+    if (typeof s === 'string') {
+      return { tag: '建议', title: s, desc: '' }
+    }
+    return {
+      tag: s.tag || s.category || '建议',
+      title: s.title || s.summary || s.name || '建议',
+      desc: s.desc || s.detail || s.content || ''
+    }
+  }
+  const normalizeQuestion = (q) => {
+    if (!q) return null
+    if (typeof q === 'string') return { question: q, hint: '' }
+    return { question: q.question || q.text || q.title || '', hint: q.hint || q.tip || q.reason || '' }
+  }
+
+  const normalized = {
+    strengths: toTextArr(strengths),
+    matchingSuggestions: (Array.isArray(suggestions) ? suggestions : []).map(normalizeSuggestion).filter(Boolean),
+    resumeQuestions: (Array.isArray(questions) ? questions : []).map(normalizeQuestion).filter(Boolean)
+  }
+  return normalized
+}
+
+const uploadResume = async (file) => {
+  if (!file || uploading.value) return
+  uploading.value = true
+  try {
+    const res = await aiInterviewApi.uploadResume({
+      file,
+      position: '',
+      experienceYears: '',
+      userId: effectiveUserId.value
+    })
+    selectedResumeId.value = res?.resumeId ?? null
+  } finally {
+    uploading.value = false
+  }
+}
+
+const ensurePlatformResumeUploaded = async () => {
+  // 平台简历这里先走“上传接口”：将平台简历 JSON 转成 txt，保证后端有 resumeId 可分析
+  if (selectedResumeId.value) return selectedResumeId.value
+  const data = platformResume.value
+  const blob = new Blob([JSON.stringify(data || {}, null, 2)], { type: 'text/plain' })
+  const file = new File([blob], 'platform-resume.txt', { type: 'text/plain' })
+  await uploadResume(file)
+  return selectedResumeId.value
+}
+
+const analyze = async () => {
+  if (!canAnalyze.value) return
   loading.value = true
   result.value = null
-  setTimeout(() => {
-    const payload = {
-      matchingSuggestions: [
-        {
-          tag: '后端 / 全栈',
-          title: '以工程实践为主的后端 / 全栈岗位',
-          desc: '你的项目经历中包含多次从 0 到 1 的服务端功能搭建，适合 Java / Go / Node.js 等工程实践导向的后端或全栈岗位。',
-        },
-        {
-          tag: '校招 / 实习',
-          title: '技术基础扎实的校招 / 实习岗位',
-          desc: '课程 / 竞赛中有数据结构、算法和系统设计相关内容，适合技术基础要求较高的校园招聘或暑期实习岗位。',
-        },
-      ],
-      resumeQuestions: [
-        {
-          question: '某个项目中你的「核心贡献」具体是什么？如何量化你带来的价值？',
-          hint: '建议准备 1～2 句 STAR 描述，对应清晰的指标（如性能、用户数、缺陷率、交付时间）。',
-        },
-        {
-          question: '目前简历中的技术栈罗列较多，有哪些是你真正「敢在简历上负责」的？',
-          hint: '可以按熟练度分层，明确「熟练 / 了解」的边界，避免面试时被反复追问基础细节。',
-        },
-        {
-          question: '是否有一段经历可以完整展示你的「问题拆解 → 方案权衡 → 落地执行」能力？',
-          hint: '可以从课程设计、实验项目或实习中选取一个典型例子，提前整理好逻辑闭环。',
-        },
-      ],
+  try {
+    if (modelSource.value === 'PLATFORM') {
+      await ensurePlatformResumeUploaded()
     }
+    if (!selectedResumeId.value) return
+    const res = await aiInterviewApi.analyzeResume(selectedResumeId.value, {
+      targetRole: targetRole.value,
+      targetLevel: targetLevel.value,
+      userId: effectiveUserId.value
+    })
+    const normalized = normalizeAnalysis(res?.analysisJson)
     const wrapped = {
-      ...payload,
+      ...normalized,
       source: modelSource.value,
-      uploadedFileName: selectedFileName.value || '',
-      platformResume: modelSource.value === 'PLATFORM' ? platformResume.value : null,
+      resumeId: selectedResumeId.value
     }
     result.value = wrapped
-    loading.value = false
     emit('analysis', wrapped)
-  }, 900)
+  } catch (e) {
+    result.value = {
+      source: modelSource.value,
+      resumeId: selectedResumeId.value,
+      strengths: [],
+      matchingSuggestions: [],
+      resumeQuestions: [
+        { question: '简历分析接口调用失败，请稍后重试', hint: e?.message || '' }
+      ]
+    }
+    emit('analysis', result.value)
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSelectHistory = (resume) => {
+  if (!resume) return
+  modelSource.value = 'UPLOAD'
+  selectedResumeId.value = resume.resumeId
+  selectedFileName.value = resume.originalFilename || `简历 #${resume.resumeId}`
 }
 
 onMounted(() => {
@@ -409,73 +385,6 @@ onMounted(() => {
   border-color: #60a5fa;
 }
 
-.upload {
-  margin-top: 8px;
-  padding: 10px 10px 10px;
-  border-radius: 14px;
-  border: 1px dashed rgba(203, 213, 225, 0.9);
-  background: #f9fafb;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.upload-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.upload-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: #111827;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-
-.upload-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.upload-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.upload-sub {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.upload-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 2px;
-}
-
-.upload-btn {
-  border-radius: 999px;
-  padding: 4px 12px;
-  border: none;
-  background: #111827;
-  color: #f9fafb;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.upload-tip {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
 .hidden {
   display: none;
 }
@@ -555,177 +464,6 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
-.loading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 12px 14px;
-  border-radius: 14px;
-  background: #f9fafb;
-}
-
-.spinner {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 2px solid rgba(148, 163, 184, 0.4);
-  border-top-color: #4f46e5;
-  animation: spin 0.7s linear infinite;
-}
-
-.loading-text {
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.result {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pill-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pill {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(79, 70, 229, 0.08);
-  color: #4f46e5;
-  font-weight: 600;
-}
-
-.pill.subtle {
-  background: rgba(148, 163, 184, 0.08);
-  color: #6b7280;
-}
-
-.pill.danger {
-  background: rgba(220, 38, 38, 0.06);
-  color: #b91c1c;
-}
-
-.subhint {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.list {
-  list-style: none;
-  margin: 4px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: #f9fafb;
-}
-
-.item-tag {
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: #111827;
-  color: #e5e7eb;
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.item-main {
-  font-size: 12px;
-  color: #111827;
-}
-
-.item-title {
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.item-body {
-  color: #4b5563;
-}
-
-.divider {
-  height: 1px;
-  margin: 6px 0;
-  background: linear-gradient(to right, rgba(226, 232, 240, 0.9), rgba(226, 232, 240, 0));
-}
-
-.questions {
-  list-style: none;
-  padding: 0;
-  margin: 4px 0 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.q-item {
-  display: flex;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 12px;
-  background: #fef2f2;
-}
-
-.q-index {
-  font-size: 11px;
-  font-weight: 700;
-  color: #b91c1c;
-  margin-top: 2px;
-}
-
-.q-main {
-  font-size: 12px;
-  color: #7f1d1d;
-}
-
-.q-title {
-  font-weight: 600;
-}
-
-.q-hint {
-  margin-top: 2px;
-}
-
-.next {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: #f9fafb;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.next-main {
-  font-size: 12px;
-  color: #111827;
-}
-
-.next-title {
-  font-weight: 600;
-}
-
-.next-desc {
-  color: #6b7280;
-}
-
-.next-btn {
-  padding-inline: 14px;
-}
-
 .empty {
   padding: 22px 12px 18px;
   border-radius: 16px;
@@ -745,17 +483,11 @@ onMounted(() => {
   margin: 0;
 }
 
-.empty-desc {
-  font-size: 12px;
-  color: #6b7280;
-  margin: 4px 0 0;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+ .empty-desc {
+   font-size: 12px;
+   color: #6b7280;
+   margin: 4px 0 0;
+ }
 
 @media (max-width: 960px) {
   .grid {

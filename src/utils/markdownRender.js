@@ -1,7 +1,14 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 
-const md = new MarkdownIt({
+const mdNoHtml = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+  breaks: true
+})
+
+const mdAllowHtml = new MarkdownIt({
   html: true,
   linkify: true,
   typographer: true,
@@ -12,9 +19,11 @@ const md = new MarkdownIt({
  * 将 Markdown 文本转为安全 HTML，供 v-html 或直接 innerHTML 使用。
  * 与 MessageList 中渲染逻辑一致，支持流式未闭合代码块。
  */
-export function renderMarkdownToHtml(text) {
+export function renderMarkdownToHtml(text, options = {}) {
   if (!text) return ''
   try {
+    const { allowHtml = false } = options || {}
+    const md = allowHtml ? mdAllowHtml : mdNoHtml
     const cleanedText = String(text).replace(/<details>[\s\S]*?<\/details>/gi, '')
     const textToProcess = cleanedText.endsWith('\n') ? cleanedText : cleanedText + '\n'
     let finalHtml = ''

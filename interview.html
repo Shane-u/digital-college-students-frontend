@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 面试 Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; }
+        pre { white-space: pre-wrap; word-break: break-word; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h3 class="mb-3">AI 面试前端 Demo</h3>
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">配置</h5>
+                    <div class="mb-2">
+                        <label class="form-label">后端 Base URL</label>
+                        <input id="baseUrl" class="form-control mono" value="http://localhost:8121/api" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">userId（未登录必填）</label>
+                        <input id="userId" class="form-control mono" placeholder="例如 1" />
+                    </div>
+                    <div class="alert alert-secondary mb-0">
+                        说明：接口返回统一结构 <span class="mono">{code,data,message}</span>，本 demo 会把 <span class="mono">data</span> 提取并展示。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">状态</h5>
+                    <div class="mb-2"><span class="badge text-bg-info">resumeId</span> <span id="resumeId" class="mono"></span></div>
+                    <div class="mb-2"><span class="badge text-bg-info">sessionId</span> <span id="sessionId" class="mono"></span></div>
+                    <div class="mb-2"><span class="badge text-bg-info">questionId</span> <span id="questionId" class="mono"></span></div>
+                    <div class="mb-0"><span class="badge text-bg-info">answerId</span> <span id="answerId" class="mono"></span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">1) 上传简历</h5>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-12 col-lg-6">
+                            <input id="resumeFile" type="file" class="form-control" accept=".pdf,.doc,.docx,.txt" />
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-primary w-100" onclick="uploadResume()">上传</button>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-outline-secondary w-100" onclick="loadHistoryResumes()">加载历史简历</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <pre id="resumeOut" class="mono"></pre>
+                        <div id="resumeHistory" class="mt-2"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">2) 简历分析</h5>
+                    <div class="row g-2">
+                        <div class="col-12 col-lg-4">
+                            <input id="targetRole" class="form-control" placeholder="targetRole（可选，如 Java后端）" />
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <input id="targetLevel" class="form-control" placeholder="targetLevel（可选，如 校招/初级）" />
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <button class="btn btn-secondary w-100" onclick="analyzeResume()">生成分析</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <pre id="analysisOut" class="mono"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">3) 创建面试会话</h5>
+                    <div class="row g-2">
+                        <div class="col-12 col-lg-3">
+                            <select id="interviewType" class="form-select">
+                                <option value="MIXED">MIXED</option>
+                                <option value="TECHNICAL">TECHNICAL</option>
+                                <option value="BEHAVIORAL">BEHAVIORAL</option>
+                                <option value="CODING">CODING</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <select id="persona" class="form-select">
+                                <option value="mentor">mentor</option>
+                                <option value="strict">strict</option>
+                                <option value="hr">hr</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <select id="difficulty" class="form-select">
+                                <option value="JUNIOR">JUNIOR</option>
+                                <option value="MID" selected>MID</option>
+                                <option value="SENIOR">SENIOR</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-success w-100" onclick="createSession()">创建会话</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <pre id="sessionOut" class="mono"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">4) 下一题（可选 TTS）</h5>
+                    <div class="row g-2 align-items-center">
+                        <div class="col-12 col-lg-3 form-check">
+                            <input class="form-check-input" type="checkbox" id="needTts">
+                            <label class="form-check-label" for="needTts">需要 TTS 音频</label>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-outline-primary w-100" onclick="nextQuestion()">获取下一题</button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="mb-2"><audio id="ttsAudio" controls></audio></div>
+                        <pre id="questionOut" class="mono"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5) 原“上传回答音频（ASR + 评价）”模块在实时语音面试模式下已不需要，故隐藏。
+             如需离线调试，可恢复此区域并使用 /answers/audio 接口。 -->
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">6) 结束面试并查看报告</h5>
+                    <div class="row g-2">
+                        <div class="col-12 col-lg-4">
+                            <button class="btn btn-danger w-100" onclick="finishSession()">结束面试并生成报告</button>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-outline-secondary w-100" onclick="getReport()">重新加载报告</button>
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-1">点击「结束面试并生成报告」会将会话标记为结束并自动生成报告（分析简历 + 本场聊天记录），报告显示在下方。</p>
+                    <div class="mt-3">
+                        <pre id="reportOut" class="mono"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">7) 实时语音面试（WebRTC + Go）</h5>
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-12 col-lg-4">
+                            <button class="btn btn-outline-info w-100" onclick="connectAiInterviewVoice()">建立语音连接</button>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="toggleAiMute()" id="aiMuteBtn" disabled>静音</button>
+                        </div>
+                        <div class="col-6 col-lg-2">
+                            <button class="btn btn-outline-danger w-100" onclick="hangupAiCall()" id="aiHangupBtn" disabled>挂断</button>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <audio id="aiVoiceAudio" controls autoplay></audio>
+                    </div>
+                    <div class="mt-2">
+                        <pre id="aiVoiceLog" class="mono"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">8) 录音回答（点一下说话，再点结束）</h5>
+                    <p class="text-muted small">先获取下一题后，点击「开始录音」说话，说完点击「结束并上传」自动 ASR 并存入历史，报告生成时会分析这些记录。</p>
+                    <div class="row g-2 align-items-center mb-2">
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-outline-primary w-100" onclick="startRecordAnswer()" id="recordStartBtn">开始录音</button>
+                        </div>
+                        <div class="col-12 col-lg-3">
+                            <button class="btn btn-outline-danger w-100" onclick="stopRecordAnswer()" id="recordStopBtn" disabled>结束并上传</button>
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <span id="recordStatus" class="text-muted small"></span>
+                        </div>
+                    </div>
+                    <pre id="recordOut" class="mono small"></pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">调试输出</h5>
+                    <pre id="debugOut" class="mono"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function $(id) { return document.getElementById(id); }
+
+    function getBaseUrl() {
+        return ($('baseUrl').value || '').replace(/\/+$/, '');
+    }
+
+    function getUserId() {
+        const v = ($('userId').value || '').trim();
+        // 注意：userId 可能是很长的雪花 ID，不能用 Number()，否则会丢精度
+        return v ? v : null; // 始终以字符串形式传给后端
+    }
+
+    function setStatus(id, val) {
+        $(id).textContent = val == null ? '' : String(val);
+    }
+
+    function logDebug(obj) {
+        const prev = $('debugOut').textContent || '';
+        $('debugOut').textContent = prev + '\n' + JSON.stringify(obj, null, 2);
+    }
+
+    async function apiFetch(path, opts = {}) {
+        const baseUrl = getBaseUrl();
+        const url = baseUrl + path;
+        const res = await fetch(url, opts);
+        const json = await res.json();
+        if (json.code !== 0) {
+            throw new Error(json.message || ('API error code=' + json.code));
+        }
+        return json.data;
+    }
+
+    async function uploadResume() {
+        const file = $('resumeFile').files[0];
+        if (!file) return alert('请选择简历文件');
+        const userId = getUserId();
+
+        const form = new FormData();
+        form.append('file', file);
+        form.append('position', '');
+        form.append('experienceYears', '');
+
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch('/ai-interview/resumes/upload' + qs, { method: 'POST', body: form });
+        setStatus('resumeId', data.resumeId);
+        $('resumeOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ uploadResume: data });
+    }
+
+    async function loadHistoryResumes() {
+        const userId = getUserId();
+        if (!userId) {
+            alert('请先在上方填写 userId（未登录情况下）');
+            return;
+        }
+        const qs = '?userId=' + encodeURIComponent(userId);
+        const list = await apiFetch('/ai-interview/resumes/list' + qs, { method: 'GET' });
+        const container = $('resumeHistory');
+        container.innerHTML = '';
+        if (!list || list.length === 0) {
+            container.textContent = '暂无历史简历';
+            return;
+        }
+        const ul = document.createElement('ul');
+        ul.className = 'list-group';
+        list.forEach(item => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            const title = item.originalFilename || ('简历ID ' + item.resumeId);
+            li.textContent = title;
+            li.style.cursor = 'pointer';
+            li.onclick = () => {
+                setStatus('resumeId', item.resumeId);
+                $('resumeOut').textContent = JSON.stringify(item, null, 2);
+                logDebug({ selectHistoryResume: item });
+            };
+            ul.appendChild(li);
+        });
+        container.appendChild(ul);
+    }
+
+    async function analyzeResume() {
+        const resumeId = ($('resumeId').textContent || '').trim();
+        if (!resumeId) return alert('请先上传简历');
+        const userId = getUserId();
+        const body = {
+            targetRole: ($('targetRole').value || '').trim(),
+            targetLevel: ($('targetLevel').value || '').trim(),
+        };
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch(`/ai-interview/resumes/${encodeURIComponent(resumeId)}/analysis` + qs, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        $('analysisOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ analyzeResume: data });
+    }
+
+    async function createSession() {
+        const resumeId = ($('resumeId').textContent || '').trim();
+        if (!resumeId) return alert('请先上传简历');
+        const userId = getUserId();
+        const body = {
+            resumeId: resumeId,
+            interviewType: $('interviewType').value,
+            language: 'zh-CN',
+            difficulty: $('difficulty').value,
+            persona: $('persona').value,
+            durationMinutes: 20,
+            enableCoding: false,
+            enableRealtimeHints: false,
+        };
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch('/ai-interview/sessions' + qs, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        setStatus('sessionId', data.sessionId);
+        $('sessionOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ createSession: data });
+    }
+
+    async function nextQuestion() {
+        const sessionId = ($('sessionId').textContent || '').trim();
+        if (!sessionId) return alert('请先创建会话');
+        const userId = getUserId();
+        const body = { needTtsAudio: $('needTts').checked };
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/next-question` + qs, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        setStatus('questionId', data.questionId);
+        $('questionOut').textContent = JSON.stringify(data, null, 2);
+        if (data.audioUrl) {
+            $('ttsAudio').src = data.audioUrl;
+        } else {
+            $('ttsAudio').removeAttribute('src');
+        }
+        logDebug({ nextQuestion: data });
+        // 通知 Go 当前题目，用于实时语音回答关联 questionId
+        if (aiWs && aiWs.readyState === WebSocket.OPEN && data.questionId) {
+            aiWs.send(JSON.stringify({
+                event: 'bindQuestion',
+                questionId: String(data.questionId),
+            }));
+        }
+    }
+
+    async function uploadAudioAnswer() {
+        const sessionId = ($('sessionId').textContent || '').trim();
+        const questionId = ($('questionId').textContent || '').trim();
+        if (!sessionId || !questionId) return alert('请先获取题目');
+        const file = $('audioFile').files[0];
+        if (!file) return alert('请选择音频文件');
+
+        const userId = getUserId();
+        const form = new FormData();
+        form.append('audioFile', file);
+        form.append('questionId', String(questionId));
+        const ds = ($('durationSeconds').value || '').trim();
+        if (ds) form.append('durationSeconds', ds);
+
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/answers/audio` + qs, {
+            method: 'POST',
+            body: form,
+        });
+        setStatus('answerId', data.answerId);
+        $('answerOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ uploadAudioAnswer: data });
+    }
+
+    async function finishSession() {
+        const sessionId = ($('sessionId').textContent || '').trim();
+        if (!sessionId) return alert('请先创建会话');
+        const userId = getUserId();
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/finish` + qs, { method: 'POST' });
+        $('reportOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ finishSession: data });
+    }
+
+    async function getReport() {
+        const sessionId = ($('sessionId').textContent || '').trim();
+        if (!sessionId) return alert('请先创建会话');
+        const userId = getUserId();
+        const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+        const data = await apiFetch(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/report` + qs, { method: 'GET' });
+        $('reportOut').textContent = JSON.stringify(data, null, 2);
+        logDebug({ getReport: data });
+    }
+
+    // ================= 实时语音面试（WebRTC + Go） =================
+    let aiWs = null;
+    let aiPeerConnection = null;
+    let aiIsMuted = false;
+
+    function logAi(msg, obj) {
+        const el = $('aiVoiceLog');
+        const line = obj ? msg + ' ' + JSON.stringify(obj) : msg;
+        el.textContent = (el.textContent || '') + '\n' + line;
+        el.scrollTop = el.scrollHeight;
+        console.log('[AI-VOICE]', msg, obj || '');
+    }
+
+    async function connectAiInterviewVoice() {
+        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+            logAi('WebSocket 已连接');
+            return;
+        }
+        const sessionId = Number($('sessionId').textContent);
+        if (!sessionId) {
+            alert('请先创建面试会话（步骤 3）');
+            return;
+        }
+        const userId = getUserId();
+        const params = new URLSearchParams();
+        params.set('sessionId', String(sessionId));
+        if (userId) params.set('userId', String(userId));
+
+        const wsUrl = `ws://localhost:8081/ws/ai-interview?${params.toString()}`;
+        logAi('connecting ws ' + wsUrl);
+        aiWs = new WebSocket(wsUrl);
+
+        aiWs.onopen = () => {
+            logAi('WebSocket connected');
+            $('aiHangupBtn').disabled = false;
+            // 建立 WebRTC
+            startAiWebRTC();
+        };
+
+        aiWs.onmessage = (event) => {
+            let msg;
+            try {
+                msg = JSON.parse(event.data);
+            } catch {
+                logAi('recv text', event.data);
+                return;
+            }
+            logAi('recv', msg);
+            if (msg.event === 'answer' && msg.sdp) {
+                handleAiAnswer(msg.sdp);
+            } else if (msg.event === 'aiInterviewBound') {
+                // 绑定成功事件，可选
+            } else if (msg.event === 'asrDelta') {
+                logAi('ASR delta: ' + msg.text);
+            } else if (msg.event === 'asrFinal') {
+                logAi('ASR final: ' + msg.text);
+            } else if (msg.event === 'llmStream') {
+                logAi('LLM stream: ' + msg.text);
+            } else if (msg.event === 'llmFinal') {
+                logAi('LLM final: ' + msg.text);
+            } else if (msg.event === 'hangup') {
+                $('aiHangupBtn').disabled = true;
+                cleanupAiCall();
+            }
+        };
+
+        aiWs.onclose = () => {
+            logAi('WebSocket closed');
+            $('aiHangupBtn').disabled = true;
+            $('aiMuteBtn').disabled = true;
+            cleanupAiCall();
+        };
+
+        aiWs.onerror = (e) => {
+            logAi('WebSocket error', e);
+        };
+    }
+
+    async function startAiWebRTC() {
+        try {
+            aiPeerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => {
+                aiPeerConnection.addTrack(track, stream);
+            });
+            $('aiMuteBtn').disabled = false;
+            logAi('local audio added');
+
+            aiPeerConnection.ontrack = (event) => {
+                const audioElement = $('aiVoiceAudio');
+                audioElement.srcObject = event.streams[0];
+                audioElement.play().catch(err => logAi('audio.play failed', err));
+                logAi('received remote track, tracks=' + event.streams[0].getTracks().length);
+            };
+
+            const offer = await aiPeerConnection.createOffer();
+            await aiPeerConnection.setLocalDescription(offer);
+            logAi('created offer');
+
+            if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+                aiWs.send(JSON.stringify({ event: 'offer', sdp: offer.sdp }));
+                logAi('sent offer');
+            }
+        } catch (e) {
+            logAi('start WebRTC failed', e);
+        }
+    }
+
+    async function handleAiAnswer(sdp) {
+        if (!aiPeerConnection) {
+            logAi('no peerConnection when handling answer');
+            return;
+        }
+        try {
+            const answer = new RTCSessionDescription({ type: 'answer', sdp });
+            await aiPeerConnection.setRemoteDescription(answer);
+            logAi('set remote description (answer)');
+        } catch (e) {
+            logAi('handle answer failed', e);
+        }
+    }
+
+    async function hangupAiCall() {
+        if (aiWs && aiWs.readyState === WebSocket.OPEN) {
+            const cmd = {
+                command: 'hangup',
+                reason: 'user_requested',
+                initiator: 'caller'
+            };
+            aiWs.send(JSON.stringify(cmd));
+            logAi('sent hangup');
+        }
+        cleanupAiCall();
+        $('aiHangupBtn').disabled = true;
+        $('aiMuteBtn').disabled = true;
+        // 实时语音挂断后，自动结束本次面试并生成报告
+        try {
+            await finishSession();
+        } catch (e) {
+            logAi('auto finishSession failed', e);
+        }
+    }
+
+    function cleanupAiCall() {
+        if (aiPeerConnection) {
+            aiPeerConnection.close();
+            aiPeerConnection = null;
+        }
+    }
+
+    function toggleAiMute() {
+        const audioElement = $('aiVoiceAudio');
+        if (!audioElement) return;
+        aiIsMuted = !aiIsMuted;
+        // 1) 静音远端播放（你听到的 AI 声音）
+        audioElement.muted = aiIsMuted;
+        // 2) 同时切换本地麦克风发送（对方是否能听到你）
+        try {
+            if (aiPeerConnection) {
+                const senders = aiPeerConnection.getSenders().filter(s => s.track && s.track.kind === 'audio');
+                senders.forEach(s => { s.track.enabled = !aiIsMuted; });
+            }
+        } catch (e) {
+            // ignore
+        }
+        $('aiMuteBtn').textContent = aiIsMuted ? '取消静音' : '静音';
+    }
+
+    // ================= 8) 录音回答（ push-to-talk ） =================
+    let recordStream = null;
+    let recordRecorder = null;
+    let recordChunks = [];
+
+    async function startRecordAnswer() {
+        const sessionId = ($('sessionId').textContent || '').trim();
+        const questionId = ($('questionId').textContent || '').trim();
+        if (!sessionId || !questionId) {
+            alert('请先创建会话并获取下一题（步骤 3、4）');
+            return;
+        }
+        try {
+            recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordChunks = [];
+            const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+            recordRecorder = new MediaRecorder(recordStream);
+            recordRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordChunks.push(e.data); };
+            recordRecorder.start(200);
+            $('recordStartBtn').disabled = true;
+            $('recordStopBtn').disabled = false;
+            $('recordStatus').textContent = '正在录音… 点击「结束并上传」停止';
+            $('recordOut').textContent = '';
+        } catch (e) {
+            alert('无法获取麦克风: ' + e.message);
+        }
+    }
+
+    async function stopRecordAnswer() {
+        if (!recordRecorder || recordRecorder.state === 'inactive') {
+            $('recordStopBtn').disabled = true;
+            $('recordStartBtn').disabled = false;
+            $('recordStatus').textContent = '';
+            return;
+        }
+        const sessionId = ($('sessionId').textContent || '').trim();
+        const questionId = ($('questionId').textContent || '').trim();
+        const userId = getUserId();
+        if (!sessionId || !questionId) {
+            stopRecordOnly();
+            return;
+        }
+        recordRecorder.stop();
+        recordRecorder.onstop = async () => {
+            try {
+                const blob = new Blob(recordChunks, { type: 'audio/webm' });
+                const form = new FormData();
+                form.append('audioFile', blob, 'answer.webm');
+                form.append('questionId', String(questionId));
+                const qs = userId ? ('?userId=' + encodeURIComponent(userId)) : '';
+                const data = await apiFetch(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/answers/audio` + qs, {
+                    method: 'POST',
+                    body: form,
+                });
+                setStatus('answerId', data.answerId);
+                $('recordOut').textContent = JSON.stringify(data, null, 2);
+                logDebug({ recordAnswer: data });
+            } catch (e) {
+                $('recordOut').textContent = '上传失败: ' + e.message;
+            }
+            stopRecordOnly();
+        };
+    }
+
+    function stopRecordOnly() {
+        if (recordStream) {
+            recordStream.getTracks().forEach(t => t.stop());
+            recordStream = null;
+        }
+        recordRecorder = null;
+        recordChunks = [];
+        $('recordStartBtn').disabled = false;
+        $('recordStopBtn').disabled = true;
+        $('recordStatus').textContent = '';
+    }
+</script>
+</body>
+</html>
+

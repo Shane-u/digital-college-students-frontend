@@ -45,6 +45,7 @@
         @compare="handleOpenCompare"
         @refresh="loadSavedFlashcards"
         @search="handleGraphSearch"
+        @filter-by-time="handleTimeFilter"
         @clear-highlight="highlightIds = []"
       />
       
@@ -464,8 +465,6 @@ const saveCardWithCategory = async (card, categoryPath, categoryPathString) => {
   }
 }
 
-// 图谱搜索：对接 Neo4j 闪卡图谱查询接口（/flash-card/neo4j/search）
-// 仅在图谱视图下使用，keyword 为空时清除高亮；不重新加载图谱数据
 const handleGraphSearch = async (keyword) => {
   const kw = (keyword || '').trim()
   // 没有关键词：清空高亮，保持原图谱
@@ -473,20 +472,116 @@ const handleGraphSearch = async (keyword) => {
     highlightIds.value = []
     return
   }
+
+  // 用一个小工具方法，统一把任意值转成字符串 ID
+  const toId = (val) => {
+    if (val == null) return null
+    const s = String(val).trim()
+    return s === '' ? null : s
+  }
+
+  // 1. 优先尝试调用后端搜索（支持 ALL 类型）
+  let idsFromServer = []
   try {
     const list = await flashCardApi.searchInNeo4j({
-      type: 'FLASHCARD',
+      type: 'ALL',
       keyword: kw
     })
     const arr = Array.isArray(list) ? list : (list?.data || [])
-    // 记录命中的业务闪卡 ID，用于前端高亮节点（通过节点 properties.id 或 data.id 匹配）
-    highlightIds.value = arr
-      .map(item => item && (item.id ?? item.flashcardId ?? item.cardId))
-      .filter(id => id != null && String(id).trim() !== '')
-      .map(id => String(id))
+    idsFromServer = arr
+      .map((item) => {
+        if (!item) return null
+        // 兼容几种常见字段：节点 id / 业务闪卡 id / 其他命名
+        return (
+          toId(item.id) ??
+          toId(item.nodeId) ??
+          toId(item.flashcardId) ??
+          toId(item.cardId)
+        )
+      })
+      .filter((id) => id != null)
   } catch (error) {
-    console.error('图谱搜索失败:', error)
-    ElMessage.error(error?.message || '图谱搜索失败，请重试')
+    console.error('图谱搜索失败（后端）:', error)
+  }
+
+  // 2. 如果后端没有返回任何有效 ID，则在当前图谱上做本地兜底搜索
+  let finalIds = idsFromServer
+  if (!finalIds.length && graphData.value && Array.isArray(graphData.value.nodes)) {
+    const kwLower = kw.toLowerCase()
+    const matched = []
+    for (const n of graphData.value.nodes) {
+      if (!n) continue
+      const name =
+        n.properties?.name ??
+        n.properties?.title ??
+        n.title ??
+        n.label ??
+        n.name ??
+        ''
+      const text = String(name).toLowerCase()
+      if (!text) continue
+      if (text.includes(kwLower)) {
+        // 同时把图谱节点 id 和业务 id 都记录下来，方便前端匹配
+        const rawId = toId(n.id)
+        const bizId = toId(n.properties?.id)
+        if (rawId) matched.push(rawId)
+        if (bizId) matched.push(bizId)
+      }
+    }
+    finalIds = matched
+  }
+
+  // 3. 设置高亮 ID 集合（字符串化去重）
+  const uniq = Array.from(new Set(finalIds.map((x) => String(x))))
+  highlightIds.value = uniq
+}
+
+// 时间筛选：调用 /flash-card/neo4j/graph-by-updated，高亮命中的节点
+const handleTimeFilter = async (rangeValue) => {
+  const v = rangeValue || 'ALL'
+  // 映射成后端约定的 range 文本
+  const rangeMap = {
+    ALL: 'ALL',
+    '7D': '近7天',
+    '15D': '近半个月',
+    '1M': '近1个月',
+    '6M': '近半年',
+    '1Y': '近一年',
+    BEFORE_1Y: '一年前'
+  }
+  const rangeLabel = rangeMap[v] || 'ALL'
+
+  // 选择时间范围后，清空当前高亮，避免上一次结果残留
+  highlightIds.value = []
+
+  try {
+    const res = await flashCardApi.filterGraphByUpdated({ range: rangeLabel })
+    const data = res?.data || res || {}
+    const nodes = Array.isArray(data.nodes) ? data.nodes : (Array.isArray(data?.data?.nodes) ? data.data.nodes : [])
+
+    const toId = (val) => {
+      if (val == null) return null
+      const s = String(val).trim()
+      return s === '' ? null : s
+    }
+
+    const ids = []
+    if (Array.isArray(nodes)) {
+      nodes.forEach((n) => {
+        if (!n) return
+        const rawId = toId(n.id)
+        const bizId = toId(n.properties?.id)
+        if (rawId) ids.push(rawId)
+        if (bizId) ids.push(bizId)
+      })
+    }
+
+    // 即使为一年前等范围没有任何节点，也是设置为空数组（前端表现为没有高亮）
+    const uniq = Array.from(new Set(ids.map((x) => String(x))))
+    highlightIds.value = uniq
+  } catch (error) {
+    console.error('按时间筛选图谱失败:', error)
+    ElMessage.error(error?.message || '按时间筛选失败，请重试')
   }
 }
 
@@ -737,25 +832,23 @@ watch(
   top: 18px;
   left: 24px;
   z-index: 1100;
-  padding: 8px 24px;
+  padding: 10px 26px;
   border-radius: 999px;
   border: none;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(30, 27, 75, 0.72);
   color: #f9fafb;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
-  transition:
-    background 0.16s ease,
-    transform 0.16s ease,
-    box-shadow 0.16s ease;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 24px rgba(46, 16, 101, 0.28);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .flashcard-back-button:hover {
-  background: #374151;
+  background: #3730a3;
   transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 12px 28px rgba(46, 16, 101, 0.35);
 }
 
 
@@ -770,17 +863,18 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
   color: #64748b;
   font-size: 14px;
+  font-weight: 600;
 }
 
 .flashcard-page-spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  border: 3px solid rgba(148, 163, 184, 0.35);
-  border-top-color: #4f46e5;
+  border: 3px solid rgba(196, 181, 253, 0.4);
+  border-top-color: #7c3aed;
   animation: flashcard-page-spin 0.7s linear infinite;
 }
 
@@ -790,41 +884,35 @@ watch(
   }
 }
 
-/* 预览弹窗样式 */
+/* 预览弹窗：与平台弹窗风格统一 */
 .preview-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(8px);
+  inset: 0;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(10px);
   z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.22s ease-out;
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .preview-modal-content {
-  background: white;
-  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  border-radius: 20px;
   width: 100%;
-  max-width: 900px;
+  max-width: 880px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 22px 56px rgba(46, 16, 101, 0.22), 0 0 0 1px rgba(196, 181, 253, 0.12);
+  border: 1px solid rgba(199, 210, 254, 0.4);
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -844,52 +932,55 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 32px;
-  border-bottom: 1px solid #f1f5f9;
+  padding: 22px 28px;
+  border-bottom: 1px solid rgba(196, 181, 253, 0.2);
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .preview-modal-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: 19px;
+  font-weight: 800;
   margin: 0;
   line-height: 1.4;
+  color: #1e293b;
+  letter-spacing: 0.02em;
 }
 
 .preview-close-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   border: none;
-  background: #f8fafc;
+  background: rgba(241, 245, 249, 0.9);
   color: #64748b;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
   padding: 0;
 }
 
 .preview-close-btn:hover {
-  background: #f1f5f9;
-  color: #475569;
+  background: #eef2ff;
+  color: #5b21b6;
   transform: scale(1.05);
 }
 
 .preview-modal-body {
   flex: 1;
   overflow-y: auto;
-  padding: 32px;
-  background: #fafbfc;
+  padding: 28px;
+  background: #f8fafc;
 }
 
 .preview-content {
-  background: white;
+  background: #ffffff;
   border-radius: 16px;
-  padding: 40px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  padding: 36px 40px;
+  box-shadow: 0 2px 12px rgba(46, 16, 101, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
 /* 使用与 AI 回答相同的 markdown 样式 */

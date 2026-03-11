@@ -75,7 +75,12 @@
           <VintageCardGallery :scene="scene" @cardClick="handleCardClick" />
         </div>
       </div>
-      <MessageList v-else :messages="currentSession.messages" :streamingContent="streamingContent" />
+      <MessageList
+        v-else
+        :messages="currentSession.messages"
+        :streamingContent="streamingContent"
+        :autoFlashCardEnabled="autoFlashCardEnabled"
+      />
     </div>
 
     <div class="main-input-area">
@@ -97,10 +102,30 @@
                 <PlusIcon />
                 <span class="tooltip">Add files</span>
               </button>
-               <div class="keyboard-hint">
-                <KeyboardIcon />
-                <span>Enter 发送，Shift + Enter 换行</span>
-              </div>
+              <button
+                v-if="!isStudyPathScene"
+                type="button"
+                class="flashcard-auto-toggle"
+                :class="{ active: autoFlashCardEnabled }"
+                @click="toggleAutoFlashCard"
+                :title="autoFlashCardEnabled ? '已开启：回答完成后自动生成闪卡' : '未开启：不自动生成闪卡'"
+              >
+                <span class="flashcard-auto-toggle__icon">
+                  <FlashCardHeaderIcon />
+                </span>
+                <span class="flashcard-auto-toggle__text">闪卡生成</span>
+                <button
+                  v-if="autoFlashCardEnabled"
+                  type="button"
+                  class="flashcard-auto-toggle__close"
+                  aria-label="关闭闪卡生成"
+                  title="关闭"
+                  @click="disableAutoFlashCard"
+                >
+                  <XIcon />
+                </button>
+              </button>
+
             </div>
 
             <div class="input-footer-right">
@@ -187,6 +212,11 @@ const FlashCardHeaderIcon = () => h('svg', { width: 24, height: 24, viewBox: '0 
   h('path', { d: FLASHCARD_SVG_PATH })
 ])
 
+const XIcon = () => h('svg', { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round' }, [
+  h('line', { x1: 18, y1: 6, x2: 6, y2: 18 }),
+  h('line', { x1: 6, y1: 6, x2: 18, y2: 18 })
+])
+
 // 对话框终止按钮图标：外圈圆形 + 内部实心方块
 const StopCircleIcon = () => h('svg', { width: 24, height: 24, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
   // 外圈圆形描边
@@ -261,6 +291,7 @@ const userDisplayName = ref('U')
 const userName = ref('')
 const isRecording = ref(false)
 const isSending = ref(false) // 新增状态变量
+const didAbortStream = ref(false)
 let mediaRecorder = null
 let audioChunks = []
 
@@ -369,6 +400,7 @@ const handleSend = () => {
 
 const handleAbort = () => {
   if (isSending.value) {
+    didAbortStream.value = true
     props.onAbortStream()
     isSending.value = false // 停止发送
   }
@@ -385,6 +417,34 @@ watch(
     if (!hasStreamingModelMsg) {
       isSending.value = false
     }
+  },
+  { deep: true }
+)
+
+// 自动闪卡：仅普通对话；当“从流式 -> 非流式”切换时触发
+watch(
+  () => props.currentSession && props.currentSession.messages,
+  async (messages) => {
+    if (isStudyPathScene.value) return
+    if (!autoFlashCardEnabled.value) return
+    if (!messages || !Array.isArray(messages)) return
+
+    const hasStreamingModelMsg = messages.some((m) => m.role === 'model' && m.isStreaming)
+    const justFinished = prevHasStreamingModelMsg && !hasStreamingModelMsg
+    prevHasStreamingModelMsg = hasStreamingModelMsg
+    if (!justFinished) return
+    if (didAbortStream.value) {
+      didAbortStream.value = false
+      return
+    }
+
+    const lastModelMsg = [...messages].reverse().find(m => m.role === 'model' && (m.content || '').trim())
+    if (!lastModelMsg) return
+    if (lastAutoFlashCardMsgId.value === lastModelMsg.id) return
+    lastAutoFlashCardMsgId.value = lastModelMsg.id
+
+    await nextTick()
+    generateFlashCardFromContent(lastModelMsg.content || '')
   },
   { deep: true }
 )
@@ -414,6 +474,140 @@ const router = useRouter()
 
 // 使用闪卡生成状态
 const flashCardState = useFlashCardGeneration()
+
+const autoFlashCardEnabled = ref(false)
+const toggleAutoFlashCard = () => {
+  autoFlashCardEnabled.value = !autoFlashCardEnabled.value
+}
+
+const disableAutoFlashCard = (e) => {
+  if (e) e.stopPropagation()
+  autoFlashCardEnabled.value = false
+}
+
+// 自动生成闪卡（异步 + 轮询进度；与 MessageList 保持一致，避免阻塞 UI）
+const autoFlashCardGenerating = ref(false)
+let autoProgressPollInterval = null
+
+const pollFlashCardProgress = async (flashCardId) => {
+  const maxAttempts = 120 // 最多轮询120次（每次2秒，共4分钟）
+  let attempts = 0
+
+  const poll = async () => {
+    if (attempts >= maxAttempts || !flashCardState.isGenerating.value) {
+      if (autoProgressPollInterval) {
+        clearInterval(autoProgressPollInterval)
+        autoProgressPollInterval = null
+      }
+      if (attempts >= maxAttempts) {
+        flashCardState.isGenerating.value = false
+        flashCardState.progress.value = 0
+        flashCardState.progressMessage.value = '生成超时'
+      }
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/flash-card/progress?flashCardId=${flashCardId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.code === 0 && result.data) {
+          const progressData = result.data
+          flashCardState.progress.value = progressData.progress || 0
+          flashCardState.progressMessage.value = progressData.message || '正在生成中...'
+
+          if (progressData.status === 'COMPLETED') {
+            flashCardState.isGenerating.value = false
+            flashCardState.progress.value = 100
+            if (autoProgressPollInterval) {
+              clearInterval(autoProgressPollInterval)
+              autoProgressPollInterval = null
+            }
+            return
+          } else if (progressData.status === 'FAILED') {
+            flashCardState.isGenerating.value = false
+            flashCardState.progress.value = 0
+            flashCardState.progressMessage.value = progressData.message || '生成失败'
+            if (autoProgressPollInterval) {
+              clearInterval(autoProgressPollInterval)
+              autoProgressPollInterval = null
+            }
+            return
+          }
+        }
+      }
+    } catch (error) {
+      console.error('查询闪卡进度失败:', error)
+    }
+
+    attempts++
+  }
+
+  await poll()
+  autoProgressPollInterval = setInterval(poll, 2000)
+}
+
+const generateFlashCardFromContent = async (content) => {
+  if (!content || !content.trim()) return
+  if (autoFlashCardGenerating.value || flashCardState.isGenerating.value) return
+
+  try {
+    autoFlashCardGenerating.value = true
+    flashCardState.isGenerating.value = true
+    flashCardState.progress.value = 0
+    flashCardState.progressMessage.value = '正在提交生成请求...'
+
+    const response = await fetch('/api/flash-card/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ originalContent: content })
+    })
+
+    if (response.ok && response.status === 200) {
+      const result = await response.json()
+      const flashCardId = result.data || result.flashCardId
+
+      if (flashCardId) {
+        flashCardState.currentFlashCardId.value = flashCardId
+        flashCardState.progress.value = 10
+        flashCardState.progressMessage.value = '已提交，正在生成中...'
+        localStorage.setItem('flashcard_first_generate', 'true')
+        await pollFlashCardProgress(flashCardId)
+      } else {
+        throw new Error('未获取到闪卡ID')
+      }
+    } else {
+      let errorMessage = '生成失败'
+      try {
+        const result = await response.json()
+        errorMessage = result.message || result.error || errorMessage
+      } catch (e) {
+        errorMessage = `HTTP错误: ${response.status}`
+      }
+      throw new Error(errorMessage)
+    }
+  } catch (error) {
+    console.error('自动生成闪卡失败:', error)
+    flashCardState.isGenerating.value = false
+    flashCardState.progress.value = 0
+    flashCardState.progressMessage.value = `生成失败: ${error.message}`
+    if (autoProgressPollInterval) {
+      clearInterval(autoProgressPollInterval)
+      autoProgressPollInterval = null
+    }
+  } finally {
+    autoFlashCardGenerating.value = false
+  }
+}
+
+const lastAutoFlashCardMsgId = ref(null)
+let prevHasStreamingModelMsg = false
 
 // 计算进度条相关值
 const circumference = 2 * Math.PI * 15 // r=15
@@ -637,6 +831,13 @@ const sendAudioToAsr = async (audioBlob) => {
 onUnmounted(() => {
   if (mediaRecorder && isRecording.value) {
     mediaRecorder.stop()
+  }
+})
+
+onUnmounted(() => {
+  if (autoProgressPollInterval) {
+    clearInterval(autoProgressPollInterval)
+    autoProgressPollInterval = null
   }
 })
 </script>
@@ -1074,6 +1275,81 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.05);
 }
 
+.flashcard-auto-toggle {
+  height: 36px;
+  padding: 0 10px 0 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  background: rgba(255, 255, 255, 0.7);
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  line-height: 36px;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.flashcard-auto-toggle:hover {
+  background: rgba(124, 58, 237, 0.08);
+  border-color: rgba(124, 58, 237, 0.45);
+  color: #4b5563;
+}
+
+.flashcard-auto-toggle.active {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.75);
+  color: #7c3aed;
+  box-shadow: 0 10px 24px rgba(124, 58, 237, 0.18);
+}
+
+.flashcard-auto-toggle.active:hover {
+  background: rgba(124, 58, 237, 0.16);
+}
+
+.flashcard-auto-toggle__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.flashcard-auto-toggle__icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.flashcard-auto-toggle__text {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.flashcard-auto-toggle__close {
+  margin-left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.flashcard-auto-toggle__close:hover {
+  background: rgba(124, 58, 237, 0.15);
+}
+
 .input-icon-btn.recording {
   background: #EF4444;
   color: white;
@@ -1107,19 +1383,6 @@ onUnmounted(() => {
 
 .input-icon-btn:hover .tooltip {
   opacity: 1;
-}
-
-.keyboard-hint {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 9999px;
-  font-size: 11px;
-  color: #444746;
-  font-weight: 500;
-  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .input-footer-right {

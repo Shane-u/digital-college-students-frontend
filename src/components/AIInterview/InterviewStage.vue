@@ -14,10 +14,28 @@
     </div>
 
     <div class="grid">
-      <InterviewConfigPanel v-if="view === 'CONFIG'" v-model="config" @start="start" />
+      <InterviewConfigPanelV2 v-if="view === 'CONFIG'" v-model="config" :disabled="creating" @start="start" />
 
       <div v-else-if="view === 'SESSION'" class="session-wrap">
-        <InterviewSession :config="config" :seed-questions="effectiveSeedQuestions" @end="endSession" />
+        <PollingInterviewSession
+          v-if="config.method === 'POLLING'"
+          :session-id="sessionId"
+          :config="config"
+          @end="endSession"
+        />
+        <RealtimeInterviewSession
+          v-else-if="config.method === 'REALTIME'"
+          :session-id="sessionId"
+          :config="config"
+          :user-id="userIdForWs"
+          @end="endSession"
+        />
+        <InterviewSession
+          v-else
+          :config="config"
+          :seed-questions="effectiveSeedQuestions"
+          @end="endSession"
+        />
       </div>
 
       <ReviewStage
@@ -33,9 +51,13 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import InterviewConfigPanel from './InterviewConfigPanel.vue'
+import InterviewConfigPanelV2 from './session/InterviewConfigPanelV2.vue'
+import PollingInterviewSession from './session/PollingInterviewSession.vue'
+import RealtimeInterviewSession from './session/RealtimeInterviewSession.vue'
 import InterviewSession from './InterviewSession.vue'
 import ReviewStage from './ReviewStage.vue'
+import { aiInterviewApi } from '../../api/aiInterview'
+import { mapInterviewReportToReview } from './session/reportMapper'
 
 const props = defineProps({
   analysisResult: { type: Object, default: null },
@@ -44,13 +66,23 @@ const props = defineProps({
 const emit = defineEmits(['started', 'ended', 'resume'])
 
 const view = ref('CONFIG') // CONFIG | SESSION | REVIEW
+const userIdForWs = ref(null)
 const config = ref({
-  jobRole: 'FRONTEND',
-  difficulty: 'MED',
-  durationMin: 20,
-  mode: 'VIDEO', // VIDEO | CHAT
-  retestMode: null, // null | WRONG_ONLY | FULL
+  // 后端 CreateInterviewSessionRequest
+  resumeId: null,
+  interviewType: 'MIXED', // MIXED/TECHNICAL/BEHAVIORAL/CODING
+  language: 'zh-CN',
+  difficulty: 'MID', // JUNIOR/MID/SENIOR
+  persona: 'mentor', // mentor/strict/hr
+  durationMinutes: 20,
+  enableCoding: false,
+  enableRealtimeHints: true,
+  // 前端扩展：轮询/实时
+  method: 'POLLING', // POLLING | REALTIME
+  retestMode: null,
 })
+const sessionId = ref(null)
+const creating = ref(false)
 const review = ref(null)
 const retestSeedQuestions = ref(null)
 
@@ -67,9 +99,40 @@ watch(
 )
 
 const start = () => {
-  view.value = 'SESSION'
-  retestSeedQuestions.value = null
-  emit('started', { ...config.value })
+  // 先创建会话再进入面试
+  createSessionAndStart()
+}
+
+const createSessionAndStart = async () => {
+  if (creating.value) return
+  creating.value = true
+  try {
+    try {
+      const u = JSON.parse(localStorage.getItem('userInfo') || '{}')
+      userIdForWs.value = u?.userId ?? u?.id ?? u?.user_id ?? u?.userID ?? null
+    } catch (_) {
+      userIdForWs.value = null
+    }
+    const resumeId = props.analysisResult?.resumeId || props.analysisResult?.resume?.resumeId || null
+    config.value.resumeId = resumeId
+    const payload = {
+      resumeId,
+      interviewType: config.value.interviewType,
+      language: config.value.language,
+      difficulty: config.value.difficulty,
+      persona: config.value.persona,
+      durationMinutes: config.value.durationMinutes,
+      enableCoding: Boolean(config.value.enableCoding || config.value.interviewType === 'CODING'),
+      enableRealtimeHints: Boolean(config.value.enableRealtimeHints),
+    }
+    const res = await aiInterviewApi.createSession(payload)
+    sessionId.value = res?.sessionId ?? null
+    view.value = 'SESSION'
+    retestSeedQuestions.value = null
+    emit('started', { ...config.value, sessionId: sessionId.value })
+  } finally {
+    creating.value = false
+  }
 }
 
 const safeSnippet = (messages) => {
@@ -178,7 +241,20 @@ const buildReview = (sessionPayload) => {
 }
 
 const endSession = (payload) => {
-  review.value = buildReview(payload || {})
+  // 后端轮询面试：payload.report / payload.report.reportJson
+  // 若没有后端报告，则回退到本地模拟报告（兼容旧的 InterviewSession）
+  const reportJson = payload?.report?.reportJson || payload?.reportJson || null
+  if (reportJson) {
+    review.value = mapInterviewReportToReview({
+      reportJson,
+      sessionId: payload?.sessionId,
+      config: payload?.config || config.value,
+      meta: payload?.meta,
+      messages: payload?.messages || []
+    })
+  } else {
+    review.value = buildReview(payload || {})
+  }
   view.value = 'REVIEW'
   saveToHistory(review.value)
   emit('ended', review.value)
