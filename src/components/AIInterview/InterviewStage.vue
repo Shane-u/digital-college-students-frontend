@@ -235,11 +235,12 @@ const buildReview = (sessionPayload) => {
 
 const endSession = (payload) => {
   if (payload?.generateReport === false) {
-    // 用户选择不生成报告：直接回到配置，不进入复盘
+    // 用户选择不生成报告：直接回到配置，不进入复盘，但要通知外层阶段已结束
     view.value = 'CONFIG'
     review.value = null
     sessionId.value = null
     retestSeedQuestions.value = null
+    emit('ended', { generateReport: false, cancelled: true })
     return
   }
   // 后端轮询面试：payload.report / payload.report.reportJson
@@ -305,7 +306,7 @@ const saveToHistory = (rec) => {
 }
 
 .section-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   color: #111827;
   margin: 0;
@@ -313,7 +314,7 @@ const saveToHistory = (rec) => {
 
 
 .chip {
-  font-size: 11px;
+  font-size: 13px;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.6);

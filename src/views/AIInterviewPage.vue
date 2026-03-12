@@ -160,8 +160,13 @@ const handleInterviewStarted = () => {
   currentStage.value = STAGES.INTERVIEW
 }
 
-const handleInterviewEnded = () => {
-  currentStage.value = STAGES.REVIEW
+const handleInterviewEnded = (payload) => {
+  if (payload && payload.generateReport === false) {
+    // 不生成报告：保持在“简历分析/面试配置”阶段，方便用户继续调整或重新开始
+    currentStage.value = STAGES.ANALYSIS
+  } else {
+    currentStage.value = STAGES.REVIEW
+  }
 }
 </script>
 

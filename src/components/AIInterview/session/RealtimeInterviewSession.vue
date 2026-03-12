@@ -24,7 +24,7 @@
           <span class="dot green"></span>
           <span class="dot yellow"></span>
           <span class="dot red"></span>
-          <span class="voice-title">实时面试 · WebRTC</span>
+          <span class="voice-title">实时面试</span>
         </div>
 
         <div class="voice-main">
@@ -37,20 +37,20 @@
 
         <div class="voice-controls">
           <button type="button" class="ctrl primary" :disabled="connecting || connected" @click="connect">
-            {{ connected ? '已连接' : (connecting ? '连接中...' : '建立通话连接') }}
+            {{ connected ? '进行中' : (connecting ? '连接中...' : '开始面试') }}
           </button>
           <button type="button" class="ctrl" :disabled="!connected" :class="{ active: muted }" @click="toggleMute">
             {{ muted ? '取消麦克风静音' : '麦克风静音' }}
           </button>
           <button type="button" class="ctrl danger" :disabled="!connected || finishing" @click="hangup">
-            挂断
+            结束面试
           </button>
         </div>
       </div>
 
       <div class="panel">
         <div class="panel-card">
-          <div class="panel-title">聊天记录</div>
+          <div class="panel-title">聊天内容</div>
           <div ref="logRef" class="log chatlog">
             <div v-for="(m, idx) in transcripts" :key="idx" class="t-line" :class="m.role">
               <div class="t-bubble">{{ m.text }}</div>
@@ -70,6 +70,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
+import { ElMessageBox } from 'element-plus'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -324,7 +325,21 @@ const toggleMute = async () => {
 
 const hangup = async () => {
   if (finishing.value) return
-  const ok = window.confirm('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
+  let ok = false
+  try {
+    await ElMessageBox.confirm(
+      '是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。',
+      '提示',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    ok = true
+  } catch (_) {
+    ok = false
+  }
   finishing.value = true
   error.value = ''
   try {
@@ -666,7 +681,7 @@ onUnmounted(() => {
 }
 
 .panel-title {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 900;
   color: #111827;
   letter-spacing: 0.08em;
@@ -689,7 +704,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.7;
 }
 

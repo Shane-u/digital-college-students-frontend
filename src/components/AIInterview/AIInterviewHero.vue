@@ -273,14 +273,14 @@ const isStepDone = (stepKey) => {
 }
 
 .flow-step-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #e5e7eb;
   margin-bottom: 2px;
 }
 
 .flow-step-desc {
-  font-size: 11px;
+  font-size: 13px;
   color: #9ca3af;
   line-height: 1.5;
 }

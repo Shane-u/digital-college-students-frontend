@@ -154,7 +154,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
   color: #111827;
   margin: 0;
@@ -181,13 +181,13 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: #475569;
 }
 
 .label-primary {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
   color: #111827;
 }
@@ -204,7 +204,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #ffffff;
   color: #4b5563;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
@@ -253,7 +253,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .mode-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
   color: #111827;
 }
@@ -273,7 +273,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .mode-desc {
-  font-size: 13px;
+  font-size: 14px;
   color: #6b7280;
   line-height: 1.6;
   margin: 0;
@@ -296,7 +296,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .summary-pill {
-  font-size: 12px;
+  font-size: 13px;
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(79, 70, 229, 0.08);
@@ -312,7 +312,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 .btn-primary {
   border-radius: 999px;
   padding: 9px 20px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
   border: none;
   cursor: pointer;

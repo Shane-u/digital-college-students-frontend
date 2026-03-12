@@ -60,7 +60,7 @@
                 {{ loadingQuestion ? '获取中...' : '下一题' }}
               </button>
               <button type="button" class="chip ghost" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(true)">
-                下一题 + TTS
+                下一题 + 语音朗读
               </button>
             </div>
             <div class="controls-right">
@@ -70,13 +70,13 @@
 
           <div class="record">
             <button type="button" class="btn-rec" :disabled="recording || uploading" @click="startRecord">
-              开始录音
+              开始回答
             </button>
             <button type="button" class="btn-rec danger" :disabled="!recording || uploading" @click="stopRecord">
-              结束并上传
+              结束回答并上传
             </button>
             <button type="button" class="btn-rec ghost" :disabled="uploading" @click="cancelRecord">
-              取消
+              取消回答
             </button>
           </div>
 
@@ -93,6 +93,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
+import { ElMessageBox } from 'element-plus'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -319,7 +320,21 @@ const stopRecord = async () => {
 
 const finish = async () => {
   if (finishing.value) return
-  const ok = window.confirm('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
+  let ok = false
+  try {
+    await ElMessageBox.confirm(
+      '是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。',
+      '提示',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    ok = true
+  } catch (_) {
+    ok = false
+  }
   if (!ok) {
     isRunning.value = false
     emit('end', {
@@ -495,6 +510,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  flex: 1;
 }
 
 .chat-header {
@@ -504,13 +520,13 @@ onUnmounted(() => {
 }
 
 .chat-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 900;
   color: #111827;
 }
 
 .chat-subtitle {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   margin-top: 4px;
   line-height: 1.6;
@@ -531,6 +547,7 @@ onUnmounted(() => {
   bottom: 0;
   z-index: 2;
   backdrop-filter: blur(10px);
+  margin-top: auto;
 }
 
 .msg {
@@ -563,7 +580,7 @@ onUnmounted(() => {
 .msg-bubble {
   padding: 10px 12px;
   border-radius: 16px;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #ffffff;
@@ -593,7 +610,7 @@ onUnmounted(() => {
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: rgba(255, 255, 255, 0.92);
   color: #4b5563;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   transition: background-color 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
@@ -644,7 +661,7 @@ onUnmounted(() => {
 }
 
 .hint {
-  font-size: 12px;
+  font-size: 13px;
   color: #64748b;
   font-weight: 800;
 }
@@ -655,7 +672,7 @@ onUnmounted(() => {
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #ffffff;
   color: #4b5563;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   cursor: pointer;
   transition: background-color 0.12s ease, transform 0.12s ease;
@@ -692,7 +709,7 @@ onUnmounted(() => {
   border: none;
   background: #111827;
   color: #f9fafb;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   cursor: pointer;
   transition: transform 0.12s ease, background-color 0.12s ease;

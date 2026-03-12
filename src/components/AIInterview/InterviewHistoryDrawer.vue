@@ -5,13 +5,23 @@
         <div class="drawer-header">
           <div class="drawer-title">面试记录</div>
           <div class="drawer-actions">
-            <button type="button" class="btn-ghost" @click="clearAll" :disabled="records.length === 0">清空</button>
+            <button
+              type="button"
+              class="btn-ghost"
+              @click="clearAll"
+              :disabled="records.length === 0 || isRemote"
+              :title="isRemote ? '远端记录暂不支持清空' : ''"
+            >
+              清空
+            </button>
             <button type="button" class="btn-close" @click="$emit('update:modelValue', false)" aria-label="关闭">✕</button>
           </div>
         </div>
 
         <div class="drawer-body">
           <div class="list">
+            <div v-if="loading" class="loading">加载中…</div>
+            <div v-else-if="remoteError" class="tip">{{ remoteError }}（已回退到本地记录）</div>
             <div v-if="records.length === 0" class="empty">
               <div class="empty-icon">🗂️</div>
               <div class="empty-title">还没有面试记录</div>
@@ -24,16 +34,16 @@
               type="button"
               class="row"
               :class="{ active: selected?.id === r.id }"
-              @click="selected = r"
+              @click="selectRecord(r)"
             >
               <div class="row-top">
-                <div class="row-title">{{ r.meta.jobRoleLabel }}</div>
-                <div class="row-score">{{ r.overall.score }}</div>
+                <div class="row-title">{{ getRowTitle(r) }}</div>
+                <div class="row-score">{{ getRowScore(r) }}</div>
               </div>
               <div class="row-sub">
-                <span class="pill">{{ r.meta.difficultyLabel }}</span>
-                <span class="pill subtle">{{ r.meta.durationMin }} 分钟</span>
-                <span class="pill subtle">{{ formatTime(r.createdAt) }}</span>
+                <span v-if="getRowPill1(r)" class="pill">{{ getRowPill1(r) }}</span>
+                <span v-if="getRowPill2(r)" class="pill subtle">{{ getRowPill2(r) }}</span>
+                <span class="pill subtle">{{ formatTime(getRowTime(r)) }}</span>
               </div>
             </button>
           </div>
@@ -47,20 +57,31 @@
             <div v-else class="detail-inner">
               <div class="detail-top">
                 <div class="detail-top-left">
-                  <div class="detail-name">{{ selected.meta.jobRoleLabel }}</div>
+                  <div class="detail-name">{{ getDetailTitle(selected) }}</div>
                   <div class="detail-meta">
-                    <span class="pill">{{ selected.meta.difficultyLabel }}</span>
-                    <span class="pill subtle">{{ selected.meta.durationMin }} 分钟</span>
-                    <span class="pill subtle">{{ formatTime(selected.createdAt) }}</span>
+                    <span v-if="getRowPill1(selected)" class="pill">{{ getRowPill1(selected) }}</span>
+                    <span v-if="getRowPill2(selected)" class="pill subtle">{{ getRowPill2(selected) }}</span>
+                    <span class="pill subtle">{{ formatTime(getRowTime(selected)) }}</span>
                   </div>
                 </div>
                 <div class="detail-top-right">
-                  <button type="button" class="btn-ghost danger" @click="removeOne(selected.id)">删除</button>
+                  <button
+                    type="button"
+                    class="btn-ghost danger"
+                    :disabled="isRemote"
+                    :title="isRemote ? '远端记录暂不支持删除' : ''"
+                    @click="removeOne(selected.id)"
+                  >
+                    删除
+                  </button>
                 </div>
               </div>
 
+              <div v-if="selected?.source === 'REMOTE' && selected.detailLoading" class="detail-loading">加载报告详情中…</div>
+              <div v-else-if="selected?.source === 'REMOTE' && selected.detailError" class="detail-error">{{ selected.detailError }}</div>
               <ReviewStage
-                :review="selected"
+                v-else
+                :review="selected?.source === 'REMOTE' ? (selected.review || fallbackEmptyReview) : selected"
                 :embedded="true"
                 @retest="(p) => $emit('retest', p)"
                 @resume="$emit('resume')"
@@ -76,6 +97,8 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import ReviewStage from './ReviewStage.vue'
+import { aiInterviewApi } from '../../api/aiInterview'
+import { mapInterviewReportToReview } from './session/reportMapper'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -86,6 +109,18 @@ const STORAGE_KEY = 'ai_interview_history_v1'
 
 const records = ref([])
 const selected = ref(null)
+const isRemote = ref(false)
+const loading = ref(false)
+const remoteError = ref('')
+
+const fallbackEmptyReview = {
+  overall: { score: 0, summary: '' },
+  dimensions: [],
+  strengths: [],
+  weaknesses: [],
+  questionSummaries: [],
+  suggestions: [],
+}
 
 const load = () => {
   try {
@@ -104,12 +139,14 @@ const persist = () => {
 }
 
 const clearAll = () => {
+  if (isRemote.value) return
   records.value = []
   selected.value = null
   persist()
 }
 
 const removeOne = (id) => {
+  if (isRemote.value) return
   records.value = records.value.filter((x) => x?.id !== id)
   if (selected.value?.id === id) selected.value = records.value[0] || null
   persist()
@@ -127,16 +164,129 @@ const formatTime = (ts) => {
   return `${y}-${m}-${day} ${hh}:${mm}`
 }
 
+const toTimestamp = (t) => {
+  const ms = Date.parse(String(t || ''))
+  return Number.isFinite(ms) ? ms : 0
+}
+
+const loadRemoteList = async () => {
+  loading.value = true
+  remoteError.value = ''
+  try {
+    const list = await aiInterviewApi.listReports({ limit: 50 })
+    const arr = Array.isArray(list) ? list : []
+    if (arr.length) {
+      isRemote.value = true
+      records.value = arr.map((x) => ({
+        id: String(x.reportId ?? x.sessionId ?? Math.random()),
+        source: 'REMOTE',
+        reportId: x.reportId ?? null,
+        sessionId: x.sessionId ?? null,
+        resumeId: x.resumeId ?? null,
+        createdAt: toTimestamp(x.createTime),
+        updatedAt: toTimestamp(x.updateTime),
+        review: null,
+        detailLoading: false,
+        detailError: '',
+      }))
+    } else {
+      // 远端无数据则回退本地
+      isRemote.value = false
+      load()
+    }
+  } catch (e) {
+    // 远端失败则回退本地
+    isRemote.value = false
+    remoteError.value = e?.message || '获取历史报告失败'
+    load()
+  } finally {
+    loading.value = false
+  }
+}
+
+const ensureRemoteDetail = async (rec) => {
+  if (!rec || rec.source !== 'REMOTE') return
+  if (rec.review) return
+  if (!rec.sessionId) {
+    rec.detailError = '缺少 sessionId，无法获取报告详情'
+    return
+  }
+  rec.detailLoading = true
+  rec.detailError = ''
+  try {
+    const report = await aiInterviewApi.getReport(rec.sessionId)
+    const reportJson = report?.reportJson ?? report?.report ?? report
+    rec.review = mapInterviewReportToReview({
+      reportJson,
+      sessionId: rec.sessionId,
+      config: {},
+      meta: null,
+      messages: [],
+    })
+  } catch (e) {
+    rec.detailError = e?.message || '获取报告详情失败'
+  } finally {
+    rec.detailLoading = false
+  }
+}
+
+const selectRecord = async (r) => {
+  selected.value = r
+  if (r?.source === 'REMOTE') await ensureRemoteDetail(r)
+}
+
+const getRowTime = (r) => r?.createdAt || 0
+
+const getRowTitle = (r) => {
+  if (!r) return ''
+  if (r.source === 'REMOTE') {
+    if (r.review?.overall?.score != null) return `报告 #${r.reportId ?? r.sessionId ?? ''}`
+    return `报告 #${r.reportId ?? r.sessionId ?? ''}`
+  }
+  return r?.meta?.jobRoleLabel || '面试报告'
+}
+
+const getRowScore = (r) => {
+  if (!r) return '--'
+  if (r.source === 'REMOTE') {
+    const s = r.review?.overall?.score
+    return s == null ? '--' : String(s)
+  }
+  return String(r?.overall?.score ?? '--')
+}
+
+const getRowPill1 = (r) => {
+  if (!r) return ''
+  if (r.source === 'REMOTE') {
+    return r.resumeId != null ? `简历：${r.resumeId}` : ''
+  }
+  return r?.meta?.difficultyLabel || ''
+}
+
+const getRowPill2 = (r) => {
+  if (!r) return ''
+  if (r.source === 'REMOTE') {
+    return r.sessionId != null ? `会话：${r.sessionId}` : ''
+  }
+  const d = r?.meta?.durationMin
+  return d != null ? `${d} 分钟` : ''
+}
+
+const getDetailTitle = (r) => {
+  if (!r) return ''
+  if (r.source === 'REMOTE') return `报告 #${r.reportId ?? r.sessionId ?? ''}`
+  return r?.meta?.jobRoleLabel || '面试报告'
+}
+
 watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
-    load()
-    selected.value = records.value[0] || null
+    loadRemoteList()
   }
 )
 
-onMounted(load)
+onMounted(loadRemoteList)
 </script>
 
 <style scoped>

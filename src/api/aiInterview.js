@@ -81,6 +81,13 @@ export const aiInterviewApi = {
     return request.get(`/ai-interview/sessions/${encodeURIComponent(sessionId)}/report`, {
       params: withUserId({}, userId)
     })
+  },
+
+  /** 10) 历史报告列表（用于前端列表页） */
+  listReports({ limit, beforeId, userId } = {}) {
+    return request.get('/ai-interview/sessions/reports', {
+      params: withUserId({ limit, beforeId }, userId)
+    })
   }
 }
 
