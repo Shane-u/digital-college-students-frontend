@@ -3,9 +3,6 @@
     <div v-if="!embedded" class="section-header">
       <div class="section-header-left">
         <h2 class="section-title">三、面试评价与复盘</h2>
-        <p class="section-subtitle">
-          报告、错题与简历建议，一屏看清。
-        </p>
       </div>
       <div class="section-header-right">
         <span class="chip chip-ok">报告已生成</span>
@@ -13,15 +10,8 @@
       </div>
     </div>
 
-    <div class="tabs">
-      <button type="button" class="tab" :class="{ active: tab === 'REPORT' }" @click="tab = 'REPORT'">详细报告</button>
-      <button type="button" class="tab" :class="{ active: tab === 'WRONG' }" @click="tab = 'WRONG'">错题本</button>
-      <button type="button" class="tab" :class="{ active: tab === 'RESUME' }" @click="tab = 'RESUME'">简历优化建议</button>
-    </div>
-
     <div class="content">
-      <!-- REPORT -->
-      <div v-if="tab === 'REPORT'" class="grid">
+      <div class="grid">
         <div class="card hero">
           <div class="hero-title-row">
             <div class="hero-title">本次面试总评</div>
@@ -30,33 +20,19 @@
               <div class="score-label">综合评分</div>
             </div>
           </div>
-          <p class="hero-desc">{{ review.overall.summary }}</p>
-
-          <div class="pill-row">
-            <span class="pill">岗位：{{ review.meta.jobRoleLabel }}</span>
-            <span class="pill subtle">难度：{{ review.meta.difficultyLabel }}</span>
-            <span class="pill subtle">时长：{{ review.meta.durationMin }} 分钟（{{ review.meta.timeText }}）</span>
-          </div>
-
-          <div class="kpis">
-            <div v-for="k in review.kpis" :key="k.key" class="kpi">
-              <div class="kpi-k">{{ k.label }}</div>
-              <div class="kpi-v">{{ k.value }}</div>
-              <div class="kpi-h">{{ k.hint }}</div>
-            </div>
-          </div>
+          <p class="hero-desc">
+            {{ review.overall.summary || '后端暂未给出招聘建议或综合评价。' }}
+          </p>
         </div>
 
-        <div class="card">
+        <div v-if="review.dimensions && review.dimensions.length" class="card">
           <div class="card-header">
             <h3 class="card-title">能力维度评分</h3>
-            <p class="card-desc">更细的维度会直接对应到错题本与复盘重测。</p>
           </div>
           <div class="dim-list">
             <div v-for="d in review.dimensions" :key="d.key" class="dim">
               <div class="dim-left">
                 <div class="dim-name">{{ d.label }}</div>
-                <div class="dim-desc">{{ d.desc }}</div>
               </div>
               <div class="dim-right">
                 <div class="dim-score">{{ d.score }}</div>
@@ -70,135 +46,80 @@
 
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">亮点</h3>
-            <p class="card-desc">建议你在下次面试继续保持并强化的部分。</p>
+            <h3 class="card-title">详细建议</h3>
           </div>
-          <ul class="bullets ok">
-            <li v-for="(s, idx) in review.strengths" :key="idx">{{ s }}</li>
-          </ul>
-        </div>
 
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">需要改进</h3>
-          </div>
-          <ul class="bullets warn">
-            <li v-for="(s, idx) in review.improvements" :key="idx">{{ s }}</li>
-          </ul>
-        </div>
-
-        <div class="card full">
-          <div class="card-header">
-            <h3 class="card-title">复盘重测</h3>
-            <p class="card-desc">你可以只重答错题，或进行一次完整重测。</p>
-          </div>
-          <div class="retest">
-            <button type="button" class="btn-primary" @click="$emit('retest', { mode: 'WRONG_ONLY' })">
-              仅重答错题（{{ review.wrongBook.items.length }}）
+          <div class="detail-tabs">
+            <button
+              type="button"
+              class="detail-tab"
+              :class="{ active: detailTab === 'STRENGTHS' }"
+              @click="detailTab = 'STRENGTHS'"
+            >
+              亮点
             </button>
-            <button type="button" class="btn-secondary" @click="$emit('retest', { mode: 'FULL' })">
-              完整重测
+            <button
+              type="button"
+              class="detail-tab"
+              :class="{ active: detailTab === 'WEAKNESSES' }"
+              @click="detailTab = 'WEAKNESSES'"
+            >
+              待改进点
             </button>
-            <div class="retest-hint">
-              提示：重测不会覆盖你历史记录（后续接后端后可支持“对比两次表现”）。
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- WRONG -->
-      <div v-else-if="tab === 'WRONG'" class="grid single">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">错题本</h3>
-            <p class="card-desc">把“答得不稳”的问题沉淀下来，下一次只练最关键的短板。</p>
-          </div>
-
-          <div v-if="review.wrongBook.items.length === 0" class="empty">
-            <div class="empty-icon">✅</div>
-            <div class="empty-title">本次没有明显错题</div>
-            <div class="empty-desc">你可以选择“完整重测”强化稳定性。</div>
+            <button
+              type="button"
+              class="detail-tab"
+              :class="{ active: detailTab === 'QUESTIONS' }"
+              @click="detailTab = 'QUESTIONS'"
+            >
+              问题小结
+            </button>
+            <button
+              type="button"
+              class="detail-tab"
+              :class="{ active: detailTab === 'SUGGESTIONS' }"
+              @click="detailTab = 'SUGGESTIONS'"
+            >
+              综合建议
+            </button>
           </div>
 
-          <div v-else class="wrong-list">
-            <div v-for="(it, idx) in review.wrongBook.items" :key="idx" class="wrong-item">
-              <div class="wrong-head">
-                <div class="wrong-q">
-                  <span class="q-index">Q{{ idx + 1 }}</span>
-                  <span class="q-text">{{ it.question }}</span>
-                </div>
-                <span class="tag" :class="it.level">{{ it.levelLabel }}</span>
+          <div class="detail-panel">
+            <template v-if="detailTab === 'STRENGTHS'">
+              <ul v-if="review.strengths && review.strengths.length" class="bullets ok">
+                <li v-for="(s, idx) in review.strengths" :key="idx">{{ s }}</li>
+              </ul>
+              <div v-else class="empty small">
+                <div class="empty-title">暂无亮点信息</div>
               </div>
-              <div class="wrong-body">
-                <div class="box">
-                  <div class="box-title">你当时的回答（节选）</div>
-                  <div class="box-text">{{ it.userAnswerSnippet }}</div>
-                </div>
-                <div class="box">
-                  <div class="box-title">问题点</div>
-                  <ul class="mini">
-                    <li v-for="(p, i2) in it.issues" :key="i2">{{ p }}</li>
-                  </ul>
-                </div>
-                <div class="box">
-                  <div class="box-title">更好的回答结构（参考）</div>
-                  <div class="box-text">{{ it.betterAnswer }}</div>
-                </div>
-                <div class="box">
-                  <div class="box-title">建议追问</div>
-                  <div class="chips">
-                    <span v-for="(x, i3) in it.followUps" :key="i3" class="chip2">{{ x }}</span>
-                  </div>
-                </div>
+            </template>
+
+            <template v-else-if="detailTab === 'WEAKNESSES'">
+              <ul v-if="review.weaknesses && review.weaknesses.length" class="bullets warn">
+                <li v-for="(s, idx) in review.weaknesses" :key="idx">{{ s }}</li>
+              </ul>
+              <div v-else class="empty small">
+                <div class="empty-title">暂无待改进点</div>
               </div>
-            </div>
+            </template>
 
-            <div class="retest-foot">
-              <button type="button" class="btn-primary" @click="$emit('retest', { mode: 'WRONG_ONLY' })">
-                仅重答错题
-              </button>
-              <button type="button" class="btn-secondary" @click="$emit('retest', { mode: 'FULL' })">
-                完整重测
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- RESUME -->
-      <div v-else class="grid single">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">简历优化建议</h3>
-            <p class="card-desc">结合本次面试追问点，把简历从“陈述经历”升级为“可被验证的能力证据”。</p>
-          </div>
-
-          <div class="resume-panels">
-            <div class="panel">
-              <div class="panel-title">优先级最高（建议本周内改完）</div>
-              <ul class="bullets warn">
-                <li v-for="(x, idx) in review.resumeAdvice.high" :key="idx">{{ x }}</li>
+            <template v-else-if="detailTab === 'QUESTIONS'">
+              <ul v-if="review.questionSummaries && review.questionSummaries.length" class="bullets">
+                <li v-for="(q, idx) in review.questionSummaries" :key="idx">{{ q }}</li>
               </ul>
-            </div>
+              <div v-else class="empty small">
+                <div class="empty-title">暂无问题小结</div>
+              </div>
+            </template>
 
-            <div class="panel">
-              <div class="panel-title">建议优化（提升通过率）</div>
-              <ul class="bullets ok">
-                <li v-for="(x, idx) in review.resumeAdvice.mid" :key="idx">{{ x }}</li>
+            <template v-else>
+              <ul v-if="review.suggestions && review.suggestions.length" class="bullets">
+                <li v-for="(s, idx) in review.suggestions" :key="idx">{{ s }}</li>
               </ul>
-            </div>
-
-            <div class="panel">
-              <div class="panel-title">加分项（有时间再做）</div>
-              <ul class="bullets">
-                <li v-for="(x, idx) in review.resumeAdvice.low" :key="idx">{{ x }}</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="resume-actions">
-            <button type="button" class="btn-secondary" @click="$emit('resume')">去简历制作页完善</button>
-            <button type="button" class="btn-primary" @click="$emit('retest', { mode: 'FULL' })">改完后完整重测</button>
+              <div v-else class="empty small">
+                <div class="empty-title">暂无综合建议</div>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -217,7 +138,7 @@ const props = defineProps({
 defineEmits(['back', 'retest', 'resume'])
 
 const embedded = computed(() => props.embedded)
-const tab = ref('REPORT') // REPORT | WRONG | RESUME
+const detailTab = ref('STRENGTHS') // STRENGTHS | WEAKNESSES | QUESTIONS | SUGGESTIONS
 </script>
 
 <style scoped>
@@ -240,12 +161,6 @@ const tab = ref('REPORT') // REPORT | WRONG | RESUME
   margin: 0;
 }
 
-.section-subtitle {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 4px 0 0;
-  line-height: 1.7;
-}
 
 .section-header-right {
   display: flex;
@@ -354,10 +269,47 @@ const tab = ref('REPORT') // REPORT | WRONG | RESUME
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   color: #111827;
   margin: 0;
+}
+
+.detail-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.detail-tab {
+  border-radius: 999px;
+  padding: 6px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.86);
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.detail-tab:hover {
+  transform: translateY(-1px);
+  background: #f8fafc;
+}
+
+.detail-tab.active {
+  border-color: rgba(124, 58, 237, 0.85);
+  background: rgba(124, 58, 237, 0.12);
+  color: #5b21b6;
+}
+
+.detail-panel {
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(249, 250, 251, 0.96);
+  padding: 10px 12px;
 }
 
 
@@ -369,13 +321,13 @@ const tab = ref('REPORT') // REPORT | WRONG | RESUME
 }
 
 .hero-title {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   color: #111827;
 }
 
 .hero-desc {
-  font-size: 13px;
+  font-size: 14px;
   color: #4b5563;
   line-height: 1.8;
   margin: 8px 0 0;
@@ -414,7 +366,7 @@ const tab = ref('REPORT') // REPORT | WRONG | RESUME
 }
 
 .pill {
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(79, 70, 229, 0.1);
@@ -728,12 +680,6 @@ const tab = ref('REPORT') // REPORT | WRONG | RESUME
   color: #111827;
 }
 
-.empty-desc {
-  font-size: 12px;
-  color: #6b7280;
-  margin-top: 4px;
-  line-height: 1.7;
-}
 
 .resume-panels {
   display: grid;

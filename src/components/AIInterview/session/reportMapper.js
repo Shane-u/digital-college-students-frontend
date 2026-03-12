@@ -104,58 +104,47 @@ function normalizeResumeAdvice(raw) {
 export function mapInterviewReportToReview({ reportJson, sessionId, config, meta, messages } = {}) {
   const raw = safeJsonParse(reportJson) || {}
 
-  const overallScore = toNumber(
-    raw.overall?.score ?? raw.overallScore ?? raw.score ?? raw.totalScore ?? raw.summaryScore,
-    70
-  )
-  const overallSummary =
-    raw.overall?.summary ||
-    raw.summary ||
-    raw.overallSummary ||
-    '报告已生成：建议根据“错题本”逐题复盘，把回答打磨成可验证的能力证据。'
+  // 总评分数与总结：直接使用后端的 overallScore / hiringRecommendation
+  const overallScore = toNumber(raw.overallScore, 0)
+  const overallSummary = String(raw.hiringRecommendation || '').trim()
 
-  const dimensions = normalizeDimensions(raw.dimensions || raw.dimensionScores || raw.metrics || raw.scores)
+  // 维度得分：后端返回的 dimensionScores 为一个对象
+  const dimMap = raw.dimensionScores && typeof raw.dimensionScores === 'object' ? raw.dimensionScores : {}
+  const labelDict = {
+    technical: '技术能力',
+    communication: '沟通表达',
+    logic: '逻辑思维',
+    confidence: '自信与稳定性',
+  }
+  const dimensions = Object.entries(dimMap).map(([key, val], idx) => ({
+    key: key || `dim_${idx}`,
+    label: labelDict[key] || key || `维度 ${idx + 1}`,
+    desc: '',
+    score: toNumber(val, 0),
+  }))
 
-  const strengths = toTextArray(raw.strengths || raw.highlights || raw.advantages || raw.goodPoints)
-  const improvements = toTextArray(raw.improvements || raw.suggestions || raw.toImprove || raw.badPoints)
-
-  const wrongBook = normalizeWrongBook(raw.wrongBook || raw.wrong || raw.mistakes || raw.weakQuestions, messages)
-  const resumeAdvice = normalizeResumeAdvice(raw.resumeAdvice || raw.resumeSuggestions || raw.resume || raw.cvAdvice)
-
-  const kpis = Array.isArray(raw.kpis)
-    ? raw.kpis
-    : [
-        { key: 'questions', label: '问题数', value: String((raw.questionCount ?? wrongBook.items.length) || 1), hint: '越稳定越能扛住追问' },
-        { key: 'answers', label: '回答数', value: String((raw.answerCount ?? (messages || []).filter((m) => m.role === 'user').length) || 0), hint: '建议每题 3～5 句为一轮' },
-        { key: 'focus', label: '聚焦度', value: `${Math.min(98, 70 + Math.floor(Math.random() * 16))}%`, hint: '是否紧贴岗位关注点' },
-      ]
+  // 各类文本列表：完全按后端字段展示
+  const strengths = toTextArray(raw.highlights)
+  const weaknesses = toTextArray(raw.weaknesses)
+  const questionSummaries = toTextArray(raw.questionSummaries)
+  const suggestions = toTextArray(raw.suggestions)
 
   const now = Date.now()
-  const jobRoleLabel = meta?.jobRoleLabel || config?.jobRoleLabel || config?.jobRole || '目标岗位'
-  const difficultyLabel = meta?.difficultyLabel || config?.difficultyLabel || config?.difficulty || '未选择'
-  const durationMin = meta?.durationMin || config?.durationMinutes || config?.durationMin || 20
-  const timeText = meta?.timeText || config?.timeText || '00:00'
 
   return {
     id: `${now}-${Math.random().toString(16).slice(2)}`,
     createdAt: now,
     sessionId: sessionId ?? raw.sessionId ?? null,
-    meta: {
-      jobRoleLabel,
-      difficultyLabel,
-      durationMin,
-      timeText,
-    },
+    // 当前版本报告只展示后端真实字段，不再生成本地“错题本 / 简历建议 / KPI”等信息
     overall: {
       score: Math.round(overallScore),
       summary: String(overallSummary || '').trim(),
     },
-    kpis,
     dimensions,
-    strengths: strengths.length ? strengths : ['回答节奏自然，能够给出清晰的行动点。'],
-    improvements: improvements.length ? improvements : ['每题先给一句话结论，再分点展开，并补齐指标与口径。'],
-    wrongBook,
-    resumeAdvice,
+    strengths,
+    weaknesses,
+    questionSummaries,
+    suggestions,
   }
 }
 

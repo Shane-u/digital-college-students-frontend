@@ -3,10 +3,9 @@
     <div class="session-header">
       <div class="session-left">
         <span class="pill">通话中</span>
-        <span class="pill subtle">会话：{{ sessionId }}</span>
-        <span class="pill subtle">类型：{{ config.interviewType }}</span>
-        <span class="pill subtle">面试官：{{ config.persona }}</span>
-        <span class="pill subtle">经验：{{ config.difficulty }}</span>
+        <span class="pill subtle">类型：{{ typeLabel }}</span>
+        <span class="pill subtle">面试官：{{ personaLabel }}</span>
+        <span class="pill subtle">经验：{{ difficultyLabel }}</span>
       </div>
       <div class="session-right">
         <div class="timer">
@@ -14,7 +13,7 @@
           <span class="timer-text">{{ timeText }}</span>
         </div>
         <button type="button" class="btn-ghost danger" :disabled="finishing" @click="hangup">
-          {{ finishing ? '生成报告中...' : '挂断并结束' }}
+          {{ finishing ? '处理中...' : '挂断并结束' }}
         </button>
       </div>
     </div>
@@ -25,30 +24,23 @@
           <span class="dot green"></span>
           <span class="dot yellow"></span>
           <span class="dot red"></span>
-          <span class="voice-title">实时语音面试 · WebRTC</span>
+          <span class="voice-title">实时面试 · WebRTC</span>
         </div>
 
         <div class="voice-main">
-          <div class="voice-avatar"></div>
-          <div class="voice-wave"></div>
-          <div class="voice-hint">
-            <div class="voice-hint-title">实时通话面试</div>
-            <div class="voice-hint-desc">
-              建立连接后，你将听到 AI 面试官的声音；你的麦克风会作为上行音频发送。
-            </div>
+          <div class="voice-video">
+            <video ref="localVideoRef" autoplay muted playsinline></video>
           </div>
-
-          <div class="voice-audio">
-            <audio ref="remoteAudioRef" controls autoplay />
-          </div>
+          <!-- 远端音频保持播放，但不展示控件 -->
+          <audio ref="remoteAudioRef" class="remote-audio" autoplay />
         </div>
 
         <div class="voice-controls">
           <button type="button" class="ctrl primary" :disabled="connecting || connected" @click="connect">
-            {{ connected ? '已连接' : (connecting ? '连接中...' : '建立语音连接') }}
+            {{ connected ? '已连接' : (connecting ? '连接中...' : '建立通话连接') }}
           </button>
           <button type="button" class="ctrl" :disabled="!connected" :class="{ active: muted }" @click="toggleMute">
-            {{ muted ? '取消静音' : '静音' }}
+            {{ muted ? '取消麦克风静音' : '麦克风静音' }}
           </button>
           <button type="button" class="ctrl danger" :disabled="!connected || finishing" @click="hangup">
             挂断
@@ -58,51 +50,11 @@
 
       <div class="panel">
         <div class="panel-card">
-          <div class="panel-title">状态</div>
-          <div class="kv">
-            <div class="k">WebSocket</div>
-            <div class="v" :class="{ ok: wsStatus === 'OPEN', warn: wsStatus !== 'OPEN' }">{{ wsStatus }}</div>
-          </div>
-          <div class="kv">
-            <div class="k">WebRTC</div>
-            <div class="v" :class="{ ok: rtcStatus === 'CONNECTED', warn: rtcStatus !== 'CONNECTED' }">{{ rtcStatus }}</div>
-          </div>
-          <div class="kv">
-            <div class="k">麦克风</div>
-            <div class="v">{{ muted ? '静音' : '开启' }}</div>
-          </div>
-        </div>
-
-        <div class="panel-card">
-          <div class="panel-title">题目绑定（和 demo 一致）</div>
-          <div class="q-actions">
-            <label class="q-tts">
-              <input type="checkbox" v-model="needTtsAudio" />
-              <span>需要 TTS</span>
-            </label>
-            <button type="button" class="btn-q" :disabled="loadingQuestion || wsStatus !== 'OPEN'" @click="fetchNextQuestion">
-              {{ loadingQuestion ? '获取中...' : '获取下一题' }}
-            </button>
-          </div>
-          <div v-if="currentQuestion" class="q-box">
-            <div class="q-meta">
-              <span class="pill">Q{{ currentQuestion.orderNo ?? '-' }}</span>
-              <span class="pill subtle">questionId：{{ currentQuestion.questionId }}</span>
-              <span v-if="currentQuestion.questionType" class="pill subtle">{{ currentQuestion.questionType }}</span>
+          <div class="panel-title">聊天记录</div>
+          <div ref="logRef" class="log chatlog">
+            <div v-for="(m, idx) in transcripts" :key="idx" class="t-line" :class="m.role">
+              <div class="t-bubble">{{ m.text }}</div>
             </div>
-            <div class="q-text">{{ currentQuestion.questionText }}</div>
-            <div v-if="currentQuestion.audioUrl" class="q-audio">
-              <div class="q-audio-label">TTS</div>
-              <audio :src="currentQuestion.audioUrl" controls />
-            </div>
-          </div>
-          <div v-else class="q-empty">连接成功后点击“获取下一题”，会自动通过 WS 发送 bindQuestion。</div>
-        </div>
-
-        <div class="panel-card">
-          <div class="panel-title">通话日志</div>
-          <div ref="logRef" class="log">
-            <div v-for="(l, idx) in logs" :key="idx" class="log-line">{{ l }}</div>
           </div>
         </div>
 
@@ -130,8 +82,10 @@ const props = defineProps({
 const emit = defineEmits(['end'])
 
 const remoteAudioRef = ref(null)
+const localVideoRef = ref(null)
 const logRef = ref(null)
 const logs = ref([])
+const transcripts = ref([])
 const error = ref('')
 
 const wsStatus = ref('CLOSED') // CLOSED | CONNECTING | OPEN
@@ -145,9 +99,36 @@ let ws = null
 let pc = null
 let localStream = null
 
-const needTtsAudio = ref(false)
 const loadingQuestion = ref(false)
 const currentQuestion = ref(null)
+
+const typeLabel = computed(() => {
+  const map = {
+    MIXED: '混合面试',
+    TECHNICAL: '技术面试',
+    BEHAVIORAL: '行为面试',
+    CODING: '编程面试',
+  }
+  return map[props.config.interviewType] || '未选择'
+})
+
+const personaLabel = computed(() => {
+  const map = {
+    mentor: '导师型面试官',
+    strict: '严格型面试官',
+    hr: 'HR 面试官',
+  }
+  return map[props.config.persona] || '未选择'
+})
+
+const difficultyLabel = computed(() => {
+  const map = {
+    JUNIOR: '初级阶段',
+    MID: '中级阶段',
+    SENIOR: '高级阶段',
+  }
+  return map[props.config.difficulty] || '未选择'
+})
 
 const effectiveUserId = computed(() => {
   if (props.userId != null && props.userId !== '') return String(props.userId)
@@ -162,6 +143,15 @@ const effectiveUserId = computed(() => {
 const log = async (msg, obj) => {
   const line = obj ? `${msg} ${JSON.stringify(obj)}` : msg
   logs.value.push(line)
+  await nextTick()
+  const el = logRef.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
+const pushTranscript = async (role, text) => {
+  const t = String(text || '').trim()
+  if (!t) return
+  transcripts.value.push({ role, text: t })
   await nextTick()
   const el = logRef.value
   if (el) el.scrollTop = el.scrollHeight
@@ -218,6 +208,7 @@ const connect = async () => {
     ws.onopen = async () => {
       wsStatus.value = 'OPEN'
       await log('ws open')
+      await fetchNextQuestion()
       await startWebRTC()
     }
 
@@ -233,14 +224,10 @@ const connect = async () => {
 
       if (msg.event === 'answer' && msg.sdp) {
         await handleAnswer(msg.sdp)
-      } else if (msg.event === 'asrDelta') {
-        await log('ASR delta', { text: msg.text })
       } else if (msg.event === 'asrFinal') {
-        await log('ASR final', { text: msg.text })
-      } else if (msg.event === 'llmStream') {
-        await log('LLM stream', { text: msg.text })
+        await pushTranscript('user', msg.text)
       } else if (msg.event === 'llmFinal') {
-        await log('LLM final', { text: msg.text })
+        await pushTranscript('ai', msg.text)
       } else if (msg.event === 'hangup') {
         await log('server hangup')
         cleanup()
@@ -270,9 +257,14 @@ const startWebRTC = async () => {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     })
 
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream))
-    await log('local audio added')
+    await log('local media added')
+
+    try {
+      const el = localVideoRef.value
+      if (el) el.srcObject = localStream
+    } catch (_) {}
 
     pc.ontrack = async (event) => {
       const el = remoteAudioRef.value
@@ -315,10 +307,11 @@ const handleAnswer = async (sdp) => {
 
 const toggleMute = async () => {
   muted.value = !muted.value
-  const audioEl = remoteAudioRef.value
-  if (audioEl) audioEl.muted = muted.value
 
   try {
+    if (localStream) {
+      localStream.getAudioTracks().forEach((t) => { t.enabled = !muted.value })
+    }
     if (pc) {
       pc.getSenders()
         .filter((s) => s.track && s.track.kind === 'audio')
@@ -331,6 +324,7 @@ const toggleMute = async () => {
 
 const hangup = async () => {
   if (finishing.value) return
+  const ok = window.confirm('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
   finishing.value = true
   error.value = ''
   try {
@@ -343,7 +337,23 @@ const hangup = async () => {
   // 本端清理
   cleanup()
 
-  // 自动结束面试并拉报告（与 demo 行为一致）
+  if (!ok) {
+    isRunning.value = false
+    emit('end', {
+      endedAt: Date.now(),
+      seconds: seconds.value,
+      timeText: timeText.value,
+      sessionId: props.sessionId,
+      generateReport: false,
+      report: null,
+      config: { ...props.config },
+      messages: transcripts.value.map((m) => ({ role: m.role, text: m.text })),
+    })
+    finishing.value = false
+    return
+  }
+
+  // 用户确认生成报告才调用后端 finish/getReport
   try {
     const finishRes = await aiInterviewApi.finishSession(props.sessionId)
     const reportRes = await aiInterviewApi.getReport(props.sessionId).catch(() => null)
@@ -353,9 +363,10 @@ const hangup = async () => {
       seconds: seconds.value,
       timeText: timeText.value,
       sessionId: props.sessionId,
+      generateReport: true,
       report: reportRes || finishRes,
       config: { ...props.config },
-      messages: [],
+      messages: transcripts.value.map((m) => ({ role: m.role, text: m.text })),
     })
   } catch (e) {
     error.value = e?.message || '结束面试失败'
@@ -381,7 +392,7 @@ const fetchNextQuestion = async () => {
   loadingQuestion.value = true
   error.value = ''
   try {
-    const q = await aiInterviewApi.nextQuestion(props.sessionId, { needTtsAudio: needTtsAudio.value })
+    const q = await aiInterviewApi.nextQuestion(props.sessionId, { needTtsAudio: false })
     currentQuestion.value = q
     await sendBindQuestion(q?.questionId)
   } catch (e) {
@@ -555,60 +566,36 @@ onUnmounted(() => {
 
 .voice-main {
   flex: 1;
-  padding: 16px 12px 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 0;
 }
 
-.voice-avatar {
-  width: 88px;
-  height: 88px;
-  border-radius: 999px;
-  background: radial-gradient(circle at top, #4f46e5, #1e293b);
-  box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.9), 0 0 0 1px rgba(148, 163, 184, 0.8);
-}
-
-.voice-wave {
-  width: 82%;
-  height: 14px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(56, 189, 248, 0.22), rgba(59, 130, 246, 0.78), rgba(56, 189, 248, 0.22));
-}
-
-.voice-hint {
+.voice-video {
   width: 100%;
-  max-width: 360px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: rgba(15, 23, 42, 0.55);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  color: #e5e7eb;
-  text-align: center;
+  height: 100%;
+  border-radius: 0;
+  overflow: hidden;
+  background: #000;
+  border: none;
+  box-shadow: none;
 }
 
-.voice-hint-title {
-  font-size: 12px;
-  font-weight: 900;
-  margin-bottom: 2px;
-}
-
-.voice-hint-desc {
-  font-size: 11px;
-  color: rgba(226, 232, 240, 0.75);
-  line-height: 1.6;
-}
-
-.voice-audio {
+.voice-video :deep(video) {
   width: 100%;
-  max-width: 520px;
-  padding-top: 8px;
+  height: 100%;
+  object-fit: cover;
 }
 
-.voice-audio :deep(audio) {
-  width: 100%;
+.remote-audio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .voice-controls {
@@ -664,13 +651,18 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
+  height: 100%;
 }
 
 .panel-card {
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
+  background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.9);
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
 
 .panel-title {
@@ -682,139 +674,58 @@ onUnmounted(() => {
   margin-bottom: 10px;
 }
 
-.q-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-}
-
-.q-tts {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: #f9fafb;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  font-size: 12px;
-  font-weight: 900;
-  color: #475569;
-  user-select: none;
-}
-
-.q-tts input {
-  width: 14px;
-  height: 14px;
-}
-
-.btn-q {
-  border-radius: 999px;
-  padding: 8px 14px;
-  border: none;
-  background: #111827;
-  color: #f9fafb;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.12s ease, background-color 0.12s ease;
-  white-space: nowrap;
-}
-
-.btn-q:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: #0f172a;
-}
-
-.btn-q:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.q-box {
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  padding: 10px 10px;
-}
-
-.q-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.q-text {
-  font-size: 13px;
-  font-weight: 900;
-  color: #111827;
-  line-height: 1.7;
-}
-
-.q-audio {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
-}
-
-.q-audio-label {
-  font-size: 11px;
-  font-weight: 900;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.q-empty {
-  font-size: 12px;
-  color: #94a3b8;
-  line-height: 1.7;
-  padding: 2px 2px;
-}
-
-.kv {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: #f9fafb;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  margin-bottom: 8px;
-}
-
-.k {
-  font-size: 12px;
-  font-weight: 900;
-  color: #475569;
-}
-
-.v {
-  font-size: 12px;
-  font-weight: 900;
-  color: #6b7280;
-}
-
-.v.ok { color: #15803d; }
-.v.warn { color: #b91c1c; }
-
 .log {
-  height: 240px;
+  flex: 1;
+  height: auto;
   overflow: auto;
   border-radius: 14px;
-  background: #0b1220;
-  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
   padding: 10px;
-  color: rgba(226, 232, 240, 0.88);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 11px;
+  color: #111827;
+}
+
+.log.chatlog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
   line-height: 1.7;
 }
 
-.log-line { white-space: pre-wrap; word-break: break-word; }
+.t-line {
+  display: flex;
+  max-width: 96%;
+}
+
+.t-line.ai {
+  justify-content: flex-start;
+}
+
+.t-line.user {
+  justify-content: flex-end;
+  align-self: flex-end;
+}
+
+.t-bubble {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: #f8fafc;
+  color: #0f172a;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.t-line.ai .t-bubble {
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.t-line.user .t-bubble {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.35);
+}
 
 .inline-error {
   padding: 10px 12px;

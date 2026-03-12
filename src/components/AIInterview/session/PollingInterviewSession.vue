@@ -3,10 +3,9 @@
     <div class="session-header">
       <div class="session-left">
         <span class="pill">进行中</span>
-        <span class="pill subtle">会话：{{ sessionId }}</span>
-        <span class="pill subtle">类型：{{ config.interviewType }}</span>
-        <span class="pill subtle">面试官：{{ config.persona }}</span>
-        <span class="pill subtle">经验：{{ config.difficulty }}</span>
+        <span class="pill subtle">类型：{{ typeLabel }}</span>
+        <span class="pill subtle">面试官：{{ personaLabel }}</span>
+        <span class="pill subtle">经验：{{ difficultyLabel }}</span>
       </div>
       <div class="session-right">
         <div class="timer">
@@ -32,7 +31,15 @@
             <div class="msg-bubble">
               <div class="msg-text">{{ m.text }}</div>
               <div v-if="m.audioUrl" class="msg-audio">
-                <audio :src="m.audioUrl" controls />
+                <audio :ref="setAudioRef(m.id)" :src="m.audioUrl" controls autoplay preload="auto" />
+                <button
+                  v-if="autoplayBlocked[m.id]"
+                  type="button"
+                  class="audio-play-hint"
+                  @click="manualPlay(m.id)"
+                >
+                  点击播放语音
+                </button>
               </div>
             </div>
           </div>
@@ -46,63 +53,37 @@
           </div>
         </div>
 
-        <div class="controls">
-          <div class="controls-left">
-            <button type="button" class="chip" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(false)">
-              {{ loadingQuestion ? '获取中...' : '下一题' }}
-            </button>
-            <button type="button" class="chip ghost" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(true)">
-              下一题 + TTS
-            </button>
-          </div>
-          <div class="controls-right">
-            <span v-if="recordStatus" class="hint">{{ recordStatus }}</span>
-          </div>
-        </div>
-
-        <div class="record">
-          <button type="button" class="btn-rec" :disabled="recording || uploading" @click="startRecord">
-            开始录音
-          </button>
-          <button type="button" class="btn-rec danger" :disabled="!recording || uploading" @click="stopRecord">
-            结束并上传
-          </button>
-          <button type="button" class="btn-rec ghost" :disabled="uploading" @click="cancelRecord">
-            取消
-          </button>
-        </div>
-
-        <div v-if="error" class="inline-error">
-          <div class="inline-error-text">{{ error }}</div>
-          <button type="button" class="inline-error-btn" @click="error = ''">知道了</button>
-        </div>
-      </div>
-
-      <div class="side">
-        <div class="side-card">
-          <div class="side-title">当前题目</div>
-          <div v-if="currentQuestion" class="qbox">
-            <div class="qmeta">
-              <span class="pill">Q{{ currentQuestion.orderNo ?? '-' }}</span>
-              <span class="pill subtle">ID：{{ currentQuestion.questionId }}</span>
-              <span v-if="currentQuestion.questionType" class="pill subtle">{{ currentQuestion.questionType }}</span>
+        <div class="chat-footer">
+          <div class="controls">
+            <div class="controls-left">
+              <button type="button" class="chip" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(false)">
+                {{ loadingQuestion ? '获取中...' : '下一题' }}
+              </button>
+              <button type="button" class="chip ghost" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(true)">
+                下一题 + TTS
+              </button>
             </div>
-            <div class="qtext">{{ currentQuestion.questionText }}</div>
-            <div v-if="currentQuestion.audioUrl" class="qaudio">
-              <div class="qaudio-label">TTS</div>
-              <audio :src="currentQuestion.audioUrl" controls />
+            <div class="controls-right">
+              <span v-if="recordStatus" class="hint">{{ recordStatus }}</span>
             </div>
           </div>
-          <div v-else class="qempty">点击“下一题”开始。</div>
-        </div>
 
-        <div class="side-card">
-          <div class="side-title">回答要求</div>
-          <ul class="tips">
-            <li>建议每题 45～90 秒</li>
-            <li>先一句话结论，再 2～3 点展开</li>
-            <li>尽量给指标与口径（对比基线）</li>
-          </ul>
+          <div class="record">
+            <button type="button" class="btn-rec" :disabled="recording || uploading" @click="startRecord">
+              开始录音
+            </button>
+            <button type="button" class="btn-rec danger" :disabled="!recording || uploading" @click="stopRecord">
+              结束并上传
+            </button>
+            <button type="button" class="btn-rec ghost" :disabled="uploading" @click="cancelRecord">
+              取消
+            </button>
+          </div>
+
+          <div v-if="error" class="inline-error">
+            <div class="inline-error-text">{{ error }}</div>
+            <button type="button" class="inline-error-btn" @click="error = ''">知道了</button>
+          </div>
         </div>
       </div>
     </div>
@@ -110,7 +91,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
 
 const props = defineProps({
@@ -118,6 +99,34 @@ const props = defineProps({
   config: { type: Object, required: true },
 })
 const emit = defineEmits(['end'])
+
+const typeLabel = computed(() => {
+  const map = {
+    MIXED: '混合面试',
+    TECHNICAL: '技术面试',
+    BEHAVIORAL: '行为面试',
+    CODING: '编程面试',
+  }
+  return map[props.config.interviewType] || '未选择'
+})
+
+const personaLabel = computed(() => {
+  const map = {
+    mentor: '导师型面试官',
+    strict: '严格型面试官',
+    hr: 'HR 面试官',
+  }
+  return map[props.config.persona] || '未选择'
+})
+
+const difficultyLabel = computed(() => {
+  const map = {
+    JUNIOR: '初级阶段',
+    MID: '中级阶段',
+    SENIOR: '高级阶段',
+  }
+  return map[props.config.difficulty] || '未选择'
+})
 
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`
 const messages = ref([])
@@ -128,6 +137,42 @@ const currentQuestion = ref(null)
 const loadingQuestion = ref(false)
 const finishing = ref(false)
 const error = ref('')
+
+const questionAudioRef = ref(null)
+const questionAutoplayBlocked = ref(false)
+const audioRefs = ref({})
+const autoplayBlocked = ref({})
+
+const setAudioRef = (id) => (el) => {
+  if (!id) return
+  if (el) audioRefs.value[id] = el
+  else delete audioRefs.value[id]
+}
+
+const tryPlay = async (audioEl) => {
+  if (!audioEl) return { ok: false, reason: 'no-el' }
+  try {
+    audioEl.currentTime = 0
+  } catch (_) {}
+  try {
+    const p = audioEl.play?.()
+    if (p && typeof p.then === 'function') await p
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, reason: e?.name || e?.message || 'blocked' }
+  }
+}
+
+const manualPlay = async (id) => {
+  const el = audioRefs.value[id]
+  const r = await tryPlay(el)
+  autoplayBlocked.value[id] = !r.ok
+}
+
+const manualPlayQuestion = async () => {
+  const r = await tryPlay(questionAudioRef.value)
+  questionAutoplayBlocked.value = !r.ok
+}
 
 const isRunning = ref(true)
 const seconds = ref(0)
@@ -147,9 +192,15 @@ const pushAI = async (text, extra = {}) => {
   aiTyping.value = true
   await scrollToBottom()
   setTimeout(async () => {
-    messages.value.push({ id: makeId(), role: 'ai', text, ...extra })
+    const id = makeId()
+    messages.value.push({ id, role: 'ai', text, ...extra })
     aiTyping.value = false
     await scrollToBottom()
+    if (extra?.audioUrl) {
+      await nextTick()
+      const r = await tryPlay(audioRefs.value[id])
+      autoplayBlocked.value[id] = !r.ok
+    }
   }, 240)
 }
 
@@ -172,6 +223,17 @@ const nextQuestion = async (needTtsAudio) => {
     loadingQuestion.value = false
   }
 }
+
+watch(
+  () => currentQuestion.value?.audioUrl,
+  async (url) => {
+    if (!url) return
+    questionAutoplayBlocked.value = false
+    await nextTick()
+    const r = await tryPlay(questionAudioRef.value)
+    questionAutoplayBlocked.value = !r.ok
+  }
+)
 
 // ===== 录音 & 上传 =====
 const recording = ref(false)
@@ -257,6 +319,21 @@ const stopRecord = async () => {
 
 const finish = async () => {
   if (finishing.value) return
+  const ok = window.confirm('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
+  if (!ok) {
+    isRunning.value = false
+    emit('end', {
+      endedAt: Date.now(),
+      seconds: seconds.value,
+      timeText: timeText.value,
+      sessionId: props.sessionId,
+      generateReport: false,
+      report: null,
+      config: { ...props.config },
+      messages: messages.value.map(m => ({ role: m.role, text: m.text })),
+    })
+    return
+  }
   finishing.value = true
   error.value = ''
   try {
@@ -268,6 +345,7 @@ const finish = async () => {
       seconds: seconds.value,
       timeText: timeText.value,
       sessionId: props.sessionId,
+      generateReport: true,
       report: report || r,
       config: { ...props.config },
       messages: messages.value.map(m => ({ role: m.role, text: m.text })),
@@ -302,6 +380,9 @@ onUnmounted(() => {
   border: 1px solid rgba(226, 232, 240, 0.9);
   height: calc(100vh - 180px);
   min-height: 540px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .session-header {
@@ -398,11 +479,12 @@ onUnmounted(() => {
 }
 
 .layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   height: 100%;
   min-height: 0;
+  flex: 1;
 }
 
 .chat {
@@ -442,6 +524,13 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+}
+
+.chat-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  backdrop-filter: blur(10px);
 }
 
 .msg {
@@ -495,6 +584,25 @@ onUnmounted(() => {
 
 .msg-audio {
   margin-top: 8px;
+}
+
+.audio-play-hint {
+  margin-top: 8px;
+  border-radius: 999px;
+  padding: 6px 12px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 0.16s ease, transform 0.16s ease, border-color 0.16s ease;
+}
+
+.audio-play-hint:hover {
+  background: #f8fafc;
+  border-color: rgba(124, 58, 237, 0.35);
+  transform: translateY(-1px);
 }
 
 .typing {
@@ -643,78 +751,6 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-}
-
-.side-card {
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  padding: 12px;
-}
-
-.side-title {
-  font-size: 12px;
-  font-weight: 900;
-  color: #111827;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-}
-
-.qbox {
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  padding: 10px 10px;
-}
-
-.qmeta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.qtext {
-  font-size: 13px;
-  font-weight: 800;
-  color: #111827;
-  line-height: 1.7;
-}
-
-.qaudio {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
-}
-
-.qaudio-label {
-  font-size: 11px;
-  font-weight: 900;
-  color: #6b7280;
-  margin-bottom: 6px;
-}
-
-.qempty {
-  font-size: 12px;
-  color: #94a3b8;
-  line-height: 1.7;
-  padding: 10px 2px;
-}
-
-.tips {
-  margin: 0;
-  padding-left: 18px;
-  color: #475569;
-  font-size: 12px;
-  line-height: 1.8;
-  font-weight: 700;
-}
 
 @keyframes bounce {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
@@ -723,7 +759,7 @@ onUnmounted(() => {
 
 @media (max-width: 960px) {
   .layout {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
   }
 }
 </style>

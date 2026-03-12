@@ -1,11 +1,8 @@
 <template>
   <section class="ai-section">
-    <div class="section-header">
+    <div v-if="view !== 'SESSION'" class="section-header">
       <div class="section-header-left">
         <h2 class="section-title">二、选择面试并开始练习</h2>
-        <p class="section-subtitle">
-          选岗位与模式，左视频右对话直接开练。
-        </p>
       </div>
       <div class="section-header-right">
         <span v-if="hasAnalysis" class="chip chip-ok">已吸收简历分析</span>
@@ -75,8 +72,6 @@ const config = ref({
   difficulty: 'MID', // JUNIOR/MID/SENIOR
   persona: 'mentor', // mentor/strict/hr
   durationMinutes: 20,
-  enableCoding: false,
-  enableRealtimeHints: true,
   // 前端扩展：轮询/实时
   method: 'POLLING', // POLLING | REALTIME
   retestMode: null,
@@ -122,8 +117,6 @@ const createSessionAndStart = async () => {
       difficulty: config.value.difficulty,
       persona: config.value.persona,
       durationMinutes: config.value.durationMinutes,
-      enableCoding: Boolean(config.value.enableCoding || config.value.interviewType === 'CODING'),
-      enableRealtimeHints: Boolean(config.value.enableRealtimeHints),
     }
     const res = await aiInterviewApi.createSession(payload)
     sessionId.value = res?.sessionId ?? null
@@ -241,6 +234,14 @@ const buildReview = (sessionPayload) => {
 }
 
 const endSession = (payload) => {
+  if (payload?.generateReport === false) {
+    // 用户选择不生成报告：直接回到配置，不进入复盘
+    view.value = 'CONFIG'
+    review.value = null
+    sessionId.value = null
+    retestSeedQuestions.value = null
+    return
+  }
   // 后端轮询面试：payload.report / payload.report.reportJson
   // 若没有后端报告，则回退到本地模拟报告（兼容旧的 InterviewSession）
   const reportJson = payload?.report?.reportJson || payload?.reportJson || null
@@ -310,12 +311,6 @@ const saveToHistory = (rec) => {
   margin: 0;
 }
 
-.section-subtitle {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 4px 0 0;
-  line-height: 1.7;
-}
 
 .chip {
   font-size: 11px;

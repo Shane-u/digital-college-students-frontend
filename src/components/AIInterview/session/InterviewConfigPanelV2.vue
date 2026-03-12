@@ -2,10 +2,40 @@
   <div class="config-card">
     <div class="card-header">
       <h3 class="card-title">面试配置</h3>
-      <p class="card-desc">选择面试类型、面试官风格与经验层级，然后选择轮询面试或实时通话。</p>
     </div>
 
     <div class="form-grid">
+      <div class="field field-primary">
+        <div class="label label-primary">面试方式</div>
+        <div class="mode">
+          <button
+            type="button"
+            class="mode-card"
+            :class="{ active: model.method === 'POLLING' }"
+            @click="model.method = 'POLLING'"
+          >
+            <div class="mode-title-row">
+              <span class="mode-title">轮询面试</span>
+              <span class="mode-badge subtle">问一题 · 答一题</span>
+            </div>
+            <p class="mode-desc">AI 提问 → 你作答（录音上传）→ AI 继续提问，更适合结构化练习。</p>
+          </button>
+
+          <button
+            type="button"
+            class="mode-card"
+            :class="{ active: model.method === 'REALTIME' }"
+            @click="model.method = 'REALTIME'"
+          >
+            <div class="mode-title-row">
+              <span class="mode-title">实时面试</span>
+              <span class="mode-badge">通话</span>
+            </div>
+            <p class="mode-desc">直接通话面试（WebRTC），更贴近真实场景；需要麦克风 + 摄像头权限。</p>
+          </button>
+        </div>
+      </div>
+
       <div class="field">
         <div class="label">面试类型</div>
         <div class="seg">
@@ -54,79 +84,6 @@
         </div>
       </div>
 
-      <div class="field">
-        <div class="label">面试方式</div>
-        <div class="mode">
-          <button
-            type="button"
-            class="mode-card"
-            :class="{ active: model.method === 'POLLING' }"
-            @click="model.method = 'POLLING'"
-          >
-            <div class="mode-title-row">
-              <span class="mode-title">轮询面试</span>
-              <span class="mode-badge subtle">问一题 · 答一题</span>
-            </div>
-            <p class="mode-desc">AI 提问 → 你作答（录音上传）→ AI 继续提问，更适合结构化练习。</p>
-          </button>
-
-          <button
-            type="button"
-            class="mode-card"
-            :class="{ active: model.method === 'REALTIME' }"
-            @click="model.method = 'REALTIME'"
-          >
-            <div class="mode-title-row">
-              <span class="mode-title">实时面试</span>
-              <span class="mode-badge">通话</span>
-            </div>
-            <p class="mode-desc">直接通话面试（WebRTC），更贴近真实场景；需要麦克风权限。</p>
-          </button>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="label">面试时长</div>
-        <div class="seg">
-          <button
-            v-for="d in durations"
-            :key="d.value"
-            type="button"
-            class="seg-btn"
-            :class="{ active: model.durationMinutes === d.value }"
-            @click="model.durationMinutes = d.value"
-          >
-            {{ d.label }}
-          </button>
-        </div>
-      </div>
-
-      <div class="field">
-        <div class="label">语言</div>
-        <div class="seg">
-          <button
-            v-for="l in languages"
-            :key="l.value"
-            type="button"
-            class="seg-btn"
-            :class="{ active: model.language === l.value }"
-            @click="model.language = l.value"
-          >
-            {{ l.label }}
-          </button>
-        </div>
-      </div>
-
-      <div class="field toggles">
-        <label class="toggle">
-          <input type="checkbox" v-model="model.enableCoding" />
-          <span class="toggle-text">开启编程追问</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" v-model="model.enableRealtimeHints" />
-          <span class="toggle-text">开启实时提示</span>
-        </label>
-      </div>
     </div>
 
     <div class="summary">
@@ -137,7 +94,7 @@
         <div class="summary-pill subtle">方式：{{ methodLabel }}</div>
       </div>
       <button type="button" class="btn-primary" :disabled="disabled" @click="$emit('start')">
-        {{ disabled ? '准备中...' : '创建会话并开始' }}
+        {{ disabled ? '准备中...' : '开始面试' }}
       </button>
     </div>
   </div>
@@ -177,17 +134,6 @@ const difficulties = [
   { value: 'SENIOR', label: '高级阶段' }
 ]
 
-const durations = [
-  { value: 10, label: '10 分钟' },
-  { value: 20, label: '20 分钟' },
-  { value: 30, label: '30 分钟' }
-]
-
-const languages = [
-  { value: 'zh-CN', label: '中文' },
-  { value: 'en-US', label: 'English' }
-]
-
 const interviewTypeLabel = computed(() => interviewTypes.find(x => x.value === model.value.interviewType)?.label || '未选择')
 const personaLabel = computed(() => personas.find(x => x.value === model.value.persona)?.label || '未选择')
 const difficultyLabel = computed(() => difficulties.find(x => x.value === model.value.difficulty)?.label || '未选择')
@@ -214,12 +160,6 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
   margin: 0;
 }
 
-.card-desc {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 4px 0 0;
-  line-height: 1.7;
-}
 
 .form-grid {
   display: grid;
@@ -233,10 +173,23 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
   gap: 8px;
 }
 
+.field-primary {
+  padding: 12px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(236, 72, 153, 0.05));
+  border: 1px solid rgba(129, 140, 248, 0.28);
+}
+
 .label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   color: #475569;
+}
+
+.label-primary {
+  font-size: 14px;
+  font-weight: 900;
+  color: #111827;
 }
 
 .seg {
@@ -251,7 +204,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #ffffff;
   color: #4b5563;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
@@ -300,13 +253,13 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .mode-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 900;
   color: #111827;
 }
 
 .mode-badge {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
   background: rgba(34, 197, 94, 0.12);
@@ -320,39 +273,10 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .mode-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   line-height: 1.6;
   margin: 0;
-}
-
-.toggles {
-  flex-direction: row;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  background: #f9fafb;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  cursor: pointer;
-  user-select: none;
-}
-
-.toggle input {
-  width: 14px;
-  height: 14px;
-}
-
-.toggle-text {
-  font-size: 12px;
-  font-weight: 800;
-  color: #4b5563;
 }
 
 .summary {
@@ -372,7 +296,7 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 }
 
 .summary-pill {
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(79, 70, 229, 0.08);
@@ -387,8 +311,8 @@ const methodLabel = computed(() => (model.value.method === 'REALTIME' ? '实时'
 
 .btn-primary {
   border-radius: 999px;
-  padding: 8px 18px;
-  font-size: 13px;
+  padding: 9px 20px;
+  font-size: 14px;
   font-weight: 900;
   border: none;
   cursor: pointer;

@@ -39,10 +39,6 @@
               @click="select(r)"
             >
               <div class="row-title">{{ r.originalFilename || `简历 #${r.resumeId}` }}</div>
-              <div class="row-sub">
-                <span class="pill">ID：{{ r.resumeId }}</span>
-                <span v-if="r.fileUrl" class="pill subtle">可下载</span>
-              </div>
             </button>
           </div>
 
@@ -54,12 +50,9 @@
 
             <div v-else class="detail">
               <div class="detail-top">
-                <div class="detail-name">{{ selected.originalFilename || `简历 #${selected.resumeId}` }}</div>
-                <div class="detail-meta">
-                  <span class="pill">ID：{{ selected.resumeId }}</span>
-                  <a v-if="selected.fileUrl" class="pill link" :href="selected.fileUrl" target="_blank" rel="noopener noreferrer">
-                    下载
-                  </a>
+                <div class="detail-title-row">
+                  <span class="detail-name">{{ selected.originalFilename || `简历 #${selected.resumeId}` }}</span>
+                  <a v-if="selected.fileUrl" class="detail-download" :href="selected.fileUrl" target="_blank" rel="noopener noreferrer">下载</a>
                 </div>
               </div>
 
@@ -255,8 +248,11 @@ watch(
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(226, 232, 240, 0.9);
-  overflow: auto;
+  overflow: hidden;
   padding: 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .row {
@@ -285,13 +281,6 @@ watch(
   font-weight: 900;
   color: #111827;
   line-height: 1.4;
-}
-
-.row-sub {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
 .pill {
@@ -406,27 +395,60 @@ watch(
   line-height: 1.7;
 }
 
+.detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .detail-top {
+  flex-shrink: 0;
   padding: 6px 6px 10px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.9);
   margin-bottom: 10px;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .detail-name {
   font-size: 14px;
   font-weight: 900;
   color: #111827;
+  flex: 1;
+  min-width: 0;
 }
 
-.detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+.detail-download {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(239, 246, 255, 0.9);
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.detail-download:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
 }
 
 .preview {
+  flex: 1;
+  min-height: 0;
   padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .preview-label {
@@ -436,11 +458,14 @@ watch(
 }
 
 .preview-box {
+  flex: 1;
+  min-height: 0;
   margin-top: 8px;
   border-radius: 16px;
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: #ffffff;
   padding: 10px 12px;
+  overflow: auto;
 }
 
 .preview-text {
@@ -457,7 +482,10 @@ watch(
 }
 
 .footer {
-  padding: 10px 6px 6px;
+  flex-shrink: 0;
+  padding: 12px 6px 6px;
+  margin-top: auto;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
   display: flex;
   justify-content: flex-end;
   gap: 10px;

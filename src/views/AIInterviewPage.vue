@@ -15,9 +15,12 @@
       <ResumeIntakeAndAnalysis
         v-if="currentStage !== STAGES.INTERVIEW"
         v-model:resumeSource="resumeSource"
+        v-model:selectedResumeId="selectedResumeId"
+        v-model:selectedFileName="selectedFileName"
         :analysis-result="analysisResult"
         @resume="goToResumeEditor"
         @analysis="handleAnalysisDone"
+        @resume-changed="handleResumeChanged"
         @goto-interview="goToInterviewStage"
       />
 
@@ -34,7 +37,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import NavBar from '../components/NavBar.vue'
@@ -42,6 +45,8 @@ import AIInterviewHero from '../components/AIInterview/AIInterviewHero.vue'
 import ResumeIntakeAndAnalysis from '../components/AIInterview/ResumeIntakeAndAnalysis.vue'
 import InterviewStage from '../components/AIInterview/InterviewStage.vue'
 import InterviewHistoryDrawer from '../components/AIInterview/InterviewHistoryDrawer.vue'
+
+const STORAGE_KEY = 'ai-interview-resume-state'
 
 const router = useRouter()
 
@@ -81,6 +86,44 @@ const historyOpen = ref(false)
 
 const resumeSource = ref('PLATFORM')
 const analysisResult = ref(null)
+const selectedResumeId = ref(null)
+const selectedFileName = ref('')
+
+function loadPersistedState() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (data && typeof data === 'object') {
+      if (data.analysisResult != null) analysisResult.value = data.analysisResult
+      if (data.resumeSource != null) resumeSource.value = data.resumeSource
+      if (data.selectedResumeId != null) selectedResumeId.value = data.selectedResumeId
+      if (data.selectedFileName != null) selectedFileName.value = data.selectedFileName
+    }
+  } catch (_) {
+    // ignore
+  }
+}
+
+function savePersistedState() {
+  try {
+    sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        analysisResult: analysisResult.value,
+        resumeSource: resumeSource.value,
+        selectedResumeId: selectedResumeId.value,
+        selectedFileName: selectedFileName.value,
+      })
+    )
+  } catch (_) {
+    // ignore
+  }
+}
+
+onMounted(() => {
+  loadPersistedState()
+})
 
 const scrollToWorkflow = () => {
   workflowRef.value?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
@@ -92,14 +135,23 @@ const goToResumeEditor = () => {
 
 const handleAnalysisDone = (payload) => {
   analysisResult.value = payload
+  if (payload?.resumeId != null) selectedResumeId.value = payload.resumeId
+  if (payload?.originalFileName != null) selectedFileName.value = payload.originalFileName
   currentStage.value = STAGES.ANALYSIS
+  savePersistedState()
+}
+
+const handleResumeChanged = ({ resumeId, fileName }) => {
+  selectedResumeId.value = resumeId ?? null
+  selectedFileName.value = fileName ?? ''
+  analysisResult.value = null
+  savePersistedState()
 }
 
 const goToInterviewStage = () => {
   currentStage.value = STAGES.INTERVIEW
   setTimeout(() => {
     const els = document.querySelectorAll('.ai-section')
-    // ResumeIntakeAndAnalysis + InterviewStage 都使用 ai-section class，第二个就是面试区
     if (els && els[1]) els[1].scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, 0)
 }

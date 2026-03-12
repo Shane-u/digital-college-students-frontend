@@ -3,9 +3,6 @@
     <div class="section-header">
       <div class="section-header-left">
         <h2 class="section-title">一、准备你的简历</h2>
-        <p class="section-subtitle">
-          上传或一键调用平台简历，马上生成建议与问题清单。
-        </p>
       </div>
     </div>
 
@@ -17,6 +14,10 @@
         :selected-resume-id="selectedResumeId"
         :uploading="uploading"
         :user-id="effectiveUserId"
+        :target-role="targetRole"
+        :target-level="targetLevel"
+        @update:targetRole="targetRole = $event"
+        @update:targetLevel="targetLevel = $event"
         @resume="$emit('resume')"
         @pickFile="openFilePicker"
         @history="historyOpen = true"
@@ -27,10 +28,6 @@
         :loading="loading"
         :result="result"
         :resume-source="modelSource"
-        :target-role="targetRole"
-        :target-level="targetLevel"
-        @update:targetRole="targetRole = $event"
-        @update:targetLevel="targetLevel = $event"
         @goto-interview="$emit('gotoInterview')"
       />
     </div>
@@ -57,20 +54,37 @@ import { aiInterviewApi } from '../../api/aiInterview'
 const props = defineProps({
   resumeSource: { type: String, default: 'PLATFORM' },
   analysisResult: { type: Object, default: null },
+  selectedResumeId: { type: [String, Number], default: null },
+  selectedFileName: { type: String, default: '' },
 })
 
-const emit = defineEmits(['update:resumeSource', 'analysis', 'resume', 'gotoInterview'])
+const emit = defineEmits([
+  'update:resumeSource',
+  'update:selectedResumeId',
+  'update:selectedFileName',
+  'analysis',
+  'resume',
+  'resumeChanged',
+  'gotoInterview',
+])
 
 const fileInputRef = ref(null)
-const selectedFileName = ref('')
 const loading = ref(false)
 const uploading = ref(false)
 const result = ref(props.analysisResult)
 const platformResume = ref(null)
-const selectedResumeId = ref(null) // 后端 resumeId（用于分析接口）
 const historyOpen = ref(false)
 const targetRole = ref('')
 const targetLevel = ref('')
+
+const selectedResumeId = computed({
+  get: () => props.selectedResumeId ?? null,
+  set: (v) => emit('update:selectedResumeId', v),
+})
+const selectedFileName = computed({
+  get: () => props.selectedFileName ?? '',
+  set: (v) => emit('update:selectedFileName', v),
+})
 
 const modelSource = computed({
   get: () => props.resumeSource,
@@ -93,7 +107,7 @@ watch(
 
 const canAnalyze = computed(() => {
   if (loading.value || uploading.value) return false
-  if (modelSource.value === 'PLATFORM') return Boolean(selectedResumeId.value)
+  if (modelSource.value === 'PLATFORM') return hasPlatformResume.value
   return Boolean(selectedResumeId.value) || Boolean(selectedFileName.value)
 })
 
@@ -136,6 +150,10 @@ const safeJsonParse = (raw) => {
 const normalizeAnalysis = (analysisJson) => {
   const obj = safeJsonParse(analysisJson) || {}
   const strengths = obj.strengths || obj.advantages || obj.highlights || []
+  const weaknesses = obj.weaknesses || obj.weakPoints || obj.shortcomings || []
+  const riskPoints = obj.riskPoints || obj.risks || obj.risk || []
+  const improvementSuggestions = obj.improvementSuggestions || obj.improvements || obj.suggestionToImprove || []
+  const suggestedQuestions = obj.suggestedQuestions || obj.suggestQuestions || obj.interviewQuestions || obj.possibleQuestions || []
   const questions = obj.questions || obj.interviewQuestions || obj.possibleQuestions || []
   const suggestions = obj.suggestions || obj.matchingSuggestions || obj.roleSuggestions || []
 
@@ -159,14 +177,19 @@ const normalizeAnalysis = (analysisJson) => {
 
   const normalized = {
     strengths: toTextArr(strengths),
+    weaknesses: toTextArr(weaknesses),
+    riskPoints: toTextArr(riskPoints),
+    improvementSuggestions: toTextArr(improvementSuggestions),
     matchingSuggestions: (Array.isArray(suggestions) ? suggestions : []).map(normalizeSuggestion).filter(Boolean),
-    resumeQuestions: (Array.isArray(questions) ? questions : []).map(normalizeQuestion).filter(Boolean)
+    resumeQuestions: (Array.isArray(questions) ? questions : []).map(normalizeQuestion).filter(Boolean),
+    suggestedQuestions: (Array.isArray(suggestedQuestions) ? suggestedQuestions : []).map(normalizeQuestion).filter(Boolean)
   }
   return normalized
 }
 
-const uploadResume = async (file) => {
+const uploadResume = async (file, options = {}) => {
   if (!file || uploading.value) return
+  const skipResumeChanged = options.skipResumeChanged === true
   uploading.value = true
   try {
     const res = await aiInterviewApi.uploadResume({
@@ -175,19 +198,22 @@ const uploadResume = async (file) => {
       experienceYears: '',
       userId: effectiveUserId.value
     })
-    selectedResumeId.value = res?.resumeId ?? null
+    const rid = res?.resumeId ?? null
+    const fname = file?.name ?? ''
+    selectedResumeId.value = rid
+    selectedFileName.value = fname
+    if (!skipResumeChanged) emit('resumeChanged', { resumeId: rid, fileName: fname })
   } finally {
     uploading.value = false
   }
 }
 
 const ensurePlatformResumeUploaded = async () => {
-  // 平台简历这里先走“上传接口”：将平台简历 JSON 转成 txt，保证后端有 resumeId 可分析
-  if (selectedResumeId.value) return selectedResumeId.value
+  // 每次分析都上传当前平台简历，保证后端拿到的是最新内容
   const data = platformResume.value
   const blob = new Blob([JSON.stringify(data || {}, null, 2)], { type: 'text/plain' })
   const file = new File([blob], 'platform-resume.txt', { type: 'text/plain' })
-  await uploadResume(file)
+  await uploadResume(file, { skipResumeChanged: true })
   return selectedResumeId.value
 }
 
@@ -197,6 +223,10 @@ const analyze = async () => {
   result.value = null
   try {
     if (modelSource.value === 'PLATFORM') {
+      loadPlatformResume()
+      if (!platformResume.value) {
+        throw new Error('未检测到平台简历，请先在简历制作页编辑并保存简历。')
+      }
       await ensurePlatformResumeUploaded()
     }
     if (!selectedResumeId.value) return
@@ -209,7 +239,8 @@ const analyze = async () => {
     const wrapped = {
       ...normalized,
       source: modelSource.value,
-      resumeId: selectedResumeId.value
+      resumeId: selectedResumeId.value,
+      originalFileName: selectedFileName.value || undefined
     }
     result.value = wrapped
     emit('analysis', wrapped)
@@ -217,6 +248,7 @@ const analyze = async () => {
     result.value = {
       source: modelSource.value,
       resumeId: selectedResumeId.value,
+      originalFileName: selectedFileName.value || undefined,
       strengths: [],
       matchingSuggestions: [],
       resumeQuestions: [
@@ -232,8 +264,10 @@ const analyze = async () => {
 const handleSelectHistory = (resume) => {
   if (!resume) return
   modelSource.value = 'UPLOAD'
+  const fname = resume.originalFilename || `简历 #${resume.resumeId}`
   selectedResumeId.value = resume.resumeId
-  selectedFileName.value = resume.originalFilename || `简历 #${resume.resumeId}`
+  selectedFileName.value = fname
+  emit('resumeChanged', { resumeId: resume.resumeId, fileName: fname })
 }
 
 onMounted(() => {
@@ -260,12 +294,6 @@ onMounted(() => {
   font-weight: 800;
   color: #111827;
   margin: 0;
-}
-
-.section-subtitle {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 4px 0 0;
 }
 
 
