@@ -126,6 +126,26 @@ const routes = [
     name: 'LearningPathGraphDetail',
     component: () => import('../views/LearningPathGraphPage.vue')
   },
+  {
+    path: '/flashcard-test/:flashcardId',
+    name: 'FlashcardTest',
+    component: () => import('../views/FlashcardTestPage.vue')
+  },
+  {
+    path: '/flashcard-test/:flashcardId/result',
+    name: 'FlashcardTestResult',
+    component: () => import('../views/FlashcardTestResultPage.vue')
+  },
+  {
+    path: '/flashcard-test/papers/:testId/attempts',
+    name: 'FlashcardTestAttempts',
+    component: () => import('../views/FlashcardTestAttemptsPage.vue')
+  },
+  {
+    path: '/flashcard-test/attempts/:attemptId',
+    name: 'FlashcardTestAttemptDetail',
+    component: () => import('../views/FlashcardTestAttemptDetailPage.vue')
+  },
 ]
 
 const router = createRouter({

@@ -93,6 +93,9 @@
             <div class="node-card-content" v-html="sanitizedContent"></div>
           </div>
           <div class="node-card-footer">
+            <button type="button" class="node-card-btn node-card-btn-primary node-card-btn-generate" @click="handleGenerateTest">
+              生成测试题
+            </button>
             <button type="button" class="node-card-btn node-card-btn-edit" @click="openEditModal">编辑</button>
             <button type="button" class="node-card-btn node-card-btn-delete" @click="handleDelete">删除</button>
           </div>
@@ -140,20 +143,50 @@
         </div>
       </div>
     </Teleport>
+
+    <FlashcardTestDifficultyDialog
+      :visible="showDifficulty"
+      v-model="difficulty"
+      :loading="generatingTest"
+      @close="showDifficulty = false"
+      @confirm="confirmGenerateTest"
+    />
+
+    <FlashcardTestPointDrawer
+      :visible="showTestPoint"
+      :node-id="testPointNodeId"
+      @close="showTestPoint = false"
+      @redo="handleRedoPaper"
+      @open-attempts="handleOpenAttempts"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
+import { flashCardTestApi } from '../../api/flashCardTest'
+import {
+  hasTestPoint,
+  isFlashcardPassed,
+  markHasTestPoint,
+  saveFlashcardTestContext,
+  saveTestPaper,
+  setLatestTestId
+} from '../../utils/flashcardTestStorage'
 import FlashcardRibbonMenu from './FlashcardRibbonMenu.vue'
 import FlashcardGraphSearchPopover from './FlashcardGraphSearchPopover.vue'
 import FlashcardGraphFilterPopover from './FlashcardGraphFilterPopover.vue'
 import FlashcardGraphStatsModal from './FlashcardGraphStatsModal.vue'
 import GraphTopHeader from '../common/GraphTopHeader.vue'
+import FlashcardTestDifficultyDialog from './Test/FlashcardTestDifficultyDialog.vue'
+import FlashcardTestPointDrawer from './Test/FlashcardTestPointDrawer.vue'
+
+const router = useRouter()
 
 const props = defineProps({
   flashcards: {
@@ -211,6 +244,10 @@ const showEditModal = ref(false)
 const editForm = ref({ id: '', graphId: '', title: '', content: '', htmlContent: '', hierarchyPath: '' })
 const loadingDetail = ref(false)
 const savingEdit = ref(false)
+const showDifficulty = ref(false)
+const difficulty = ref('medium')
+const generatingTest = ref(false)
+const pendingGenerateNodeId = ref('')
 
 // 右侧彩带：图例显隐、筛选弹出层、统计弹窗
 const showLegend = ref(true)
@@ -359,6 +396,16 @@ const getNodeDisplayName = (d) => {
     }
   }
   return d.label || d.id
+}
+
+const nodePassedCache = new Map()
+const getNodePassed = (d) => {
+  const bid = d?.businessId != null ? String(d.businessId) : null
+  if (!bid) return false
+  if (nodePassedCache.has(bid)) return nodePassedCache.get(bid) === true
+  const passed = isFlashcardPassed(bid)
+  nodePassedCache.set(bid, passed)
+  return passed
 }
 
 // 渲染D3图谱（支持 根/课程/名 路径格式，Neo4j 风格节点）
@@ -547,6 +594,7 @@ const getNodeTextStroke = (d) => {
 }
 
 const renderGraph = () => {
+  nodePassedCache.clear()
   updateDimensions()
   if (!svgRef.value || dimensions.value.width === 0 || dimensions.value.height === 0) return
   const { width, height } = dimensions.value
@@ -577,6 +625,27 @@ const renderGraph = () => {
       target: typeof l.target === 'object' ? l.target.id : l.target,
       type: l.type || 'RELATES_TO'
     }))
+
+    // 前端补充“测试点”子节点：首次生成后，挂在对应闪卡节点旁
+    const extraNodes = []
+    const extraLinks = []
+    for (const n of nodes) {
+      if (!isFlashcardNode(n)) continue
+      const bid = n.businessId != null ? String(n.businessId) : null
+      if (!bid) continue
+      if (!hasTestPoint(bid)) continue
+      const tpId = `testpoint:${bid}`
+      extraNodes.push({
+        id: tpId,
+        label: '测试点',
+        type: 'testpoint',
+        properties: { nodeId: bid },
+        businessId: bid
+      })
+      extraLinks.push({ source: n.id, target: tpId, type: 'HAS_TEST_POINT' })
+    }
+    if (extraNodes.length) nodes = nodes.concat(extraNodes)
+    if (extraLinks.length) links = links.concat(extraLinks)
   } else {
     const seenNodeIds = new Set()
     // 从每张闪卡的 category / hierarchyPath 构建层级分类节点
@@ -871,6 +940,35 @@ const renderGraph = () => {
     .attr('fill', d => (isRootNode(d) ? NEO4J.rootFill : getNodeFill(d)))
     .attr('stroke', '#f8fafc')
     .attr('stroke-width', 1.5)
+
+  // 通过测试的闪卡：右上角绿色小勾（仅闪卡节点）
+  const passedSel = nodeSel
+    .filter(d => isFlashcardNode(d) && getNodePassed(d))
+    .append('g')
+    .attr('class', 'node-pass-badge')
+    .attr('transform', d => {
+      const r = getNodeRadius(d)
+      const x = r - 2
+      const y = -r + 2
+      return `translate(${x},${y})`
+    })
+
+  passedSel
+    .append('circle')
+    .attr('r', 10)
+    .attr('fill', '#22c55e')
+    .attr('stroke', '#ffffff')
+    .attr('stroke-width', 2)
+    .style('filter', 'drop-shadow(0 6px 12px rgba(34, 197, 94, 0.28))')
+
+  passedSel
+    .append('path')
+    .attr('d', 'M-4 0 L-1 3 L5 -4')
+    .attr('fill', 'none')
+    .attr('stroke', '#ffffff')
+    .attr('stroke-width', 2.4)
+    .attr('stroke-linecap', 'round')
+    .attr('stroke-linejoin', 'round')
   
   nodeSel.append('title').text(getNodeDisplayName)
   textSel = textLayer.selectAll('text').data(visibleNodes, d => d.id).join(
@@ -909,6 +1007,13 @@ const renderGraph = () => {
   // 点击节点显示 content 小卡片
   nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
+    if (d?.type === 'testpoint') {
+      const bid = d?.businessId != null ? String(d.businessId) : (d?.properties?.nodeId != null ? String(d.properties.nodeId) : '')
+      if (bid) {
+        openTestPointDrawer(bid)
+      }
+      return
+    }
     const content = (d.properties && d.properties.content) || ''
     if (content) {
       showNodeCardFunc(ev, d, content)
@@ -1474,6 +1579,76 @@ const sanitizedContent = computed(() => {
   return sanitizeHtml(raw)
 })
 
+const handleGenerateTest = () => {
+  const id = nodeCardData.value?.id
+  if (!id) return
+  pendingGenerateNodeId.value = String(id)
+  difficulty.value = 'medium'
+  showDifficulty.value = true
+}
+
+const confirmGenerateTest = async () => {
+  const nodeId = pendingGenerateNodeId.value
+  if (!nodeId) return
+  try {
+    generatingTest.value = true
+    saveFlashcardTestContext(nodeId, {
+      flashcardId: String(nodeId),
+      title: nodeCardData.value?.title || '',
+      hierarchyPath: nodeCardData.value?.hierarchyPath || '',
+      content: nodeCardData.value?.content || '',
+      htmlContent: nodeCardData.value?.htmlContent || ''
+    })
+    const res = await flashCardTestApi.generate({ nodeId, pathId: 0, difficulty: difficulty.value })
+    const paper = flashCardTestApi.normalizeTestVO(res)
+    const testId = paper?.testId
+    if (testId != null) {
+      saveTestPaper(testId, paper)
+      setLatestTestId(nodeId, testId)
+    }
+    markHasTestPoint(nodeId, true)
+    showDifficulty.value = false
+    await router.push({ name: 'FlashcardTest', params: { flashcardId: String(nodeId) }, query: { testId: String(testId || '') } })
+    nextTick(() => renderGraph())
+  } catch (e) {
+    console.error(e)
+    ElMessage && ElMessage.error(e?.message || e?.response?.data?.message || '生成失败，请稍后重试')
+  } finally {
+    generatingTest.value = false
+  }
+}
+
+// 测试点抽屉（历史试卷列表）- 下一步会补全 UI，这里先占位打开
+const showTestPoint = ref(false)
+const testPointNodeId = ref('')
+const openTestPointDrawer = (nodeId) => {
+  testPointNodeId.value = String(nodeId)
+  showTestPoint.value = true
+}
+
+const handleRedoPaper = async (paper) => {
+  try {
+    const tid = paper?.testId
+    if (tid == null) return
+    const res = await flashCardTestApi.loadPaper(tid)
+    const p = flashCardTestApi.normalizeTestVO(res)
+    saveTestPaper(tid, p)
+    await router.push({
+      name: 'FlashcardTest',
+      params: { flashcardId: String(testPointNodeId.value) },
+      query: { testId: String(tid), mode: 'redo' }
+    })
+  } catch (e) {
+    ElMessage && ElMessage.error(e?.message || e?.response?.data?.message || '加载试卷失败，请稍后重试')
+  }
+}
+
+const handleOpenAttempts = (paper) => {
+  const tid = paper?.testId
+  if (tid == null) return
+  router.push({ name: 'FlashcardTestAttempts', params: { testId: String(tid) } })
+}
+
 </script>
 
 <style scoped>
@@ -1782,6 +1957,10 @@ const sanitizedContent = computed(() => {
 .node-card-btn-primary:hover {
   filter: brightness(1.05);
   box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+}
+
+.node-card-btn-generate {
+  margin-right: auto;
 }
 
 .node-card-btn-secondary {
