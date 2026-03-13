@@ -108,7 +108,6 @@ const typeLabel = computed(() => {
     MIXED: '混合面试',
     TECHNICAL: '技术面试',
     BEHAVIORAL: '行为面试',
-    CODING: '编程面试',
   }
   return map[props.config.interviewType] || '未选择'
 })

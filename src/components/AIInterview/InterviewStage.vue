@@ -67,7 +67,7 @@ const userIdForWs = ref(null)
 const config = ref({
   // 后端 CreateInterviewSessionRequest
   resumeId: null,
-  interviewType: 'MIXED', // MIXED/TECHNICAL/BEHAVIORAL/CODING
+  interviewType: 'MIXED', // MIXED/TECHNICAL/BEHAVIORAL
   language: 'zh-CN',
   difficulty: 'MID', // JUNIOR/MID/SENIOR
   persona: 'mentor', // mentor/strict/hr

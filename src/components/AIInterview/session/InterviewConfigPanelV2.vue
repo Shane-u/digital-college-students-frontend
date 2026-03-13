@@ -118,8 +118,7 @@ const model = computed({
 const interviewTypes = [
   { value: 'MIXED', label: '混合面试' },
   { value: 'TECHNICAL', label: '技术面试' },
-  { value: 'BEHAVIORAL', label: '行为面试' },
-  { value: 'CODING', label: '编程面试' }
+  { value: 'BEHAVIORAL', label: '行为面试' }
 ]
 
 const personas = [
