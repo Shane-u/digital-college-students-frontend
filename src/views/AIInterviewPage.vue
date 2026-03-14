@@ -3,7 +3,6 @@
     <NavBar :transparent="false" />
 
     <AIInterviewHero
-      v-if="currentStage !== STAGES.INTERVIEW"
       :steps="orderedSteps"
       :current-stage="currentStage"
       @start="scrollToWorkflow"
@@ -13,7 +12,6 @@
 
     <main ref="workflowRef" class="ai-interview-main">
       <ResumeIntakeAndAnalysis
-        v-if="currentStage !== STAGES.INTERVIEW"
         v-model:resumeSource="resumeSource"
         v-model:selectedResumeId="selectedResumeId"
         v-model:selectedFileName="selectedFileName"
@@ -26,6 +24,7 @@
 
       <InterviewStage
         :analysis-result="analysisResult"
+        :initial-review="pendingReviewFromSession"
         @started="handleInterviewStarted"
         @ended="handleInterviewEnded"
         @resume="goToResumeEditor"
@@ -37,7 +36,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import NavBar from '../components/NavBar.vue'
@@ -83,6 +82,7 @@ const orderedSteps = [
 const workflowRef = ref(null)
 const currentStage = ref(STAGES.RESUME)
 const historyOpen = ref(false)
+const pendingReviewFromSession = ref(null)
 
 const resumeSource = ref('PLATFORM')
 const analysisResult = ref(null)
@@ -123,6 +123,17 @@ function savePersistedState() {
 
 onMounted(() => {
   loadPersistedState()
+  try {
+    const raw = sessionStorage.getItem('ai-interview-pending-review')
+    if (raw) {
+      pendingReviewFromSession.value = JSON.parse(raw)
+      sessionStorage.removeItem('ai-interview-pending-review')
+      currentStage.value = STAGES.REVIEW
+      nextTick(() => {
+        document.getElementById('ai-interview-review-section')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      })
+    }
+  } catch (_) {}
 })
 
 const scrollToWorkflow = () => {
@@ -166,6 +177,9 @@ const handleInterviewEnded = (payload) => {
     currentStage.value = STAGES.ANALYSIS
   } else {
     currentStage.value = STAGES.REVIEW
+    nextTick(() => {
+      document.getElementById('ai-interview-review-section')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    })
   }
 }
 </script>

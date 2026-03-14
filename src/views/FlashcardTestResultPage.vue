@@ -3,8 +3,7 @@
     <div class="result-shell">
       <div class="result-top-row">
         <div class="title-area">
-          <div class="title-main">{{ ctxTitle || '闪卡测试' }}</div>
-          <div class="title-sub">测试结果</div>
+          <div class="title-main">测试结果</div>
         </div>
         <div class="top-actions">
           <button type="button" class="top-btn ghost" @click="goBack">返回</button>
@@ -43,7 +42,7 @@ const ctxTitle = ref('')
 const score = ref(0)
 const submitId = ref('')
 
-const isPass = computed(() => Number(score.value) > 60)
+const isPass = computed(() => Number(score.value) >= 60)
 
 onMounted(() => {
   const ctx = loadFlashcardTestContext(flashcardId.value)
@@ -59,7 +58,7 @@ onMounted(() => {
 })
 
 const goBack = () => {
-  router.back()
+  router.replace({ path: '/flashcard-graph' })
 }
 
 const viewDetail = () => {
@@ -98,17 +97,10 @@ const viewDetail = () => {
 }
 
 .title-main {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 900;
   color: #111827;
   letter-spacing: 0.03em;
-}
-
-.title-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #9ca3af;
 }
 
 .top-actions {

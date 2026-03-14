@@ -48,6 +48,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import InterviewConfigPanelV2 from './session/InterviewConfigPanelV2.vue'
 import PollingInterviewSession from './session/PollingInterviewSession.vue'
 import RealtimeInterviewSession from './session/RealtimeInterviewSession.vue'
@@ -56,8 +57,13 @@ import ReviewStage from './ReviewStage.vue'
 import { aiInterviewApi } from '../../api/aiInterview'
 import { mapInterviewReportToReview } from './session/reportMapper'
 
+const SESSION_STORAGE_KEY = 'ai-interview-session-state'
+const router = useRouter()
+
 const props = defineProps({
   analysisResult: { type: Object, default: null },
+  /** 从会话页返回时带回来的面试报告，用于直接进入复盘视图 */
+  initialReview: { type: Object, default: null },
 })
 
 const emit = defineEmits(['started', 'ended', 'resume'])
@@ -93,8 +99,18 @@ watch(
   }
 )
 
+watch(
+  () => props.initialReview,
+  (val) => {
+    if (val && typeof val === 'object') {
+      review.value = val
+      view.value = 'REVIEW'
+    }
+  },
+  { immediate: true }
+)
+
 const start = () => {
-  // 先创建会话再进入面试
   createSessionAndStart()
 }
 
@@ -120,9 +136,21 @@ const createSessionAndStart = async () => {
     }
     const res = await aiInterviewApi.createSession(payload)
     sessionId.value = res?.sessionId ?? null
-    view.value = 'SESSION'
-    retestSeedQuestions.value = null
     emit('started', { ...config.value, sessionId: sessionId.value })
+    if (sessionId.value) {
+      try {
+        sessionStorage.setItem(
+          SESSION_STORAGE_KEY,
+          JSON.stringify({
+            sessionId: sessionId.value,
+            config: { ...config.value },
+            seedQuestions: effectiveSeedQuestions.value || [],
+          })
+        )
+      } catch (_) {}
+      router.push({ path: '/career/ai-interview/session', query: { sessionId: sessionId.value } })
+    }
+    retestSeedQuestions.value = null
   } finally {
     creating.value = false
   }
@@ -275,8 +303,7 @@ const handleRetest = ({ mode }) => {
   } else {
     retestSeedQuestions.value = null
   }
-  view.value = 'SESSION'
-  emit('started', { ...config.value, retestMode: mode })
+  createSessionAndStart()
 }
 
 const STORAGE_KEY = 'ai_interview_history_v1'

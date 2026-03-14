@@ -98,7 +98,7 @@
               />
               <MessageSquareIcon v-else />
             </template>
-            <span class="sidebar-chat-title">{{ session.title }}</span>
+            <span class="sidebar-chat-title" :title="session.title">{{ session.title }}</span>
             <PinIcon v-if="session.isPinned" class="sidebar-pin" />
             <button 
               v-if="isOpen && !isBatchMode" 

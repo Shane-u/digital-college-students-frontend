@@ -1,52 +1,29 @@
 <template>
   <div class="session">
-    <div class="session-header">
-      <div class="session-left">
-        <span class="pill">通话中</span>
-        <span class="pill subtle">类型：{{ typeLabel }}</span>
-        <span class="pill subtle">面试官：{{ personaLabel }}</span>
-        <span class="pill subtle">经验：{{ difficultyLabel }}</span>
-      </div>
-      <div class="session-right">
-        <div class="timer">
-          <span class="timer-dot" :class="{ on: isRunning }"></span>
-          <span class="timer-text">{{ timeText }}</span>
-        </div>
-        <button type="button" class="btn-ghost danger" :disabled="finishing" @click="hangup">
-          {{ finishing ? '处理中...' : '挂断并结束' }}
-        </button>
-      </div>
-    </div>
+    <InterviewSessionHeader
+      status-label="通话中"
+      :type-label="typeLabel"
+      :persona-label="personaLabel"
+      :difficulty-label="difficultyLabel"
+      :time-text="timeText"
+      :is-running="isRunning"
+      :finishing="finishing"
+      end-button-text="挂断并结束"
+      end-button-loading-text="处理中..."
+      @end="hangup"
+    />
 
     <div class="layout">
-      <div class="voice">
-        <div class="voice-topbar">
-          <span class="dot green"></span>
-          <span class="dot yellow"></span>
-          <span class="dot red"></span>
-          <span class="voice-title">实时面试</span>
-        </div>
-
-        <div class="voice-main">
-          <div class="voice-video">
-            <video ref="localVideoRef" autoplay muted playsinline></video>
-          </div>
-          <!-- 远端音频保持播放，但不展示控件 -->
-          <audio ref="remoteAudioRef" class="remote-audio" autoplay />
-        </div>
-
-        <div class="voice-controls">
-          <button type="button" class="ctrl primary" :disabled="connecting || connected" @click="connect">
-            {{ connected ? '进行中' : (connecting ? '连接中...' : '开始面试') }}
-          </button>
-          <button type="button" class="ctrl" :disabled="!connected" :class="{ active: muted }" @click="toggleMute">
-            {{ muted ? '取消麦克风静音' : '麦克风静音' }}
-          </button>
-          <button type="button" class="ctrl danger" :disabled="!connected || finishing" @click="hangup">
-            结束面试
-          </button>
-        </div>
-      </div>
+      <RealtimeVoicePanel
+        ref="voicePanelRef"
+        :connecting="connecting"
+        :connected="connected"
+        :muted="muted"
+        :finishing="finishing"
+        @connect="connect"
+        @toggle-mute="toggleMute"
+        @hangup="hangup"
+      />
 
       <div class="panel">
         <div class="panel-card">
@@ -71,6 +48,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
 import { ElMessageBox } from 'element-plus'
+import InterviewSessionHeader from './InterviewSessionHeader.vue'
+import RealtimeVoicePanel from './RealtimeVoicePanel.vue'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -82,8 +61,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['end'])
 
-const remoteAudioRef = ref(null)
-const localVideoRef = ref(null)
+const voicePanelRef = ref(null)
 const logRef = ref(null)
 const logs = ref([])
 const transcripts = ref([])
@@ -262,12 +240,12 @@ const startWebRTC = async () => {
     await log('local media added')
 
     try {
-      const el = localVideoRef.value
+      const el = voicePanelRef.value?.localVideoRef
       if (el) el.srcObject = localStream
     } catch (_) {}
 
     pc.ontrack = async (event) => {
-      const el = remoteAudioRef.value
+      const el = voicePanelRef.value?.remoteAudioRef
       if (!el) return
       el.srcObject = event.streams[0]
       try {
@@ -437,200 +415,20 @@ onUnmounted(() => {
   padding: 16px 16px 18px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   border: 1px solid rgba(226, 232, 240, 0.9);
-  height: calc(100vh - 180px);
-  min-height: 540px;
-}
-
-.session-header {
+  height: calc(100vh - 120px);
+  min-height: 420px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  margin-bottom: 12px;
-}
-
-.session-left {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.pill {
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
-  font-weight: 800;
-}
-
-.pill.subtle {
-  background: rgba(148, 163, 184, 0.08);
-  color: #6b7280;
-}
-
-.session-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #f9fafb;
-}
-
-.timer-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.8);
-}
-
-.timer-dot.on {
-  background: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
-}
-
-.timer-text {
-  font-size: 13px;
-  font-weight: 900;
-  color: #111827;
-  letter-spacing: 0.06em;
-}
-
-.btn-ghost {
-  border-radius: 999px;
-  padding: 6px 12px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #ffffff;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: background-color 0.16s ease, transform 0.16s ease;
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: #f1f5f9;
-  transform: translateY(-1px);
-}
-
-.btn-ghost:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-ghost.danger {
-  border-color: rgba(220, 38, 38, 0.25);
-  background: rgba(220, 38, 38, 0.06);
-  color: #b91c1c;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 12px;
-  height: 100%;
+  flex: 1;
   min-height: 0;
-}
-
-.voice {
-  border-radius: 18px;
-  background: #020617;
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.85);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.voice-topbar {
-  height: 28px;
-  padding: 0 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-}
-
-.dot.green { background: #22c55e; }
-.dot.yellow { background: #eab308; }
-.dot.red { background: #ef4444; }
-
-.voice-title {
-  margin-left: 6px;
-  font-size: 11px;
-  color: rgba(226, 232, 240, 0.85);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.voice-main {
-  flex: 1;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-}
-
-.voice-video {
-  width: 100%;
   height: 100%;
-  border-radius: 0;
-  overflow: hidden;
-  background: #000;
-  border: none;
-  box-shadow: none;
-}
-
-.voice-video :deep(video) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.remote-audio {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.voice-controls {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(2, 6, 23, 0.7);
-}
-
-.ctrl {
-  flex: 1;
-  border-radius: 14px;
-  padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.45);
-  color: rgba(226, 232, 240, 0.92);
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
 }
 
 .ctrl:hover:not(:disabled) {

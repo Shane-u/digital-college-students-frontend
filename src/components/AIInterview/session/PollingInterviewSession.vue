@@ -1,22 +1,17 @@
 <template>
   <div class="session">
-    <div class="session-header">
-      <div class="session-left">
-        <span class="pill">进行中</span>
-        <span class="pill subtle">类型：{{ typeLabel }}</span>
-        <span class="pill subtle">面试官：{{ personaLabel }}</span>
-        <span class="pill subtle">经验：{{ difficultyLabel }}</span>
-      </div>
-      <div class="session-right">
-        <div class="timer">
-          <span class="timer-dot" :class="{ on: isRunning }"></span>
-          <span class="timer-text">{{ timeText }}</span>
-        </div>
-        <button type="button" class="btn-ghost danger" :disabled="finishing" @click="finish">
-          {{ finishing ? '生成报告中...' : '结束面试' }}
-        </button>
-      </div>
-    </div>
+    <InterviewSessionHeader
+      status-label="进行中"
+      :type-label="typeLabel"
+      :persona-label="personaLabel"
+      :difficulty-label="difficultyLabel"
+      :time-text="timeText"
+      :is-running="isRunning"
+      :finishing="finishing"
+      end-button-text="结束面试"
+      end-button-loading-text="生成报告中..."
+      @end="finish"
+    />
 
     <div class="layout">
       <div class="chat">
@@ -53,38 +48,18 @@
           </div>
         </div>
 
-        <div class="chat-footer">
-          <div class="controls">
-            <div class="controls-left">
-              <button type="button" class="chip" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(false)">
-                {{ loadingQuestion ? '获取中...' : '下一题' }}
-              </button>
-              <button type="button" class="chip ghost" :disabled="loadingQuestion || recording || uploading" @click="nextQuestion(true)">
-                下一题 + 语音朗读
-              </button>
-            </div>
-            <div class="controls-right">
-              <span v-if="recordStatus" class="hint">{{ recordStatus }}</span>
-            </div>
-          </div>
-
-          <div class="record">
-            <button type="button" class="btn-rec" :disabled="recording || uploading" @click="startRecord">
-              开始回答
-            </button>
-            <button type="button" class="btn-rec danger" :disabled="!recording || uploading" @click="stopRecord">
-              结束回答并上传
-            </button>
-            <button type="button" class="btn-rec ghost" :disabled="uploading" @click="cancelRecord">
-              取消回答
-            </button>
-          </div>
-
-          <div v-if="error" class="inline-error">
-            <div class="inline-error-text">{{ error }}</div>
-            <button type="button" class="inline-error-btn" @click="error = ''">知道了</button>
-          </div>
-        </div>
+        <PollingFooterControls
+          :loading-question="loadingQuestion"
+          :recording="recording"
+          :uploading="uploading"
+          :record-status="recordStatus"
+          :error="error"
+          @next="nextQuestion"
+          @start-record="startRecord"
+          @stop-record="stopRecord"
+          @cancel-record="cancelRecord"
+          @clear-error="error = ''"
+        />
       </div>
     </div>
   </div>
@@ -94,6 +69,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
 import { ElMessageBox } from 'element-plus'
+import InterviewSessionHeader from './InterviewSessionHeader.vue'
+import PollingFooterControls from './PollingFooterControls.vue'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -392,104 +369,11 @@ onUnmounted(() => {
   padding: 16px 16px 18px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   border: 1px solid rgba(226, 232, 240, 0.9);
-  height: calc(100vh - 180px);
-  min-height: 540px;
+  height: calc(100vh - 120px);
+  min-height: 420px;
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.session-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  margin-bottom: 12px;
-}
-
-.session-left {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.pill {
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
-  font-weight: 800;
-}
-
-.pill.subtle {
-  background: rgba(148, 163, 184, 0.08);
-  color: #6b7280;
-}
-
-.session-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #f9fafb;
-}
-
-.timer-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.8);
-}
-
-.timer-dot.on {
-  background: #22c55e;
-  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
-}
-
-.timer-text {
-  font-size: 13px;
-  font-weight: 900;
-  color: #111827;
-  letter-spacing: 0.06em;
-}
-
-.btn-ghost {
-  border-radius: 999px;
-  padding: 6px 12px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #ffffff;
-  color: #4b5563;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: background-color 0.16s ease, transform 0.16s ease;
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: #f1f5f9;
-  transform: translateY(-1px);
-}
-
-.btn-ghost:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-ghost.danger {
-  border-color: rgba(220, 38, 38, 0.25);
-  background: rgba(220, 38, 38, 0.06);
-  color: #b91c1c;
 }
 
 .layout {
@@ -539,14 +423,6 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-}
-
-.chat-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  backdrop-filter: blur(10px);
-  margin-top: auto;
 }
 
 .msg {
@@ -641,130 +517,6 @@ onUnmounted(() => {
 
 .typing-dot:nth-child(3) {
   animation-delay: 0.24s;
-}
-
-.controls {
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.controls-left {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.hint {
-  font-size: 13px;
-  color: #64748b;
-  font-weight: 800;
-}
-
-.chip {
-  border-radius: 999px;
-  padding: 6px 10px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: #ffffff;
-  color: #4b5563;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: background-color 0.12s ease, transform 0.12s ease;
-}
-
-.chip:hover:not(:disabled) {
-  background: #f1f5f9;
-  transform: translateY(-1px);
-}
-
-.chip:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.chip.ghost {
-  background: rgba(255, 255, 255, 0.9);
-  color: #4b5563;
-  border: 1px dashed rgba(148, 163, 184, 0.7);
-}
-
-.record {
-  padding: 10px 12px 12px;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.92);
-}
-
-.btn-rec {
-  border-radius: 999px;
-  padding: 8px 14px;
-  border: none;
-  background: #111827;
-  color: #f9fafb;
-  font-size: 13px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.12s ease, background-color 0.12s ease;
-}
-
-.btn-rec:hover:not(:disabled) {
-  transform: translateY(-1px);
-  background: #0f172a;
-}
-
-.btn-rec:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-rec.danger {
-  background: linear-gradient(135deg, #ef4444, #f97316);
-}
-
-.btn-rec.ghost {
-  background: rgba(255, 255, 255, 0.9);
-  color: #4b5563;
-  border: 1px solid rgba(148, 163, 184, 0.6);
-}
-
-.btn-rec.ghost:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-
-.inline-error {
-  margin: 10px 12px 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(220, 38, 38, 0.06);
-  border: 1px solid rgba(220, 38, 38, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.inline-error-text {
-  font-size: 12px;
-  color: #b91c1c;
-  font-weight: 800;
-}
-
-.inline-error-btn {
-  border-radius: 999px;
-  padding: 6px 10px;
-  border: 1px solid rgba(220, 38, 38, 0.35);
-  background: rgba(255, 255, 255, 0.9);
-  color: #b91c1c;
-  font-size: 12px;
-  font-weight: 900;
-  cursor: pointer;
 }
 
 

@@ -44,7 +44,8 @@
               </div>
 
               <div v-if="hoverId === String(p.testId)" class="ops">
-                <button type="button" class="op" @click="$emit('redo', p)">重做</button>
+                <button type="button" class="op" @click.stop="$emit('redo', p)">重做</button>
+                <button type="button" class="op" @click.stop="$emit('delete', p)">删除</button>
                 <button type="button" class="op primary" @click="$emit('openAttempts', p)">查看提交记录</button>
               </div>
             </div>
@@ -61,9 +62,10 @@ import { flashCardTestApi } from '../../../api/flashCardTest'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  nodeId: { type: String, default: '' }
+  nodeId: { type: String, default: '' },
+  refreshTrigger: { type: Number, default: 0 }
 })
-defineEmits(['close', 'redo', 'openAttempts'])
+defineEmits(['close', 'redo', 'delete', 'openAttempts'])
 
 const loading = ref(false)
 const papers = ref([])
@@ -98,13 +100,10 @@ const setDifficulty = (v) => {
 
 watch(
   () => [props.visible, props.nodeId],
-  () => {
-    if (props.visible) load()
-  }
+  () => { if (props.visible) load() }
 )
-watch(difficulty, () => {
-  if (props.visible) load()
-})
+watch(difficulty, () => { if (props.visible) load() })
+watch(() => props.refreshTrigger, () => { if (props.visible) load() })
 
 onMounted(() => {
   if (props.visible) load()

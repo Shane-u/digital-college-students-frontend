@@ -79,7 +79,7 @@ defineEmits(['update:modelValue'])
 }
 
 .text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 750;
   color: #334155;
   line-height: 1.55;

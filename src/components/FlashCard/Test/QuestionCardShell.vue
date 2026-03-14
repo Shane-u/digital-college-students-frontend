@@ -55,7 +55,7 @@ defineProps({
   min-width: 0;
 }
 .q-title {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 900;
   color: #1e293b;
   line-height: 1.55;

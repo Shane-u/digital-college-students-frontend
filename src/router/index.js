@@ -11,6 +11,7 @@ import PhotoWallPage from '../views/PhotoWallPage.vue'
 import RecordPreviewPage from '../views/RecordPreviewPage.vue'
 import ResumeBuilderPage from '../views/ResumeBuilderPage.vue'
 import AIInterviewPage from '../views/AIInterviewPage.vue'
+import AIInterviewSessionPage from '../views/AIInterviewSessionPage.vue'
 
 const routes = [
   {
@@ -76,6 +77,11 @@ const routes = [
     path: '/career/ai-interview',
     name: 'AIInterview',
     component: AIInterviewPage
+  },
+  {
+    path: '/career/ai-interview/session',
+    name: 'AIInterviewSession',
+    component: AIInterviewSessionPage
   },
   {
     path: '/career/showcase',

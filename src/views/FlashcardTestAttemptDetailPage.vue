@@ -17,7 +17,7 @@
             <div class="idx">{{ idx + 1 }}</div>
             <div class="content">{{ q.content }}</div>
             <div class="score">
-              <span class="u">{{ q.userScore }}</span>
+              <span class="u" :class="scoreClass(q)">{{ q.userScore }}</span>
               <span class="sep">/</span>
               <span class="t">{{ q.score }}</span>
             </div>
@@ -65,9 +65,21 @@ const questions = ref([])
 
 const goBack = () => router.back()
 
-const userAnswerClass = (q) => {
+const fullAndGot = (q) => {
   const full = Number(q.score ?? 0)
   const got = Number(q.userScore ?? 0)
+  return { full, got }
+}
+
+const scoreClass = (q) => {
+  const { full, got } = fullAndGot(q)
+  if (!Number.isFinite(full) || full <= 0) return ''
+  if (!Number.isFinite(got)) return 'score-wrong'
+  return got >= full ? 'score-correct' : 'score-wrong'
+}
+
+const userAnswerClass = (q) => {
+  const { full, got } = fullAndGot(q)
   if (!Number.isFinite(full) || full <= 0) return ''
   if (!Number.isFinite(got)) return 'wrong'
   return got >= full ? 'correct' : 'wrong'
@@ -105,14 +117,14 @@ onMounted(async () => {
   padding: 12px 0;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
-  gap: 12px;
+  gap: 400px;
   align-items: center;
 }
 .meta {
   min-width: 0;
 }
 .title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 950;
   color: #111827;
 }
@@ -162,7 +174,7 @@ onMounted(async () => {
   font-weight: 900;
 }
 .content {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 850;
   color: #111827;
   line-height: 1.6;
@@ -174,8 +186,13 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .score .u {
-  color: #111827;
   font-style: italic;
+}
+.score .u.score-correct {
+  color: #16a34a;
+}
+.score .u.score-wrong {
+  color: #ef4444;
 }
 .opts {
   margin-top: 10px;
@@ -200,7 +217,7 @@ onMounted(async () => {
   background: #f3f4f6;
 }
 .op .t {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   color: #374151;
   line-height: 1.6;
@@ -217,12 +234,12 @@ onMounted(async () => {
   align-items: start;
 }
 .label {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 850;
   color: #6b7280;
 }
 .val {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 650;
   color: #111827;
   line-height: 1.6;

@@ -609,15 +609,13 @@ const loadLearningPathHistory = async (lpSessionId, sessionId) => {
     // 同步当前学习路径 sessionId，确保后续润色请求能带上正确的 sessionId
     learningPathSessionId.value = String(lpSessionId)
 
-    // 更新会话的统计信息（不保存具体消息内容）
+    // 更新会话的关联信息（不更新 updatedAt，避免仅查看时列表项跑到顶部）
     sessions.value = sessions.value.map(s =>
       s.id === sessionId
         ? {
             ...s,
             lpSessionId: String(lpSessionId),
-            type: s.type || 'learningPath',
-            updatedAt: new Date(),
-            lastMessageTime: new Date().toISOString()
+            type: s.type || 'learningPath'
           }
         : s
     )

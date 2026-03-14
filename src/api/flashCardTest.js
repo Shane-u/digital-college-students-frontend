@@ -53,6 +53,14 @@ export const flashCardTestApi = {
     return request.get(`/flash-card/test/papers/${testId}`)
   },
 
+  /**
+   * 删除试卷（逻辑删除，同步 Neo4j）
+   * DELETE /flash-card/test/{testId}
+   */
+  delete(testId) {
+    return request.delete(`/flash-card/test/${testId}`)
+  },
+
   normalizeTestVO(res) {
     const data = res?.data ?? res
     return data?.data ?? data

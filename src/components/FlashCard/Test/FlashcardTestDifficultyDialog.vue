@@ -10,13 +10,12 @@
   >
     <template #header>
       <div class="head">
-        <div class="title">生成测试题</div>
+        <div class="title">选择难度</div>
         <button type="button" class="x" @click="$emit('close')" aria-label="关闭">×</button>
       </div>
     </template>
 
     <div class="body">
-      <div class="hint">请选择难度（后续会影响题目深度与综合度）</div>
       <div class="grid">
         <button
           v-for="opt in options"
@@ -99,13 +98,6 @@ const options = [
 
 .body {
   padding: 6px 2px 4px;
-}
-
-.hint {
-  font-size: 12px;
-  font-weight: 650;
-  color: #6b7280;
-  margin-bottom: 12px;
 }
 
 .grid {

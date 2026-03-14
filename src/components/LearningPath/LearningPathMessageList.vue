@@ -1,10 +1,10 @@
 <template>
   <div class="path-message-list">
     <template v-for="(msg, idx) in messages" :key="msg.id || idx">
-      <!-- 用户消息：右侧 -->
+      <!-- 用户消息：右侧（再次润色时携带的 JSON 不展示） -->
       <div v-if="msg.role === 'user'" class="path-msg-item path-msg-user">
         <div class="path-msg-bubble path-msg-bubble-user">
-          {{ msg.content }}
+          {{ displayUserContent(msg.content) }}
         </div>
         <div class="path-msg-avatar path-msg-avatar-user">Z</div>
       </div>
@@ -30,7 +30,7 @@
           </template>
           <div v-else-if="msg.isStreaming" class="path-msg-loading">正在生成学习路径...</div>
           <div v-else-if="msg.content" class="path-msg-bubble path-msg-bubble-model path-msg-bubble-text">
-            {{ msg.content }}
+            {{ displayModelContent(msg.content) }}
           </div>
         </div>
       </div>
@@ -52,6 +52,28 @@ defineProps({
 
 defineEmits(['confirm', 'polish'])
 const endRef = ref(null)
+
+// 用户消息：再次润色时可能带完整 prompt + JSON，只展示简短文案
+function displayUserContent(content) {
+  if (content == null || typeof content !== 'string') return ''
+  const s = content.trim()
+  if (!s) return ''
+  if (s.includes('再次润色') && (s.includes('"nodes"') || (s.includes('{') && s.length > 200))) {
+    return '再次润色当前学习路径'
+  }
+  const jsonStart = s.indexOf('{"nodes"')
+  if (jsonStart > 0) return s.slice(0, jsonStart).trim() || '再次润色当前学习路径'
+  return s
+}
+
+// 模型消息：若为纯 JSON 或带大段 JSON 的文本，不展示原始内容（仅保留思维导图时的 fallback 提示）
+function displayModelContent(content) {
+  if (content == null || typeof content !== 'string') return ''
+  const s = content.trim()
+  if (!s) return ''
+  if (s.includes('"nodes"') && (s.startsWith('{') || s.length > 500)) return '已生成学习路径，请查看上方导图。'
+  return s
+}
 </script>
 
 <style scoped>

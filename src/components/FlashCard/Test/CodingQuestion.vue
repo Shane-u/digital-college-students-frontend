@@ -3,29 +3,81 @@
     <div class="lang-row">
       <div class="pill">{{ languageLabel }}</div>
     </div>
-    <textarea
-      class="editor"
-      :value="modelValue"
-      spellcheck="false"
-      :placeholder="placeholder"
-      @input="$emit('update:modelValue', $event.target.value)"
-    ></textarea>
+    <div ref="editorContainer" class="monaco-wrapper"></div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   language: { type: String, default: 'javascript' },
   placeholder: { type: String, default: '在这里编写你的代码…' }
 })
-defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue'])
 
 const languageLabel = computed(() => {
   const map = { javascript: 'JavaScript', typescript: 'TypeScript', java: 'Java', python: 'Python', c: 'C', cpp: 'C++' }
   return map[props.language] || String(props.language || 'Code')
+})
+
+const editorContainer = ref(null)
+let editor = null
+let monaco = null
+
+const monacoLanguageMap = {
+  javascript: 'javascript',
+  typescript: 'typescript',
+  java: 'java',
+  python: 'python',
+  c: 'c',
+  cpp: 'cpp'
+}
+
+onMounted(async () => {
+  if (!editorContainer.value) return
+  monaco = await import('monaco-editor')
+  const lang = monacoLanguageMap[props.language] || 'javascript'
+  editor = monaco.editor.create(editorContainer.value, {
+    value: props.modelValue || '',
+    language: lang,
+    theme: 'vs',
+    automaticLayout: true,
+    minimap: { enabled: false },
+    fontSize: 13,
+    lineHeight: 22,
+    padding: { top: 14 },
+    scrollBeyondLastLine: false,
+    wordWrap: 'on',
+    // 提示框使用固定定位，避免被父级 overflow 裁剪
+    fixedOverflowWidgets: true,
+    // 代码提示（IntelliSense）
+    quickSuggestions: { other: true, comments: false, strings: true },
+    suggestOnTriggerCharacters: true,
+    acceptSuggestionOnCommitCharacter: true,
+    wordBasedSuggestions: 'matchingDocuments',
+    parameterHints: { enabled: true },
+    suggest: { showKeywords: true, showSnippets: true },
+    tabSize: 2,
+    insertSpaces: true
+  })
+  editor.onDidChangeModelContent(() => {
+    emit('update:modelValue', editor.getValue())
+  })
+  // 外部 modelValue 变化时同步到编辑器（如加载草稿）
+  watch(() => props.modelValue, (val) => {
+    if (editor && editor.getValue() !== (val || '')) {
+      editor.setValue(val || '')
+    }
+  })
+})
+
+onBeforeUnmount(() => {
+  if (editor) {
+    editor.dispose()
+    editor = null
+  }
 })
 </script>
 
@@ -47,26 +99,19 @@ const languageLabel = computed(() => {
   border: 1px solid rgba(129, 140, 248, 0.35);
 }
 
-.editor {
+.monaco-wrapper {
   width: 100%;
   min-height: 220px;
-  resize: vertical;
-  padding: 14px 14px;
   border-radius: 16px;
-  border: none;
-  background: #0b1220;
-  color: #e2e8f0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
+  overflow: visible;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e5e7eb;
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
-.editor:focus {
-  outline: none;
-  box-shadow: 0 18px 38px rgba(79, 70, 229, 0.18), 0 0 0 2px rgba(129, 140, 248, 0.2);
+.monaco-wrapper:focus-within {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
+  border-color: rgba(129, 140, 248, 0.5);
 }
 </style>
-

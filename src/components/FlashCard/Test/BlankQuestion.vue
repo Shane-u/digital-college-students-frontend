@@ -25,7 +25,7 @@ defineEmits(['update:modelValue'])
   border: none;
   border-bottom: 1px solid #e5e7eb;
   background: transparent;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   transition: border-color 0.18s ease;
 }

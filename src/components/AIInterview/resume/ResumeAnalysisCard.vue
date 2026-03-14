@@ -347,7 +347,7 @@ watch(
 }
 
 .q-main {
-  font-size: 12px;
+  font-size: 16px;
   color: #7f1d1d;
   line-height: 1.7;
 }
@@ -373,7 +373,7 @@ watch(
 }
 
 .next-main {
-  font-size: 12px;
+  font-size: 16px;
   color: #111827;
 }
 
@@ -425,14 +425,14 @@ watch(
 }
 
 .empty-desc {
-  font-size: 12px;
+  font-size: 16px;
   color: #6b7280;
   margin: 4px 0 0;
   line-height: 1.7;
 }
 
 .placeholder {
-  font-size: 12px;
+  font-size: 16px;
   color: #94a3b8;
   padding: 10px 10px;
   border-radius: 14px;

@@ -155,8 +155,10 @@
     <FlashcardTestPointDrawer
       :visible="showTestPoint"
       :node-id="testPointNodeId"
+      :refresh-trigger="drawerRefreshTrigger"
       @close="showTestPoint = false"
       @redo="handleRedoPaper"
+      @delete="handleDeletePaper"
       @open-attempts="handleOpenAttempts"
     />
   </div>
@@ -166,13 +168,12 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 import { flashCardTestApi } from '../../api/flashCardTest'
 import {
   hasTestPoint,
-  isFlashcardPassed,
   markHasTestPoint,
   saveFlashcardTestContext,
   saveTestPaper,
@@ -383,6 +384,9 @@ function pathPrefixes(parts) {
 
 // 节点显示名函数：优先 name，没有则 title，再没有才用 label 或 id（避免显示 userId）
 const getNodeDisplayName = (d) => {
+  if (d?.id === '根' || /Root/i.test(String(d?.label || ''))) return '' // 根节点不显示文字
+  const rawLabel = (d?.label || d?.properties?.label || '').toString()
+  if (/TestPoint/i.test(rawLabel) || d?.type === 'testpoint') return '测试点'
   if (d.properties) {
     if (d.properties.name) return d.properties.name
     if (d.properties.title) return d.properties.title
@@ -398,15 +402,8 @@ const getNodeDisplayName = (d) => {
   return d.label || d.id
 }
 
-const nodePassedCache = new Map()
-const getNodePassed = (d) => {
-  const bid = d?.businessId != null ? String(d.businessId) : null
-  if (!bid) return false
-  if (nodePassedCache.has(bid)) return nodePassedCache.get(bid) === true
-  const passed = isFlashcardPassed(bid)
-  nodePassedCache.set(bid, passed)
-  return passed
-}
+// 绿色勾：以节点数据 litStatus 为准，为 true 显示、为 false 或不存在则不显示
+const getNodePassed = (d) => d?.properties?.litStatus === true
 
 // 渲染D3图谱（支持 根/课程/名 路径格式，Neo4j 风格节点）
 let simulation = null
@@ -436,15 +433,16 @@ const FAST_FORCE = {
 // 动画参数（与参考组件一致：duration 900-1000ms, easeOutQuad）
 const ANIM_DURATION = 1000
 const ANIM_EASING = d3.easeQuadOut
+// 图谱节点配色：靛紫系为主 + 琥珀闪卡 + 天空蓝测试点，统一柔和
 const NEO4J = {
-  // 参考图谱模板：整体偏蓝紫色调
-  categoryFill: '#7880f0',
+  rootFill: '#6366f1',       // 根节点：靛蓝
+  categoryFill: '#818cf8',   // 分类节点：浅靛
+  flashcardFill: '#d97706',   // 闪卡节点：琥珀色
+  testPointFill: '#0ea5e9',   // 测试点：天空蓝
   categoryStroke: '#ffffff',
-  flashcardFill: '#F2A73D',
   flashcardStroke: '#ffffff',
-  rootFill: '#A78BFA',
-  linkStroke: '#A5ABB6',
-  labelFill: '#333333',
+  linkStroke: '#94a3b8',     // 连线：柔和灰蓝
+  labelFill: '#334155',
   nodeStrokeWidth: 2
 }
 
@@ -471,9 +469,19 @@ const getGraphNodeDepth = (d) => {
 }
 
 const isFlashcardNode = (d) => {
-  if (d?.type === 'flashcard') return true
+  if (!d) return false
+  if (d.type === 'flashcard') return true
   const label = (d?.label || '').toString()
+  // 后端已存在的 TestPoint 节点不要当作闪卡
+  if (/TestPoint/i.test(label)) return false
   return /FlashCard|Flashcard/i.test(label)
+}
+
+const isTestPointNode = (d) => {
+  if (!d) return false
+  if (d.type === 'testpoint') return true
+  const label = (d.label || d.properties?.label || '').toString()
+  return /TestPoint/i.test(label)
 }
 
 const isRootNode = (d) => {
@@ -550,6 +558,7 @@ const getNodeRadius = (d) => {
 }
 
 const getNodeFill = (d) => {
+  if (isTestPointNode(d)) return NEO4J.testPointFill
   if (isFlashcardNode(d)) return NEO4J.flashcardFill
   if (isRootNode(d)) return NEO4J.rootFill
   return NEO4J.categoryFill
@@ -566,7 +575,9 @@ const radialByDepth = (depth) => {
 
 const getRadialDistance = (d) => {
   const depth = getGraphNodeDepth(d)
-  // 闪卡节点统一推到最外圈，让连线朝外延伸，而不是朝根收缩
+  // 测试点节点在闪卡外侧，向外伸展
+  if (isTestPointNode(d)) return 540
+  // 闪卡节点统一推到最外圈，让连线朝外延伸
   if (isFlashcardNode(d)) return 480
   return radialByDepth(depth)
 }
@@ -594,7 +605,6 @@ const getNodeTextStroke = (d) => {
 }
 
 const renderGraph = () => {
-  nodePassedCache.clear()
   updateDimensions()
   if (!svgRef.value || dimensions.value.width === 0 || dimensions.value.height === 0) return
   const { width, height } = dimensions.value
@@ -626,14 +636,77 @@ const renderGraph = () => {
       type: l.type || 'RELATES_TO'
     }))
 
-    // 前端补充“测试点”子节点：首次生成后，挂在对应闪卡节点旁
+    // 任意一个闪卡只保留一个测试点节点：按「边的来源」去重，同一节点连出的多个 TestPoint 只保留一个
+    const testPointNodes = nodes.filter(n => isTestPointNode(n))
+    const testPointIdSet = new Set(testPointNodes.map(n => n.id))
+    const nonTestPointNodes = nodes.filter(n => !isTestPointNode(n))
+    // 统计每个“来源节点”连出了哪些 TestPoint（source -> [target TestPoint ids]）
+    const sourceToTestTargets = new Map()
+    for (const l of links) {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      if (!testPointIdSet.has(tid)) continue
+      if (!sourceToTestTargets.has(sid)) sourceToTestTargets.set(sid, [])
+      sourceToTestTargets.get(sid).push(tid)
+    }
+    const keptTestPointIds = new Set()
+    sourceToTestTargets.forEach((targetIds) => {
+      if (targetIds.length > 0) keptTestPointIds.add(targetIds[0])
+    })
+    const uniqueTestPointNodes = testPointNodes.filter(n => keptTestPointIds.has(n.id))
+    // 为保留的测试点节点补全 businessId（用于点击打开抽屉）：来自连线的源节点
+    const targetToSourceId = new Map()
+    for (const l of links) {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      if (testPointIdSet.has(tid)) targetToSourceId.set(tid, sid)
+    }
+    const allNodesForLookup = [...nonTestPointNodes, ...testPointNodes]
+    uniqueTestPointNodes.forEach((n) => {
+      const sourceId = targetToSourceId.get(n.id)
+      const sourceNode = allNodesForLookup.find((x) => x.id === sourceId)
+      const bidFromLink = sourceNode?.businessId != null ? String(sourceNode.businessId) : null
+      // 若连线来源是闪卡节点，用其 businessId 作为测试点的闪卡 id，保证点击打开抽屉时能按闪卡拉取试卷列表
+      if (bidFromLink && isFlashcardNode(sourceNode)) {
+        n.businessId = bidFromLink
+        if (!n.properties) n.properties = {}
+        n.properties.nodeId = bidFromLink
+      } else if (!n.businessId && (n.properties?.nodeId == null || n.properties.nodeId === '')) {
+        // 否则仅当完全没有时再补（可能来源是分类节点，无 businessId）
+        if (bidFromLink) {
+          n.businessId = bidFromLink
+          if (!n.properties) n.properties = {}
+          n.properties.nodeId = bidFromLink
+        }
+      }
+      n.type = 'testpoint'
+    })
+    nodes = [...nonTestPointNodes, ...uniqueTestPointNodes]
+    const keptNodeIds = new Set(nodes.map((n) => n.id))
+    links = links.filter((l) => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      return keptNodeIds.has(sid) && keptNodeIds.has(tid)
+    })
+
+    // 前端补充“测试点”子节点：仅当该闪卡在图中既没有对应 TestPoint 节点、也没有“闪卡→TestPoint”的边时才补（Neo4j 已有一个测试点则不再补）
     const extraNodes = []
     const extraLinks = []
+    const hasLinkFromFlashcardToTestPoint = (flashcardNodeId) => links.some((l) => {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source
+      const tid = typeof l.target === 'object' ? l.target.id : l.target
+      if (sid !== flashcardNodeId) return false
+      const targetNode = nodes.find((nn) => nn.id === tid)
+      return targetNode && isTestPointNode(targetNode)
+    })
     for (const n of nodes) {
       if (!isFlashcardNode(n)) continue
       const bid = n.businessId != null ? String(n.businessId) : null
       if (!bid) continue
       if (!hasTestPoint(bid)) continue
+      const backendHasById = nodes.some(x => isTestPointNode(x) && (x.businessId != null ? String(x.businessId) === bid : String(x.properties?.nodeId ?? '') === bid))
+      const backendHasByLink = hasLinkFromFlashcardToTestPoint(n.id)
+      if (backendHasById || backendHasByLink) continue
       const tpId = `testpoint:${bid}`
       extraNodes.push({
         id: tpId,
@@ -701,6 +774,21 @@ const renderGraph = () => {
         type: 'belongs_to'
       })
     }
+  })
+
+  // 无 Neo4j 时：有测试记录的闪卡每个只补一个测试点节点，点击后抽屉内展示多套试卷列表
+  filteredFlashcards.value.forEach(card => {
+    const bid = card.id != null ? String(card.id) : null
+    if (!bid || !hasTestPoint(bid)) return
+    const tpId = `testpoint:${bid}`
+    nodes.push({
+      id: tpId,
+      label: '测试点',
+      type: 'testpoint',
+      properties: { nodeId: bid },
+      businessId: bid
+    })
+    links.push({ source: card.id, target: tpId, type: 'HAS_TEST_POINT' })
   })
   }
   
@@ -851,7 +939,7 @@ const renderGraph = () => {
     )
     .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 6))
   
-  const linkLayer = gRoot.append('g').attr('class', 'links').attr('stroke', '#A5ABB6').attr('stroke-opacity', 0.8)
+  const linkLayer = gRoot.append('g').attr('class', 'links').attr('stroke', NEO4J.linkStroke).attr('stroke-opacity', 0.75)
   const nodeLayer = gRoot.append('g').attr('class', 'nodes')
   const textLayer = gRoot.append('g').attr('class', 'texts')
 
@@ -1004,10 +1092,10 @@ const renderGraph = () => {
     .style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   textSel.transition().duration(220).style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   
-  // 点击节点显示 content 小卡片
+  // 点击节点显示 content 小卡片（测试点用 isTestPointNode 判断，兼容后端未带 type 的节点）
   nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
-    if (d?.type === 'testpoint') {
+    if (isTestPointNode(d)) {
       const bid = d?.businessId != null ? String(d.businessId) : (d?.properties?.nodeId != null ? String(d.properties.nodeId) : '')
       if (bid) {
         openTestPointDrawer(bid)
@@ -1300,13 +1388,13 @@ const renderGraph = () => {
     })
   })
 
-  // hover 高亮：外圈加粗 + 光晕圈显现（平台紫主色）
+  // hover 高亮：外圈加粗 + 光晕圈显现（靛蓝主色）
   nodeSel
     .on('mouseover', function (ev, d) {
       const gSel = d3.select(this)
       gSel
         .select('.node-outer')
-        .attr('stroke', 'rgba(167, 139, 250, 1)')
+        .attr('stroke', '#6366f1')
         .attr('stroke-width', isRootNode(d) ? 8 : 6)
       gSel
         .select('.node-halo')
@@ -1314,7 +1402,7 @@ const renderGraph = () => {
         .duration(150)
         .attr('r', getNodeRadius(d) + 14)
         .style('opacity', 1)
-      gSel.style('filter', 'drop-shadow(0 0 18px rgba(167, 139, 250, 0.6))')
+      gSel.style('filter', 'drop-shadow(0 0 18px rgba(99, 102, 241, 0.5))')
     })
     .on('mouseout', function (ev, d) {
       const gSel = d3.select(this)
@@ -1618,12 +1706,35 @@ const confirmGenerateTest = async () => {
   }
 }
 
-// 测试点抽屉（历史试卷列表）- 下一步会补全 UI，这里先占位打开
+// 测试点抽屉（历史试卷列表）
 const showTestPoint = ref(false)
 const testPointNodeId = ref('')
+const drawerRefreshTrigger = ref(0)
 const openTestPointDrawer = (nodeId) => {
   testPointNodeId.value = String(nodeId)
   showTestPoint.value = true
+}
+
+const handleDeletePaper = async (paper) => {
+  const tid = paper?.testId
+  if (tid == null) return
+  try {
+    await ElMessageBox.confirm('确定删除该试卷？删除后不可恢复。', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await flashCardTestApi.delete(tid)
+    drawerRefreshTrigger.value++
+    emit('refresh')
+    ElMessage && ElMessage.success('已删除')
+  } catch (e) {
+    ElMessage && ElMessage.error(e?.message || e?.response?.data?.message || '删除失败')
+  }
 }
 
 const handleRedoPaper = async (paper) => {

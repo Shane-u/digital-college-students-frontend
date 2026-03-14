@@ -91,14 +91,15 @@ onMounted(async () => {
   padding: 12px 0;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
-  gap: 12px;
+  gap: 400px;
   align-items: center;
+  justify-content: flex-start;
 }
 .meta {
   min-width: 0;
 }
 .title {
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 900;
   color: #111827;
 }
@@ -128,7 +129,7 @@ onMounted(async () => {
   padding: 24px 2px;
   color: #6b7280;
   font-weight: 650;
-  font-size: 13px;
+  font-size: 16px;
 }
 .list {
   padding-top: 10px;
@@ -155,7 +156,7 @@ onMounted(async () => {
   gap: 10px;
 }
 .score {
-  font-size: 22px;
+  font-size: 34px;
   font-weight: 950;
   font-style: italic;
 }
@@ -166,7 +167,7 @@ onMounted(async () => {
   color: #ef4444;
 }
 .hint {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 750;
   color: #6b7280;
 }
@@ -174,13 +175,13 @@ onMounted(async () => {
   text-align: right;
 }
 .time {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
   color: #6b7280;
 }
 .more {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   color: #4f46e5;
 }

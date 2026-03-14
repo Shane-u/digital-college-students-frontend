@@ -1,5 +1,5 @@
 <template>
-  <section class="ai-section">
+  <section id="ai-interview-review-section" class="ai-section">
     <div v-if="!embedded" class="section-header">
       <div class="section-header-left">
         <h2 class="section-title">三、面试评价与复盘</h2>
@@ -20,9 +20,7 @@
               <div class="score-label">综合评分</div>
             </div>
           </div>
-          <p class="hero-desc">
-            {{ review.overall.summary || '后端暂未给出招聘建议或综合评价。' }}
-          </p>
+          <p class="hero-desc" v-html="summaryWithRecommendationHighlight"></p>
         </div>
 
         <div v-if="review.dimensions && review.dimensions.length" class="card">
@@ -139,6 +137,30 @@ defineEmits(['back', 'retest', 'resume'])
 
 const embedded = computed(() => props.embedded)
 const detailTab = ref('STRENGTHS') // STRENGTHS | WEAKNESSES | QUESTIONS | SUGGESTIONS
+
+function escapeHtml(s) {
+  if (s == null) return ''
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** 将总评中“是否推荐录用”相关语句用 span 包裹，便于加粗放大 */
+const summaryWithRecommendationHighlight = computed(() => {
+  const raw = props.review?.overall?.summary || '后端暂未给出招聘建议或综合评价。'
+  const escaped = escapeHtml(raw)
+  const regex = /[^。；]*推荐[^。；]*录用[^。；]*[。；]?|[^。；]*不推荐[^。；]*录用[^。；]*[。；]?/g
+  const match = regex.exec(raw)
+  if (!match || !match[0]) return escaped
+  const segment = match[0]
+  const segEscaped = escapeHtml(segment)
+  const idx = raw.indexOf(segment)
+  const before = escapeHtml(raw.slice(0, idx))
+  const after = escapeHtml(raw.slice(idx + segment.length))
+  return `${before}<span class="hero-desc-recommendation">${segEscaped}</span>${after}`
+})
 </script>
 
 <style scoped>
@@ -331,6 +353,12 @@ const detailTab = ref('STRENGTHS') // STRENGTHS | WEAKNESSES | QUESTIONS | SUGGE
   color: #4b5563;
   line-height: 1.8;
   margin: 8px 0 0;
+}
+
+.hero-desc :deep(.hero-desc-recommendation) {
+  font-size: 16px;
+  font-weight: 800;
+  color: #111827;
 }
 
 .score-badge {
