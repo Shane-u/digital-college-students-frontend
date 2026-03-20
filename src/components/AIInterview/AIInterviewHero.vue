@@ -12,7 +12,7 @@
         <button type="button" class="btn-tertiary" @click="$emit('history')">面试记录</button>
       </div>
       <div class="ai-hero-tags">
-        <span class="tag">简历诊断</span>
+        <span class="tag">简历分析</span>
         <span class="tag">岗位匹配</span>
         <span class="tag">视频面试</span>
       </div>
