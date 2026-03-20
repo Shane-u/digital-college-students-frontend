@@ -129,6 +129,20 @@ export function remove(pathId, userId) {
 }
 
 /**
+ * 重命名学习路径 topic
+ * PUT /learning-path/{pathId}/topic
+ */
+export function renameTopic(pathId, topic, userId) {
+  return request.put(
+    `${REQUEST_BASE}/${pathId}/topic`,
+    { topic: topic || '' },
+    {
+      params: userId != null ? { userId } : {}
+    }
+  )
+}
+
+/**
  * 获取学习路径图谱（节点 + 关系），供前端展示 Neo4j 图
  * GET /learning-path/{pathId}/graph
  * @returns {{ pathId, topic, nodes, relationships }}
@@ -172,6 +186,18 @@ export function matchFlashcards(pathId, body, userId) {
   })
 }
 
+/**
+ * 学习路径节点生成推荐知识点
+ * POST /learning-path/recommend-questions
+ * @param {{ topic: string }} body
+ * @param {string|number} [userId]
+ */
+export function recommendNodeKnowledge(body, userId) {
+  return request.post(`${REQUEST_BASE}/recommend-questions`, body, {
+    params: userId != null ? { userId } : {}
+  })
+}
+
 export const learningPathApi = {
   planStreamFlux,
   save,
@@ -179,7 +205,9 @@ export const learningPathApi = {
   getById,
   getGraph,
   remove,
+   renameTopic,
   getJson,
   updateJson,
-  matchFlashcards
+  matchFlashcards,
+  recommendNodeKnowledge
 }

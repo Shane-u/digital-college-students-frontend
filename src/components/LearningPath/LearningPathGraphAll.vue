@@ -20,9 +20,10 @@
             <button class="lp-node-drawer-close" @click="closeNodeCard">×</button>
           </div>
           <div class="lp-node-drawer-body">
-            <div class="lp-node-meta">所属路径：{{ titleById[nodeCardData.__pathId] || nodeCardData.__pathId }}</div>
-            <div v-if="nodeCardData.testPointsProgress" class="lp-node-meta">进度: {{ nodeCardData.testPointsProgress }}</div>
-            <div v-if="nodeCardData.childrenProgress" class="lp-node-meta">子节点: {{ nodeCardData.childrenProgress }}</div>
+            <LearningPathNodeKnowledgePanel
+              :topic="nodeCardTopic"
+              :user-id="userId"
+            />
           </div>
           <div class="lp-node-drawer-actions">
             <button type="button" class="lp-node-btn lp-node-edit" @click="openEdit">编辑</button>
@@ -70,6 +71,7 @@ import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { updateJson, matchFlashcards } from '../../api/learningPath'
 import GraphTopHeader from '../common/GraphTopHeader.vue'
+import LearningPathNodeKnowledgePanel from './LearningPathNodeKnowledgePanel.vue'
 
 const props = defineProps({
   userId: { type: [String, Number], default: null },
@@ -193,6 +195,11 @@ const buildCombined = () => {
 
   return { nodes, links: uniqueLinks }
 }
+
+const nodeCardTopic = computed(() => {
+  const n = nodeCardData.value || {}
+  return n.name || n.label || ''
+})
 
 const getTheme = (pid) => props.themeById?.[pid] || {}
 const getNodeRadius = (d) => (d.isRoot ? 28 : 18)

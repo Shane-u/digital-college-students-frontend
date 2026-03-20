@@ -337,10 +337,8 @@ const handlePathPolish = (pathJson) => {
   emit('pathPolish', pathJson)
 }
 
-const handleCardClick = (content) => {
-  // 将卡片内容填充到输入框，将换行符替换为空格
+const applyInputAndFocus = (content) => {
   inputValue.value = content.replace(/\n/g, ' ')
-  // 自动聚焦到输入框
   nextTick(() => {
     const textarea = document.querySelector('.input-textarea')
     if (textarea) {
@@ -349,6 +347,17 @@ const handleCardClick = (content) => {
       textarea.style.height = textarea.scrollHeight + 'px'
     }
   })
+}
+
+const handleCardClick = (content) => {
+  // 将卡片内容填充到输入框，将换行符替换为空格
+  applyInputAndFocus(content)
+}
+
+const handleExternalSetInput = (event) => {
+  const text = event?.detail?.text || ''
+  if (!text) return
+  applyInputAndFocus(text)
 }
 
 // 初始化用户信息
@@ -386,6 +395,11 @@ const initUserInfo = async () => {
 
 onMounted(() => {
   initUserInfo()
+  window.addEventListener('twin-study-set-input', handleExternalSetInput)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('twin-study-set-input', handleExternalSetInput)
 })
 
 const handleSend = () => {

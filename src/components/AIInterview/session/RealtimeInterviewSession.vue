@@ -186,7 +186,7 @@ const connect = async () => {
     ws.onopen = async () => {
       wsStatus.value = 'OPEN'
       await log('ws open')
-      await fetchNextQuestion()
+      // await fetchNextQuestion()
       await startWebRTC()
     }
 

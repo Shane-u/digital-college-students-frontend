@@ -13,6 +13,9 @@
     <div class="content">
       <div class="grid">
         <div class="card hero">
+          <div v-if="recommendStampInfo.src" class="recommend-stamp">
+            <img :src="recommendStampInfo.src" :alt="recommendStampInfo.alt" />
+          </div>
           <div class="hero-title-row">
             <div class="hero-title">本次面试总评</div>
             <div class="score-badge">
@@ -127,6 +130,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import recommendStamp from '../../assets/AIInterview/recommend.png'
+import unrecommendStamp from '../../assets/AIInterview/unrecommend.png'
 
 const props = defineProps({
   review: { type: Object, required: true },
@@ -147,19 +152,29 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;')
 }
 
-/** 将总评中“是否推荐录用”相关语句用 span 包裹，便于加粗放大 */
+/** 将总评中“不推荐/不建议录用/推荐录用”等关键短语加粗放大 */
 const summaryWithRecommendationHighlight = computed(() => {
   const raw = props.review?.overall?.summary || '后端暂未给出招聘建议或综合评价。'
   const escaped = escapeHtml(raw)
-  const regex = /[^。；]*推荐[^。；]*录用[^。；]*[。；]?|[^。；]*不推荐[^。；]*录用[^。；]*[。；]?/g
-  const match = regex.exec(raw)
-  if (!match || !match[0]) return escaped
-  const segment = match[0]
-  const segEscaped = escapeHtml(segment)
-  const idx = raw.indexOf(segment)
-  const before = escapeHtml(raw.slice(0, idx))
-  const after = escapeHtml(raw.slice(idx + segment.length))
-  return `${before}<span class="hero-desc-recommendation">${segEscaped}</span>${after}`
+  // 先整体转义，再对关键词做局部替换，避免破坏其它内容
+  return escaped
+    .replace(/不推荐录用/g, '<span class="hero-desc-recommendation">不推荐录用</span>')
+    .replace(/不建议录用/g, '<span class="hero-desc-recommendation">不建议录用</span>')
+    .replace(/不推荐/g, '<span class="hero-desc-recommendation">不推荐</span>')
+    .replace(/推荐录用/g, '<span class="hero-desc-recommendation">推荐录用</span>')
+})
+
+const recommendStampInfo = computed(() => {
+  const summary = String(props.review?.overall?.summary || '')
+  const isNegative = /不推荐|不建议录用|不建议/.test(summary)
+  const isPositive = !isNegative && /推荐录用|建议录用|推荐/.test(summary)
+  if (isNegative) {
+    return { src: unrecommendStamp, alt: '不推荐录用' }
+  }
+  if (isPositive) {
+    return { src: recommendStamp, alt: '推荐录用' }
+  }
+  return { src: null, alt: '' }
 })
 </script>
 
@@ -281,6 +296,7 @@ const summaryWithRecommendationHighlight = computed(() => {
 
 .card.hero {
   grid-column: 1 / -1;
+  position: relative;
   background:
     radial-gradient(circle at top left, rgba(129, 140, 248, 0.22), transparent 55%),
     linear-gradient(135deg, rgba(79, 70, 229, 0.06), rgba(236, 72, 153, 0.03));
@@ -359,6 +375,19 @@ const summaryWithRecommendationHighlight = computed(() => {
   font-size: 16px;
   font-weight: 800;
   color: #111827;
+}
+
+.recommend-stamp {
+  position: absolute;
+  top: 15px;
+  left: 9px;
+  transform: rotate(-10deg);
+}
+
+.recommend-stamp img {
+  width: 100px;
+  height: auto;
+  opacity: 0.85;
 }
 
 .score-badge {

@@ -56,9 +56,20 @@
           ></div>
         </div>
         <div class="nav-right">
-          <a href="/login" class="nav-auth" ref="loginLink">登录/注册</a>
-          
-          <div class="user-info-container" ref="userContainer" style="display: none;">
+          <a
+            v-if="!isLoggedIn"
+            href="/login"
+            class="nav-auth"
+            ref="loginLink"
+          >
+            登录/注册
+          </a>
+
+          <div
+            v-else
+            class="user-info-container"
+            ref="userContainer"
+          >
             <div class="user-avatar">
               <img v-if="userAvatar" :src="userAvatar" class="user-avatar-img" alt="用户头像" />
               <span v-else class="user-account" ref="userAccount">{{ userDisplayName }}</span>
@@ -186,6 +197,9 @@ const profileForm = ref({
   bio: ''
 })
 const selectedAvatarFile = ref(null)
+
+// 登录状态（避免已登录用户初始渲染时闪现“登录/注册”）
+const isLoggedIn = ref(!!localStorage.getItem('userInfo'))
 
 // 用户信息
 const userAvatar = ref('')
@@ -567,12 +581,8 @@ const initUserStatus = async () => {
     }
   }
   
-  if (loginLink.value) {
-    loginLink.value.style.display = 'none'
-  }
-  if (userContainer.value) {
-    userContainer.value.style.display = 'block'
-  }
+  // 标记为已登录，模板使用 v-if/v-else 渲染，避免闪现“登录/注册”
+  isLoggedIn.value = true
 }
 
 // 监听路由变化

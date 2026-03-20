@@ -22,8 +22,10 @@
             <button class="lp-node-drawer-close" @click="closeNodeCard">×</button>
           </div>
           <div class="lp-node-drawer-body">
-            <div v-if="nodeCardData.testPointsProgress" class="lp-node-meta">进度: {{ nodeCardData.testPointsProgress }}</div>
-            <div v-if="nodeCardData.childrenProgress" class="lp-node-meta">子节点: {{ nodeCardData.childrenProgress }}</div>
+            <LearningPathNodeKnowledgePanel
+              :topic="nodeCardTopic"
+              :user-id="userId"
+            />
           </div>
           <div class="lp-node-drawer-actions">
             <button type="button" class="lp-node-btn lp-node-edit" @click="openEdit">编辑</button>
@@ -69,6 +71,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { updateJson } from '../../api/learningPath'
+import LearningPathNodeKnowledgePanel from './LearningPathNodeKnowledgePanel.vue'
 
 const props = defineProps({
   pathId: { type: String, required: true },
@@ -112,6 +115,11 @@ const NODE_STYLE = computed(() => ({
   bg: props.theme?.bg || '#faf8ff'
 }))
 const nodeBg = computed(() => NODE_STYLE.value.bg)
+
+const nodeCardTopic = computed(() => {
+  const n = nodeCardData.value || {}
+  return n.name || n.label || ''
+})
 
 const updateDimensions = () => {
   if (graphContainer.value) {

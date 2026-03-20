@@ -91,7 +91,6 @@
             <div class="upload-actions">
               <button type="button" class="upload-btn" @click.stop="$emit('pickFile')">选择文件</button>
               <button type="button" class="upload-btn ghost" @click.stop="$emit('history')">历史简历</button>
-              <span class="upload-tip">单个文件不超过 10MB</span>
             </div>
           </div>
         </div>
@@ -419,10 +418,6 @@ const canAnalyze = computed(() => {
   transform: translateY(-1px);
 }
 
-.upload-tip {
-  font-size: 11px;
-  color: #9ca3af;
-}
 
 .summary {
   display: flex;

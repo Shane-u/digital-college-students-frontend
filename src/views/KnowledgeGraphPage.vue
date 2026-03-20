@@ -1,5 +1,6 @@
 <template>
   <div class="knowledge-graph-page">
+    <GraphTopHeader title="技能图谱" />
     <button class="back-button" type="button" @click="goBackHome">
       返回主页
     </button>
@@ -34,6 +35,7 @@
 <script setup>
 import { useRoute, useRouter } from 'vue-router'
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import GraphTopHeader from '../components/common/GraphTopHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,7 +128,10 @@ const goBackHome = () => {
 
 .graph-fullscreen {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .graph-iframe {
@@ -139,9 +144,9 @@ const goBackHome = () => {
 
 .back-button {
   position: absolute;
-  top: 24px;
+  top: 90px;
   left: 24px;
-  z-index: 1100;
+  z-index: 1300;
   padding: 8px 18px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.4);

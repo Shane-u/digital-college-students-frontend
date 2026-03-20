@@ -8,9 +8,8 @@
             <button
               type="button"
               class="btn-ghost"
-              @click="clearAll"
-              :disabled="records.length === 0 || isRemote"
-              :title="isRemote ? '远端记录暂不支持清空' : ''"
+              @click="confirmClearAll"
+              :disabled="records.length === 0"
             >
               清空
             </button>
@@ -37,12 +36,10 @@
               @click="selectRecord(r)"
             >
               <div class="row-top">
-                <div class="row-title">{{ getRowTitle(r) }}</div>
+                <div class="row-title">报告</div>
                 <div class="row-score">{{ getRowScore(r) }}</div>
               </div>
               <div class="row-sub">
-                <span v-if="getRowPill1(r)" class="pill">{{ getRowPill1(r) }}</span>
-                <span v-if="getRowPill2(r)" class="pill subtle">{{ getRowPill2(r) }}</span>
                 <span class="pill subtle">{{ formatTime(getRowTime(r)) }}</span>
               </div>
             </button>
@@ -57,20 +54,18 @@
             <div v-else class="detail-inner">
               <div class="detail-top">
                 <div class="detail-top-left">
-                  <div class="detail-name">{{ getDetailTitle(selected) }}</div>
+                  <div class="detail-name">报告</div>
                   <div class="detail-meta">
-                    <span v-if="getRowPill1(selected)" class="pill">{{ getRowPill1(selected) }}</span>
-                    <span v-if="getRowPill2(selected)" class="pill subtle">{{ getRowPill2(selected) }}</span>
                     <span class="pill subtle">{{ formatTime(getRowTime(selected)) }}</span>
+                    <span class="pill">{{ getRowScore(selected) }}</span>
                   </div>
                 </div>
                 <div class="detail-top-right">
                   <button
                     type="button"
                     class="btn-ghost danger"
-                    :disabled="isRemote"
-                    :title="isRemote ? '远端记录暂不支持删除' : ''"
-                    @click="removeOne(selected.id)"
+                    @click="confirmRemoveOne(selected?.id)"
+                    :disabled="!selected?.id"
                   >
                     删除
                   </button>
@@ -96,6 +91,7 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import ReviewStage from './ReviewStage.vue'
 import { aiInterviewApi } from '../../api/aiInterview'
 import { mapInterviewReportToReview } from './session/reportMapper'
@@ -127,6 +123,9 @@ const load = () => {
     const raw = localStorage.getItem(STORAGE_KEY)
     const arr = raw ? JSON.parse(raw) : []
     records.value = Array.isArray(arr) ? arr : []
+    if (!selected.value && records.value.length > 0) {
+      selected.value = records.value[0]
+    }
   } catch (_) {
     records.value = []
   }
@@ -138,18 +137,105 @@ const persist = () => {
   } catch (_) {}
 }
 
-const clearAll = () => {
-  if (isRemote.value) return
+const confirmClearAll = async () => {
+  if (records.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      '清空后将无法恢复，确定要清空所有面试记录吗？',
+      '清空确认',
+      {
+        confirmButtonText: '清空',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    await clearAll()
+  } catch (_) {
+    // 用户取消
+  }
+}
+
+const confirmRemoveOne = async (id) => {
+  if (!id) return
+  try {
+    await ElMessageBox.confirm(
+      '删除后将无法恢复，确定要删除这条面试记录吗？',
+      '删除确认',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    await removeOne(id)
+  } catch (_) {
+    // 用户取消
+  }
+}
+
+const clearAll = async () => {
+  if (records.value.length === 0) return
+
+  // 远端记录：调用后端清空接口
+  if (isRemote.value) {
+    try {
+      await aiInterviewApi.clearReports({})
+      records.value = []
+      selected.value = null
+      ElMessage.success('已清空所有面试记录')
+    } catch (e) {
+      console.error(e)
+      // 失败时保留现有列表
+      return
+    }
+    return
+  }
+
+  // 本地模式：仅清空本地存储
   records.value = []
   selected.value = null
   persist()
+  ElMessage.success('已清空所有面试记录')
 }
 
-const removeOne = (id) => {
-  if (isRemote.value) return
-  records.value = records.value.filter((x) => x?.id !== id)
-  if (selected.value?.id === id) selected.value = records.value[0] || null
+const removeOne = async (id) => {
+  if (!id) return
+
+  const prevList = [...records.value]
+
+  // 远端记录：调用后端单条删除接口
+  if (isRemote.value) {
+    try {
+      const rec = records.value.find((x) => String(x?.id) === String(id))
+      const reportId = rec?.reportId ?? id
+      await aiInterviewApi.deleteReport(reportId, {})
+      const newList = prevList.filter((x) => String(x?.id) !== String(id))
+      records.value = newList
+
+      // 删除后选中“临近”记录：优先选删除位置的下一条，否则上一条
+      if (selected.value?.id === id) {
+        const idx = prevList.findIndex((x) => String(x?.id) === String(id))
+        const next = newList[idx] || newList[idx - 1] || newList[0] || null
+        selected.value = next
+      }
+
+      ElMessage.success('删除成功')
+    } catch (e) {
+      console.error(e)
+    }
+    return
+  }
+
+  // 本地模式：删除本地记录并持久化
+  const newList = prevList.filter((x) => String(x?.id) !== String(id))
+  records.value = newList
+  if (selected.value?.id === id) {
+    const idx = prevList.findIndex((x) => String(x?.id) === String(id))
+    const next = newList[idx] || newList[idx - 1] || newList[0] || null
+    selected.value = next
+  }
   persist()
+  ElMessage.success('删除成功')
 }
 
 const pad2 = (n) => String(n).padStart(2, '0')
@@ -189,6 +275,10 @@ const loadRemoteList = async () => {
         detailLoading: false,
         detailError: '',
       }))
+      if (!selected.value && records.value.length > 0) {
+        selected.value = records.value[0]
+        ensureRemoteDetail(selected.value)
+      }
     } else {
       // 远端无数据则回退本地
       isRemote.value = false
@@ -272,12 +362,6 @@ const getRowPill2 = (r) => {
   return d != null ? `${d} 分钟` : ''
 }
 
-const getDetailTitle = (r) => {
-  if (!r) return ''
-  if (r.source === 'REMOTE') return `报告 #${r.reportId ?? r.sessionId ?? ''}`
-  return r?.meta?.jobRoleLabel || '面试报告'
-}
-
 watch(
   () => props.modelValue,
   (open) => {
@@ -295,7 +379,8 @@ onMounted(loadRemoteList)
   inset: 0;
   background: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(8px);
-  z-index: 3000;
+  /* 保持在全局顶部区域，但要低于 Element Plus 弹窗（默认 zIndex≈2000） */
+  z-index: 1800;
   display: flex;
   align-items: stretch;
   justify-content: flex-end;
@@ -320,7 +405,7 @@ onMounted(loadRemoteList)
 }
 
 .drawer-title {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 900;
   color: #111827;
   letter-spacing: 0.08em;
@@ -426,7 +511,7 @@ onMounted(loadRemoteList)
 }
 
 .row-title {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 900;
   color: #111827;
   line-height: 1.4;

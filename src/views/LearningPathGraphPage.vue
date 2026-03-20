@@ -90,7 +90,7 @@
 <script setup>
 import { h, ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { list as listApi, remove, getGraph } from '../api/learningPath'
+import { list as listApi, remove, getGraph, renameTopic } from '../api/learningPath'
 import LearningPathGraphAll from '../components/LearningPath/LearningPathGraphAll.vue'
 import LearningPathSelectorPanel from '../components/LearningPath/LearningPathSelectorPanel.vue'
 import { getMyProfile } from '../api/user'
@@ -142,6 +142,7 @@ const pathMenuPosition = ref(null)
 const currentMenuPathId = ref(null)
 const showRenameDialog = ref(false)
 const renameValue = ref('')
+const renamePathId = ref(null)
 const pinnedIds = ref([])
 const renamedById = ref({})
 
@@ -290,6 +291,7 @@ const handlePinPath = () => {
 const closeRenameDialog = () => {
   showRenameDialog.value = false
   renameValue.value = ''
+  renamePathId.value = null
 }
 
 const handleRenamePath = () => {
@@ -297,17 +299,42 @@ const handleRenamePath = () => {
   if (!pid) return
   const p = (pathList.value || []).find(x => String(x.id) === String(pid))
   renameValue.value = getPathDisplayName(p)
+   renamePathId.value = pid
   showRenameDialog.value = true
   closePathMenu()
 }
 
-const confirmRename = () => {
-  const pid = currentMenuPathId.value
+const confirmRename = async () => {
+  const pid = renamePathId.value
   const v = (renameValue.value || '').trim()
   if (!pid || !v) return
-  renamedById.value = { ...(renamedById.value || {}), [pid]: v }
-  savePrefs()
-  closeRenameDialog()
+  try {
+    // 后端重命名 topic
+    await renameTopic(pid, v, userId.value)
+
+    // 同步更新本地列表与图谱缓存
+    const list = pathList.value || []
+    pathList.value = list.map(p => (String(p.id) === String(pid) ? { ...p, topic: v } : p))
+
+    const currentGraph = graphsById.value?.[pid]
+    if (currentGraph) {
+      graphsById.value = {
+        ...graphsById.value,
+        [pid]: { ...currentGraph, topic: v }
+      }
+    }
+
+    // 后端已存储新的 topic，本地重命名缓存可清理
+    if (renamedById.value && renamedById.value[pid]) {
+      const { [pid]: _, ...rest } = renamedById.value
+      renamedById.value = rest
+    }
+    savePrefs()
+    closeRenameDialog()
+    ElMessage.success('重命名成功')
+  } catch (e) {
+    ElMessage.error(e?.message || '重命名失败')
+  }
 }
 
 const handleDeletePath = () => {

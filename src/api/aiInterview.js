@@ -88,6 +88,24 @@ export const aiInterviewApi = {
     return request.get('/ai-interview/sessions/reports', {
       params: withUserId({ limit, beforeId }, userId)
     })
+  },
+
+  /** 11) 删除当前用户的一条面试报告（逻辑删除）
+   * DELETE /ai-interview/sessions/reports/{reportId}
+   */
+  deleteReport(reportId, { userId } = {}) {
+    return request.delete(`/ai-interview/sessions/reports/${encodeURIComponent(reportId)}`, {
+      params: withUserId({}, userId)
+    })
+  },
+
+  /** 12) 清空当前用户的全部面试报告（逻辑删除）
+   * DELETE /ai-interview/sessions/reports
+   */
+  clearReports({ userId } = {}) {
+    return request.delete('/ai-interview/sessions/reports', {
+      params: withUserId({}, userId)
+    })
   }
 }
 

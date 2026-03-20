@@ -64,8 +64,8 @@ const orderedSteps = [
   },
   {
     key: STAGES.ANALYSIS,
-    title: '简历分析与岗位匹配',
-    desc: '生成岗位建议 + 问题清单。',
+    title: '简历分析与问题追问',
+    desc: '生成岗 + 问题清单。',
   },
   {
     key: STAGES.INTERVIEW,
@@ -74,8 +74,8 @@ const orderedSteps = [
   },
   {
     key: STAGES.REVIEW,
-    title: '详细评价 + 错题本复盘',
-    desc: '报告 + 错题本 + 简历建议。',
+    title: '综合评分 + 详细评价',
+    desc: '报告  + 面试建议。',
   },
 ]
 

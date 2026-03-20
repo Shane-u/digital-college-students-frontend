@@ -15,7 +15,6 @@
         <span class="tag">简历诊断</span>
         <span class="tag">岗位匹配</span>
         <span class="tag">视频面试</span>
-        <span class="tag">错题本复盘</span>
       </div>
     </div>
 

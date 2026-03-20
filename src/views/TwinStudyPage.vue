@@ -280,6 +280,26 @@ const parseStreamData = (text) => {
   }
 }
 
+// 从学习路径节点知识点推荐跳转时预填一条问题
+const applyPendingInputFromStorage = () => {
+  try {
+    const raw = sessionStorage.getItem('twin_study_pending_input')
+    if (!raw) return
+    sessionStorage.removeItem('twin_study_pending_input')
+    const data = JSON.parse(raw)
+    const text = typeof data === 'string' ? data : data?.text
+    if (!text) return
+    // 切换到默认对话场景并清空当前会话，相当于“新的对话”
+    scene.value = 'default'
+    currentSessionId.value = null
+    saveSessionsToStorage()
+    // 通过全局事件把内容填入输入框
+    window.dispatchEvent(new CustomEvent('twin-study-set-input', { detail: { text } }))
+  } catch (e) {
+    console.warn('[TwinStudyPage] applyPendingInputFromStorage error', e)
+  }
+}
+
 // 获取用户ID（与 bailianChatApi.js 保持一致）
 const getUserId = () => {
   try {
@@ -1153,6 +1173,7 @@ const loadSessionsFromStorage = () => {
 
 onMounted(async () => {
   loadSessionsFromStorage()
+  applyPendingInputFromStorage()
   const sid = currentSessionId.value
   if (!sid) return
   const session = sessions.value.find(s => s.id === sid)

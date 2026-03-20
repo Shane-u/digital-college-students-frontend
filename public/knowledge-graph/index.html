@@ -1,1564 +1,1475 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-	<meta charset="UTF-8" />
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>技能图谱 (手绘版)</title>
-	
-	<style>
-		:root {
-			/* 可爱的手绘调色板 */
-			--bg-paper: #fffdf5;
-			--line-ink: #4a4a4a;
-			--panel-bg: #ffffff;
-			--shadow-sketch: 4px 4px 0px rgba(0,0,0,0.15);
-			--font-hand: 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
-		}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>技能图谱</title>
+    <!-- 使用ECharts进行可视化 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="/knowledge-graph/css/graph.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #f5f7fa;
+            overflow: hidden;
+        }
+        
+        #app {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
 
-		body {
-			margin: 0;
-			padding: 0;
-			background-color: var(--bg-paper);
-			background-image: radial-gradient(#e0e0e0 1px, transparent 1px);
-			background-size: 20px 20px; /* 点阵纸效果 */
-			overflow: hidden;
-			font-family: var(--font-hand);
-			color: var(--line-ink);
-		}
-		
-		#svg1 {
-			width: 100%;
-			height: 100%;
-		}
+        /* 右侧图谱区域 */
+        #graph-container {
+            width: 100%;
+            height: 100vh;
+            background: #f8fafc;
+            position: relative;
+        }
+        
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* 面板头部 */
+        .panel-header {
+            padding: 24px 20px 16px;
+            border-bottom: 1px solid #edf2f7;
+        }
+        
+        .panel-header h2 {
+            font-size: 20px;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel-header h2 span {
+            font-size: 14px;
+            color: #718096;
+            font-weight: normal;
+        }
+        
+        /* 技能搜索 */
+        .skill-search {
+            margin: 16px 20px;
+            position: relative;
+        }
+        
+        .skill-search input {
+            width: 100%;
+            padding: 10px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 30px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+            background: #f7fafc;
+        }
+        
+        .skill-search input:focus {
+            border-color: #FF6B6B;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+        }
+        
+        /* 技能标签区域 */
+        .skills-section {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px;
+            margin-bottom: 16px;
+        }
+        
+        .skills-title {
+            font-size: 14px;
+            color: #4a5568;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        .skills-title .hot-badge {
+	 		background: #FF6B6B;
+	   		color: white;
+ 	   		padding: 2px 8px;
+ 	  		border-radius: 12px;
+ 	   		font-size: 10px;
+ 	   		cursor: pointer;
+		}	
 
-		/* 连线样式：深灰色，模拟铅笔 */
-		.links line {
-			stroke: var(--line-ink);
-			stroke-opacity: 0.6;
-			stroke-width: 2px;
-			stroke-linecap: round;
-			/* 应用手绘滤镜 */
-			filter: url(#sketch-line);
-		}
-		.links line.inactive {
-			stroke-opacity: 0.1;
-			stroke-dasharray: 4 4;
-		}
-
-		/* 节点样式 */
-		.nodes circle {
-			stroke: var(--line-ink);
-			stroke-width: 2.5px;
-			/* 应用手绘滤镜，让圆圈不那么圆 */
-			filter: url(#sketch-shape);
-			cursor: pointer;
-			transition: all 0.3s ease;
-		}
-		.nodes circle:hover {
-			stroke-width: 4px;
-			filter: drop-shadow(3px 3px 0px rgba(0,0,0,0.2)) url(#sketch-shape);
-		}
-		.nodes circle.inactive {
-			opacity: 0.1;
-		}
-
-		/* 文字样式 */
-		.texts text {
-			font-family: var(--font-hand);
-			fill: var(--line-ink);
-			text-anchor: middle;
-			pointer-events: none;
-			font-weight: 700;
-			/* 文字描边，保证在连线之上清晰可见 */
-			paint-order: stroke;
-			stroke: var(--bg-paper);
-			stroke-width: 4px;
-			stroke-linecap: round;
-			stroke-linejoin: round;
-		}
-		.texts text.inactive {
-			opacity: 0.1;
-		}
-
-		/* 顶部科技感装饰条 */
-		.graph-header {
-			position: fixed;
-			top: 0px;
-			left: 50%;
-			transform: translateX(-50%);
-			width: 100%;
-			height: 120px;
-			background: url('https://lms.cdut.edu.cn/static/assets/images/knowledge-node/234a36768ff31bf18d9f.png') center/cover no-repeat;
-			z-index: 12;
-			pointer-events: none;
-		}
-		.graph-header__inner {
-			width: 100%;
-			height: 100%;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			gap: 16px;
-			pointer-events: auto;
-			padding: 0 60px;
-			box-sizing: border-box;
+		.skill-tag.hot {
+			background: #FFE5E5;
+			border-color: #FF6B6B;
 			position: relative;
 		}
-		.graph-header__title {
-			font-size: 34px;
-			font-weight: 700;
-			letter-spacing: 4px;
-			color: #fff;
-			text-shadow: 0 8px 25px rgba(0,0,0,0.55);
-			text-align: center;
-			flex: none;
-		}
-		.graph-search-toggle {
+
+		.skill-tag.hot::after {
+			content: "🔥";
 			position: absolute;
-			right: 24px;
-			top: 50%;
-			transform: translateY(-50%);
-			width: 44px;
-			height: 44px;
-			border-radius: 50%;
-			border: 2px solid rgba(255,255,255,0.4);
-			background: rgba(7,20,45,0.65);
-			color: #fff;
-			cursor: pointer;
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			transition: transform 0.2s, border-color 0.2s, background 0.2s;
+			top: -8px;
+			right: -8px;
+			font-size: 12px;
 		}
-		.graph-search-toggle:hover {
-			transform: translateY(-50%) scale(1.08);
-			border-color: #5dade2;
-			background: rgba(19,44,92,0.9);
-		}
-		.graph-search-toggle svg {
-			width: 22px;
-			height: 22px;
-		}
+        .skills-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .skill-tag {
+            padding: 6px 14px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 30px;
+            font-size: 13px;
+            color: #2d3748;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .skill-tag:hover {
+            background: #FF6B6B;
+            color: white;
+            border-color: #FF6B6B;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 107, 107, 0.2);
+        }
+        
+        .skill-tag.selected {
+            background: #FF6B6B;
+            color: white;
+            border-color: #c53030;
+        }
+        
+        /* 已选技能区域 */
+        .selected-section {
+            padding: 16px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .selected-title {
+            font-size: 13px;
+            color: #718096;
+            margin-bottom: 10px;
+        }
+        
+        .selected-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 32px;
+        }
+        
+        .selected-tag {
+            padding: 4px 10px;
+            background: #FF6B6B;
+            color: white;
+            border-radius: 20px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .selected-tag .remove {
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 4px;
+            opacity: 0.8;
+        }
+        
+        .selected-tag .remove:hover {
+            opacity: 1;
+        }
+        
+        /* 推荐按钮 */
+        .recommend-btn {
+            margin: 16px 20px;
+            padding: 12px;
+            background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+        }
+        
+        .recommend-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 107, 107, 0.4);
+        }
+        
+        .recommend-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* 推荐结果区域 */
+        .recommendations {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 20px 20px;
+        }
+        
+        .recommendations-title {
+            font-size: 14px;
+            color: #4a5568;
+            margin: 16px 0 12px;
+            font-weight: 600;
+        }
+        
+        .competition-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .competition-card:hover {
+            border-color: #FF6B6B;
+            box-shadow: 0 4px 12px rgba(255, 107, 107, 0.1);
+            transform: translateX(4px);
+        }
+        
+        .competition-name {
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+        
+        .competition-meta {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        
+        .competition-domain {
+            color: #FF6B6B;
+            background: #fff5f5;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+        
+        .competition-skills {
+            color: #718096;
+        }
+        
+        .match-skills {
+            font-size: 12px;
+            color: #48bb78;
+            background: #f0fff4;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
+        
+        /* 空状态 */
+        .empty-state {
+            color: #a0aec0;
+            text-align: center;
+            padding: 32px 16px;
+            font-size: 14px;
+        }
 
-		/* Mac Spotlight 风格搜索 */
-		.search-overlay {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			background: rgba(2, 6, 23, 0.65);
-			backdrop-filter: blur(10px);
-			display: none;
-			align-items: flex-start;
-			justify-content: center;
-			padding-top: 140px;
-			z-index: 15;
-		}
-		.search-overlay.visible {
-			display: flex;
-		}
-		.search-panel {
-			width: min(900px, 92vw);
-			background: rgba(11, 18, 35, 0.9);
-			border-radius: 28px;
-			padding: 28px 32px 32px;
-			box-shadow: 0 25px 80px rgba(0,0,0,0.45);
-			border: 1px solid rgba(255,255,255,0.08);
-		}
-		.search-panel__input {
-			display: flex;
-			align-items: center;
-			gap: 16px;
-			border-bottom: 1px solid rgba(255,255,255,0.08);
-			padding-bottom: 18px;
-			margin-bottom: 20px;
-		}
-		.search-panel__input svg {
-			width: 26px;
-			height: 26px;
-			flex-shrink: 0;
-		}
-		.search-panel__input input {
-			flex: 1;
-			background: none;
-			border: none;
-			font-size: 24px;
-			color: #fff;
-			outline: none;
-		}
-		.search-panel__input input::placeholder {
-			color: rgba(255,255,255,0.4);
-		}
-		.search-panel__close {
-			background: none;
-			border: none;
-			color: rgba(255,255,255,0.7);
-			font-size: 26px;
-			cursor: pointer;
-		}
-		.search-results {
-			max-height: 360px;
-			overflow-y: auto;
-			display: flex;
-			flex-direction: column;
-			gap: 14px;
-			align-items: stretch;
-		}
-		.search-result {
-			background: rgba(255,255,255,0.1);
-			border-radius: 16px;
-			padding: 18px 20px;
-			border: 1px solid transparent;
-			color: #f5f5f5;
-			text-align: left;
-			cursor: pointer;
-			transition: border-color 0.2s, background 0.2s, transform 0.2s;
-			display: flex;
-			flex-direction: column;
-			gap: 6px;
-		}
-		.search-result:hover {
-			border-color: rgba(91, 173, 226, 0.7);
-			background: rgba(91, 173, 226, 0.18);
-			transform: translateY(-2px);
-		}
-		.search-result__name {
-			font-size: 20px;
-			font-weight: 700;
-		}
-		.search-result__meta {
-			font-size: 14px;
-			color: rgba(255,255,255,0.7);
-		}
-		.search-result__desc {
-			font-size: 13px;
-			color: rgba(255,255,255,0.55);
-		}
-		.search-empty {
-			text-align: center;
-			color: rgba(255,255,255,0.6);
-			padding: 26px 0;
-			font-size: 16px;
-		}
+        /* 右下角控制按钮 */
+        .control-buttons {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 100;
+        }
 
-		/* 底部控制条 */
-		.graph-controls {
-			position: fixed;
-			right: 40px;
-			bottom: 40px;
-			display: flex;
-			align-items: center;
-			gap: 4px;
-			padding: 8px 12px;
-			background: rgba(2, 8, 28, 0.75);
-			border-radius: 16px;
-			border: 1px solid rgba(255,255,255,0.08);
-			box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-			z-index: 14;
-			backdrop-filter: blur(8px);
-		}
-		.graph-controls button {
-			background: transparent;
-			border: none;
-			color: #e5ecff;
-			font-size: 14px;
-			padding: 10px 14px;
-			border-radius: 12px;
-			display: inline-flex;
-			align-items: center;
-			gap: 6px;
-			cursor: pointer;
-			transition: background 0.2s, color 0.2s;
-		}
-		.graph-controls button:hover {
-			background: rgba(91, 173, 226, 0.2);
-			color: #fff;
-		}
-		.graph-settings-hint {
-			position: fixed;
-			right: 40px;
-			bottom: 120px;
-			padding: 10px 16px;
-			background: rgba(7,20,45,0.9);
-			border: 1px solid rgba(255,255,255,0.12);
-			border-radius: 12px;
-			color: #e5ecff;
-			box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-			font-size: 14px;
-			opacity: 0;
-			transform: translateY(10px);
-			transition: opacity 0.25s ease, transform 0.25s ease;
-			z-index: 16;
-			pointer-events: none;
-		}
-		.graph-settings-hint.visible {
-			opacity: 1;
-			transform: translateY(0);
-		}
+        /* 鼠标悬停节点时显示的详情卡片 */
+        .node-tooltip {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 0;
+            z-index: 1000;
+            display: none;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
 
-		/* 节点详情面板 */
-		.node-info-panel {
-			position: fixed;
-			left: 40px;
-			bottom: 40px;
-			max-width: 420px;
-			color: #dbe9ff;
-			font-size: 14px;
-			line-height: 1.6;
-			z-index: 14;
-			pointer-events: none;
-			opacity: 0;
-			transform: translateY(10px);
-			transition: opacity 0.25s, transform 0.25s;
-			display: none;
-		}
-		.node-info-panel.visible {
-			opacity: 1;
-			transform: translateY(0);
-		}
-		.node-info-panel__title {
-			font-size: 22px;
-			font-weight: 700;
-			margin-bottom: 10px;
-			text-shadow: 0 0 12px rgba(0,0,0,0.6);
-		}
-		.node-info-panel__prop {
-			display: flex;
-			margin-bottom: 6px;
-			gap: 6px;
-		}
-		.node-info-panel__key {
-			color: rgba(255,255,255,0.6);
-		}
-		.node-info-panel__value {
-			color: #fff;
-		}
+        .node-tooltip-header {
+            background: linear-gradient(135deg, #9575CD, #B39DDB);
+            color: white;
+            padding: 12px 16px;
+            font-size: 15px;
+            font-weight: 600;
+            position: relative;
+        }
 
-		/* Hover/Search 状态 */
-		.links line.hover-dim,
-		.nodes circle.hover-dim,
-		.texts text.hover-dim {
-			opacity: 0.15;
-		}
-		.links line.hover-focus {
-			stroke-opacity: 0.95;
-			stroke-width: 3px;
-		}
-		.nodes circle.hover-focus {
-			stroke-width: 4px;
-		}
-		.texts text.hover-focus {
-			opacity: 1;
-		}
-		.links line.search-dim,
-		.nodes circle.search-dim,
-		.texts text.search-dim {
-			opacity: 0.08 !important;
-		}
-		.nodes circle.search-match {
-			stroke: #5dade2;
-			stroke-width: 4px;
-			filter: drop-shadow(0 0 12px rgba(93,173,226,0.45));
-		}
-		.texts text.search-match {
-			fill: #fff;
-			stroke: rgba(93,173,226,0.6);
-		}
-		.links line.search-match {
-			stroke: rgba(93,173,226,0.9);
-			stroke-width: 3px;
-		}
-		.nodes circle.search-related {
-			stroke: rgba(255,255,255,0.5);
-		}
+        .node-tooltip-body {
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.8;
+        }
 
-		@media (max-width: 768px) {
-			.graph-controls {
-				right: 16px;
-				bottom: 16px;
-				flex-wrap: wrap;
-			}
-			.graph-header {
-				height: 90px;
-			}
-			.graph-header__title {
-				font-size: 22px;
-			}
-			.node-info-panel {
-				left: 16px;
-				right: 16px;
-				bottom: 120px;
-			}
-			.search-panel {
-				padding: 20px;
-			}
-		}
+        .node-tooltip-row {
+            margin-bottom: 8px;
+            display: flex;
+        }
 
-		/* 助手面板：便利贴风格 */
-		.assistant-panel {
-			position: absolute;
-			top: 20px;
-			right: 20px;
-			width: 200px;
-			background: #fff9c4; /* 黄色便利贴 */
-			border: 2px solid var(--line-ink);
-			border-radius: 2px 2px 20px 2px; /* 右下角稍微卷起 */
-			padding: 16px;
-			color: var(--line-ink);
-			box-shadow: var(--shadow-sketch);
-			pointer-events: auto;
-			z-index: 10;
-			transform: rotate(-2deg); /* 稍微歪一点 */
-			transition: transform 0.2s;
-		}
-		.assistant-panel:hover {
-			transform: rotate(0deg) scale(1.02);
-		}
-		.assistant-panel h3 {
-			margin: 0 0 8px 0;
-			font-size: 20px;
-			font-weight: 900;
-			border-bottom: 2px dashed var(--line-ink);
-			padding-bottom: 4px;
-		}
-		.assistant-panel p {
-			margin: 8px 0 16px;
-			font-size: 16px;
-			line-height: 1.3;
-		}
+        .node-tooltip-label {
+            color: #888;
+            min-width: 70px;
+            flex-shrink: 0;
+        }
 
-		/* 按钮：手绘风格 */
-		.assistant-launch, .assistant-button, .copy-button {
-			width: 100%;
-			border: 2px solid var(--line-ink);
-			border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; /* 不规则圆角 */
-			padding: 8px 12px;
-			background: #ffccbc; /* 浅红 */
-			color: var(--line-ink);
-			font-family: var(--font-hand);
-			font-weight: 700;
-			font-size: 16px;
-			cursor: pointer;
-			box-shadow: 2px 2px 0px rgba(0,0,0,0.1);
-			transition: all 0.1s ease;
-		}
-		.assistant-launch:hover, .assistant-button:hover {
-			transform: translate(-2px, -2px);
-			box-shadow: 4px 4px 0px rgba(0,0,0,0.2);
-			background: #ffab91;
-		}
-		.assistant-launch:active, .assistant-button:active {
-			transform: translate(0, 0);
-			box-shadow: 0 0 0;
-		}
+        .node-tooltip-value {
+            color: #333;
+            flex: 1;
+            word-break: break-all;
+        }
 
-		/* 模态框：素描本风格 */
-		.assistant-modal {
-			position: fixed;
-			top: 0;
-			left: 0;
-			width: 100%;
-			height: 100%;
-			display: none;
-			align-items: center;
-			justify-content: center;
-			background: rgba(255, 255, 255, 0.6);
-			backdrop-filter: blur(2px);
-			z-index: 20;
-		}
-		.assistant-modal.visible {
-			display: flex;
-		}
-		.assistant-modal__dialog {
-			width: min(550px, calc(100% - 32px));
-			max-height: calc(100% - 64px);
-			overflow-y: auto;
-			background: #ffffff;
-			border: 3px solid var(--line-ink);
-			border-radius: 12px;
-			padding: 24px;
-			box-shadow: 8px 8px 0px rgba(0,0,0,0.15);
-			position: relative;
-		}
-		/* 模态框顶部的装订线效果 */
-		.assistant-modal__dialog::before {
-			content: "";
-			position: absolute;
-			top: 10px;
-			left: 0;
-			right: 0;
-			height: 20px;
-			background-image: repeating-linear-gradient(90deg, transparent, transparent 19px, var(--line-ink) 19px, var(--line-ink) 21px, transparent 21px, transparent 40px);
-			background-size: 40px 100%;
-			opacity: 0.2;
-			pointer-events: none;
-		}
+        .node-tooltip-link a {
+            color: #03A9F4;
+            text-decoration: none;
+        }
 
-		.assistant-modal__header {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			margin-bottom: 16px;
-		}
-		.assistant-modal__title {
-			font-size: 24px;
-			font-weight: 900;
-			color: var(--line-ink);
-		}
-		.assistant-close {
-			background: none;
-			border: none;
-			color: var(--line-ink);
-			font-size: 32px;
-			font-family: var(--font-hand);
-			cursor: pointer;
-			line-height: 0.8;
-		}
-		
-		.assistant-input {
-			width: 100%;
-			min-height: 100px;
-			border: 2px solid var(--line-ink);
-			border-radius: 8px;
-			padding: 12px;
-			background: #f0f4c3; /* 浅绿纸张 */
-			color: var(--line-ink);
-			font-family: var(--font-hand);
-			font-size: 18px;
-			resize: vertical;
-			outline: none;
-			box-sizing: border-box;
-		}
-		.assistant-input:focus {
-			background: #fff;
-			box-shadow: inset 2px 2px 5px rgba(0,0,0,0.05);
-		}
+        .node-tooltip-link a:hover {
+            text-decoration: underline;
+        }
 
-		.assistant-actions {
-			display: flex;
-			gap: 10px;
-			margin-top: 15px;
-		}
-		.copy-button {
-			width: auto;
-			background: #b2dfdb; /* 浅青 */
-		}
 
-		.assistant-result {
-			margin-top: 15px;
-			padding: 16px;
-			border-radius: 8px;
-			background: #eeeeee;
-			border: 2px dashed var(--line-ink);
-			position: relative;
-		}
-		.assistant-result pre {
-			font-family: 'Consolas', 'Monaco', monospace; /* 代码还是要用等宽字体 */
-			font-size: 14px;
-			color: #333;
-			white-space: pre-wrap;
-			margin: 0;
-		}
-		
-		.assistant-tip {
-			margin-top: 15px;
-			font-size: 14px;
-			color: #666;
-			background: rgba(0,0,0,0.05);
-			padding: 8px;
-			border-radius: 4px;
-		}
-	</style>
-	<script src="https://d3js.org/d3.v4.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/neo4j-driver"></script>
-	<!-- 代码高亮样式改为浅色主题 -->
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
-	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-	<script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
-	<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: none;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        .control-btn.active {
+            background: #FF6B6B;
+            color: white;
+        }
+
+        /* 右上角搜索卡片 */
+        .search-card {
+            position: fixed;
+            top: 130px;
+            right: 20px;
+            width: 320px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            z-index: 100;
+            overflow: hidden;
+        }
+
+        .search-card-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #9575CD, #B39DDB);
+            color: white;
+        }
+
+        .search-card-header h3 {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+            font-weight: 600;
+        }
+
+        .search-input-wrapper {
+            position: relative;
+        }
+
+        .search-input-wrapper input {
+            width: 100%;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            background: rgba(255,255,255,0.9);
+        }
+
+        .search-input-wrapper .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #999;
+        }
+
+        .search-tabs {
+            display: flex;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .search-tab.active {
+            color: #03A9F4;
+            border-bottom: 2px solid #03A9F4;
+            font-weight: 600;
+        }
+
+        .search-tab:hover:not(.active) {
+            background: #f9f9f9;
+        }
+
+        .search-results {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .search-result-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .search-result-item:hover {
+            background: #E1F5FE;
+        }
+
+        .search-result-item.selected {
+            background: #E1F5FE;
+            border-left: 3px solid #03A9F4;
+        }
+
+        .search-result-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .search-result-meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .detail-section {
+            padding: 16px;
+            border-top: 1px solid #eee;
+            background: #fafafa;
+        }
+
+        .detail-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detail-content {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .detail-comp-name:hover,
+        .detail-skill-name:hover {
+            text-decoration: underline;
+            opacity: 0.9;
+        }
+
+        .detail-skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .detail-skill-tag {
+            padding: 4px 10px;
+            background: #e3f2fd;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #1976d2;
+        }
+
+        .recommend-section {
+            padding: 12px 16px;
+            border-top: 1px solid #eee;
+        }
+
+        .recommend-btn-new {
+            width: 48%;
+            padding: 10px;
+            background: linear-gradient(135deg, #03A9F4, #4FC3F7);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .recommend-btn-new:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(3, 169, 244, 0.3);
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .learn-btn {
+            width: 48%;
+            padding: 10px;
+            background: linear-gradient(135deg, #FF9800, #FFB74D);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .learn-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+        }
+
+        .recommend-result {
+            margin-top: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .recommend-item {
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #eee;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .recommend-item:hover {
+            border-color: #03A9F4;
+            transform: translateX(4px);
+        }
+
+        .recommend-item-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .recommend-item-match {
+            font-size: 11px;
+            color: #48bb78;
+            margin-top: 4px;
+        }
+
+        .empty-search {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 13px;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.3);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.5);
+        }
+
+        .toggle-card-btn {
+            position: fixed;
+            top: 130px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            border: none;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            cursor: pointer;
+            font-size: 18px;
+            z-index: 99;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .toggle-card-btn:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+    </style>
 </head>
 <body>
-	<svg id="svg1"></svg>
-	<header class="graph-header">
-		<div class="graph-header__inner">
-			<div class="graph-header__title">知 识 图 谱</div>
-			<button class="graph-search-toggle" id="graphSearchToggle" aria-label="开启搜索">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<circle cx="11" cy="11" r="7"></circle>
-					<line x1="16.65" y1="16.65" x2="21" y2="21"></line>
-				</svg>
-			</button>
-		</div>
-	</header>
+    <div id="app">
+        <!-- 鼠标悬停节点时显示的详情卡片 -->
+        <div class="node-tooltip" id="nodeTooltip">
+            <div class="node-tooltip-header" id="nodeTooltipHeader">
+                <span id="nodeTooltipTitle"></span>
+            </div>
+            <div class="node-tooltip-body" id="nodeTooltipBody"></div>
+        </div>
 
-	<div class="search-overlay" id="searchOverlay" aria-hidden="true">
-		<div class="search-panel">
-			<form id="searchForm" autocomplete="off">
-				<div class="search-panel__input">
-					<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#7fb3ff" stroke-width="2">
-						<circle cx="11" cy="11" r="7"></circle>
-						<line x1="16.65" y1="16.65" x2="21" y2="21"></line>
-					</svg>
-					<input id="searchInput" type="text" placeholder="搜索节点、技能或人物..." />
-					<button type="button" class="search-panel__close" id="searchClose" aria-label="关闭搜索">×</button>
-				</div>
-			</form>
-			<div class="search-results" id="searchResults">
-				<div class="search-empty">输入关键词以搜索节点</div>
-			</div>
-		</div>
-	</div>
+        <!-- 右上角搜索卡片 -->
+        <div class="search-card" id="searchCard">
+            <div class="search-card-header">
+                <button class="close-btn" onclick="toggleSearchCard()">×</button>
+                <h3>技能图谱</h3>
+                <div class="search-input-wrapper">
+                    <input type="text" id="searchInput" placeholder="搜索竞赛或技能..." oninput="handleSearch()">
+                </div>
+            </div>
 
-	<div class="node-info-panel" id="nodeInfoPanel" aria-live="polite"></div>
+            <div class="search-tabs">
+                <div class="search-tab active" id="tabCompetitions" onclick="switchTab('competitions')">竞赛</div>
+                <div class="search-tab" id="tabSkills" onclick="switchTab('skills')">技能</div>
+            </div>
 
-	<div class="graph-controls" id="graphControls">
-		<button type="button" data-action="fullscreen">⛶ 全屏</button>
-		<button type="button" data-action="reset">⟲ 还原</button>
-		<button type="button" data-action="zoom-in">＋ 放大</button>
-		<button type="button" data-action="zoom-out">－ 缩小</button>
-		<button type="button" data-action="settings">⚙ 设置</button>
-	</div>
+            <div class="search-results" id="searchResults">
+                <div class="empty-search">输入关键词搜索</div>
+            </div>
 
-	<div class="graph-settings-hint" id="graphSettingsHint">设置面板开发中，敬请期待～</div>
-	
-	<div class="assistant-panel" id="assistantPanel">
-		<h3>🖍️ 知识助手</h3>
-		<p>想查什么？我来帮你把自然语言变成 Cypher 代码！</p>
-		<button class="assistant-launch" id="assistantLaunch">✨ 呼叫助手</button>
-	</div>
+            <div class="detail-section" id="detailSection" style="display: none;">
+                <div class="detail-title" id="detailTitle">
+                    <span>📋 详情</span>
+                </div>
+                <div class="detail-content" id="detailContent"></div>
+            </div>
 
-	<div class="assistant-modal" id="assistantModal" aria-hidden="true">
-		<div class="assistant-modal__dialog">
-			<div class="assistant-modal__header">
-				<div>
-					<div class="assistant-modal__title">✏️ 知识小助手</div>
-					<div style="font-size:16px;color:#666;margin-top:4px;">自然语言转 Cypher (支持 Markdown)</div>
-				</div>
-				<button class="assistant-close" id="assistantClose" aria-label="关闭">×</button>
-			</div>
-			<form id="assistantForm">
-				<textarea id="assistantInput" class="assistant-input" placeholder="比如：帮我找找所有擅长“Python”的冠军队伍..."></textarea>
-				<div class="assistant-actions">
-					<button type="submit" id="assistantSubmit" class="assistant-button">🎨 生成代码</button>
-					<button type="button" id="assistantCopy" class="copy-button" disabled>📄 复制</button>
-				</div>
-				<div id="assistantStatus" class="assistant-status" style="margin-top:8px; font-size:14px;"></div>
-				<div class="assistant-result">
-					<div id="assistantResult" class="assistant-empty">等待你的灵感...</div>
-				</div>
-				<div class="assistant-tip">
-					<strong>💡 提示：</strong> 如果遇到 CORS 跨域问题，记得去后端开启 8121 端口的权限哦。
-				</div>
-			</form>
-		</div>
-	</div>
-	
-	<script type="text/javascript">
-		document.addEventListener('DOMContentLoaded', function() {
-			// -----------------------------
-			// 0. 检查对比模式参数，隐藏额外组件
-			// -----------------------------
-			const urlParams = new URLSearchParams(window.location.search);
-			const isCompareMode = urlParams.get('compareMode') === 'true';
-			
-			if (isCompareMode) {
-				// 隐藏知识助手面板
-				const assistantPanel = document.getElementById('assistantPanel');
-				if (assistantPanel) {
-					assistantPanel.style.display = 'none';
-				}
-				
-				// 隐藏控制栏（全屏、还原、放大、缩小、设置）
-				const graphControls = document.getElementById('graphControls');
-				if (graphControls) {
-					graphControls.style.display = 'none';
-				}
-				
-				// 隐藏搜索按钮（顶部右侧的搜索图标）
-				const searchToggle = document.getElementById('graphSearchToggle');
-				if (searchToggle) {
-					searchToggle.style.display = 'none';
-				}
-				
-				// 隐藏设置提示
-				const settingsHint = document.getElementById('graphSettingsHint');
-				if (settingsHint) {
-					settingsHint.style.display = 'none';
-				}
-				
-				// 隐藏节点信息面板（左下角）
-				const nodeInfoPanel = document.getElementById('nodeInfoPanel');
-				if (nodeInfoPanel) {
-					nodeInfoPanel.style.display = 'none';
-				}
-				
-				// 隐藏搜索覆盖层（如果打开的话）
-				const searchOverlay = document.getElementById('searchOverlay');
-				if (searchOverlay) {
-					searchOverlay.style.display = 'none';
-				}
-			}
-			
-			// -----------------------------
-			// 1. 助手功能逻辑 (保持功能不变)
-			// -----------------------------
-			const TEXT2CYPHER_ENDPOINT = 'http://localhost:8121/api/mcp/text2cypher';
-			const assistantElements = {
-				form: document.getElementById('assistantForm'),
-				input: document.getElementById('assistantInput'),
-				submit: document.getElementById('assistantSubmit'),
-				copy: document.getElementById('assistantCopy'),
-				status: document.getElementById('assistantStatus'),
-				result: document.getElementById('assistantResult'),
-				launch: document.getElementById('assistantLaunch'),
-				modal: document.getElementById('assistantModal'),
-				close: document.getElementById('assistantClose')
-			};
+            <div class="recommend-section" id="recommendSection" style="display: none;">
+                <div class="btn-group">
+                    <button class="recommend-btn-new" onclick="recommendFromSelection()">推荐相关竞赛</button>
+                    <button class="learn-btn" onclick="goToLearn()">即刻启学</button>
+                </div>
+                <div class="recommend-result" id="recommendResult"></div>
+            </div>
+        </div>
 
-			const graphUI = {
-				searchToggle: document.getElementById('graphSearchToggle'),
-				searchOverlay: document.getElementById('searchOverlay'),
-				searchForm: document.getElementById('searchForm'),
-				searchInput: document.getElementById('searchInput'),
-				searchResults: document.getElementById('searchResults'),
-				searchClose: document.getElementById('searchClose'),
-				controls: document.getElementById('graphControls'),
-				infoPanel: document.getElementById('nodeInfoPanel')
-			};
+        <!-- 切换搜索卡片显示的按钮 -->
+        <button class="toggle-card-btn" id="toggleCardBtn" onclick="toggleSearchCard()"></button>
 
-			const graphState = {
-				nodes: [],
-				links: [],
-				nodeSelection: null,
-				linkSelection: null,
-				textSelection: null,
-				simulation: null,
-				zoomBehavior: null,
-				container: null,
-				currentZoom: d3.zoomIdentity,
-				hoveredNodeId: null,
-				pinnedNodeId: null,
-				pendingSearch: null
-			};
-			
-			if (window.marked) {
-				marked.setOptions({
-					breaks: true,
-					highlight: function(code, lang) {
-						if (lang && window.hljs && hljs.getLanguage(lang)) {
-							return hljs.highlight(code, { language: lang }).value;
-						}
-						return window.hljs ? hljs.highlightAuto(code).value : code;
-					}
-				});
-			}
-			
-			function toggleModal(show) {
-				if (!assistantElements.modal) return;
-				if (show) {
-					assistantElements.modal.classList.add('visible');
-					assistantElements.modal.setAttribute('aria-hidden', 'false');
-				} else {
-					assistantElements.modal.classList.remove('visible');
-					assistantElements.modal.setAttribute('aria-hidden', 'true');
-				}
-			}
-			
-			if (assistantElements.launch) {
-				assistantElements.launch.addEventListener('click', function() {
-					toggleModal(true);
-					setTimeout(() => assistantElements.input.focus(), 100);
-				});
-			}
-			if (assistantElements.close) {
-				assistantElements.close.addEventListener('click', function() {
-					toggleModal(false);
-				});
-			}
-			if (assistantElements.modal) {
-				assistantElements.modal.addEventListener('click', function(event) {
-					if (event.target === assistantElements.modal) {
-						toggleModal(false);
-					}
-				});
-			}
-			
-			function setAssistantStatus(message, tone) {
-				const colors = {
-					info: '#7986cb',
-					success: '#4db6ac',
-					error: '#e57373'
-				};
-				assistantElements.status.style.color = colors[tone] || colors.info;
-				assistantElements.status.textContent = message || '';
-			}
-			
-			function setAssistantLoading(isLoading) {
-				assistantElements.submit.disabled = isLoading;
-				assistantElements.submit.textContent = isLoading ? '🎨 绘制中...' : '🎨 生成 Cypher';
-			}
-			
-			function renderCypher(text) {
-				if (text) {
-					let rendered = text;
-					if (window.marked && typeof marked.parse === 'function') {
-						rendered = marked.parse(text);
-					}
-					assistantElements.result.innerHTML = rendered;
-					assistantElements.result.classList.remove('assistant-empty');
-					assistantElements.copy.disabled = false;
-					if (window.MathJax && MathJax.typesetPromise) {
-						MathJax.typesetPromise([assistantElements.result]).catch(function(err) {});
-					}
-					if (window.hljs) {
-						assistantElements.result.querySelectorAll('pre code').forEach(block => {
-							hljs.highlightElement(block);
-						});
-					}
-				} else {
-					assistantElements.result.textContent = '暂未获取到 Cypher 结果';
-					assistantElements.result.classList.add('assistant-empty');
-					assistantElements.copy.disabled = true;
-				}
-			}
-			
-			function requestCypher(question) {
-				const trimmed = question.trim();
-				if (!trimmed) {
-					setAssistantStatus('写点什么吧...', 'error');
-					renderCypher('');
-					return;
-				}
-				
-				setAssistantLoading(true);
-				setAssistantStatus('正在呼叫智能助手...', 'info');
-				renderCypher('请稍候，正在构思...');
-				
-				const url = TEXT2CYPHER_ENDPOINT + '?question=' + encodeURIComponent(trimmed);
-				fetch(url, { method: 'GET' })
-					.then(resp => {
-						if (!resp.ok) throw new Error('接口返回状态码 ' + resp.status);
-						return resp.json();
-					})
-					.then(data => {
-						if (data && data.code === 0 && data.data) {
-							renderCypher(data.data);
-							setAssistantStatus('搞定啦！', 'success');
-						} else {
-							const msg = (data && (data.message || data.msg)) || '未知错误';
-							renderCypher('');
-							setAssistantStatus('哎呀：' + msg, 'error');
-						}
-					})
-					.catch(err => {
-						renderCypher('');
-						const corsHint = err.message && err.message.includes('Failed to fetch') ? '（可能是跨域问题）' : '';
-						setAssistantStatus('请求失败：' + err.message + corsHint, 'error');
-					})
-					.finally(() => {
-						setAssistantLoading(false);
-					});
-			}
-			
-			assistantElements.form.addEventListener('submit', function(e) {
-				e.preventDefault();
-				requestCypher(assistantElements.input.value);
-			});
-			
-			assistantElements.copy.addEventListener('click', function() {
-				const text = assistantElements.result.innerText;
-				if (!text || assistantElements.copy.disabled) return;
-				navigator.clipboard.writeText(text.trim()).then(function() {
-					setAssistantStatus('复制好啦！', 'success');
-				}).catch(function() {
-					setAssistantStatus('复制失败', 'error');
-				});
-			});
-			
-			const panel = document.getElementById('assistantPanel');
-			if (panel) {
-				panel.addEventListener('mousedown', function(event) {
-					if (event.target.tagName === 'TEXTAREA' || event.target.tagName === 'BUTTON') return;
-					let startX = event.clientX;
-					let startY = event.clientY;
-					const rect = panel.getBoundingClientRect();
-					const offsetX = startX - rect.left;
-					const offsetY = startY - rect.top;
-					
-					function onMouseMove(e) {
-						panel.style.left = Math.min(window.innerWidth - panel.offsetWidth - 16, Math.max(16, e.clientX - offsetX)) + 'px';
-						panel.style.top = Math.min(window.innerHeight - panel.offsetHeight - 16, Math.max(16, e.clientY - offsetY)) + 'px';
-						panel.style.right = 'unset';
-					}
-					
-					function onMouseUp() {
-						document.removeEventListener('mousemove', onMouseMove);
-						document.removeEventListener('mouseup', onMouseUp);
-					}
-					
-					document.addEventListener('mousemove', onMouseMove);
-					document.addEventListener('mouseup', onMouseUp);
-				});
-			}
-			
-			// -----------------------------
-			// 1.5 搜索、信息面板与视图控制
-			// -----------------------------
-			let searchInputTimer = null;
+        <!-- 右下角控制按钮 -->
+        <div id="graph-container">
+            <div id="graph"></div>
 
-			function toggleSearchOverlay(forceState) {
-				if (!graphUI.searchOverlay) return;
-				const isVisible = graphUI.searchOverlay.classList.contains('visible');
-				const shouldShow = typeof forceState === 'boolean' ? forceState : !isVisible;
-				graphUI.searchOverlay.classList.toggle('visible', shouldShow);
-				graphUI.searchOverlay.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
-				if (shouldShow && graphUI.searchInput) {
-					setTimeout(() => graphUI.searchInput.focus(), 150);
-				}
-			}
+            <!-- 右下角控制按钮 -->
+            <div class="control-buttons">
+                <button class="control-btn" onclick="zoomIn()" title="放大">+</button>
+                <button class="control-btn" onclick="zoomOut()" title="缩小">-</button>
+                <button class="control-btn" onclick="toggleFullscreen()" id="fullscreenBtn" title="全屏">⛶</button>
+                <button class="control-btn" onclick="resetZoom()" title="还原">↺</button>
+            </div>
+        </div>
+    </div>
 
-			function renderSearchResults(list, keyword) {
-				if (!graphUI.searchResults) return;
-				const container = graphUI.searchResults;
-				container.innerHTML = '';
-				if (!keyword) {
-					container.innerHTML = '<div class="search-empty">输入关键词以搜索节点</div>';
-					return;
-				}
-				if (!list || list.length === 0) {
-					container.innerHTML = '<div class="search-empty">没有找到匹配的节点</div>';
-					return;
-				}
-				const fragment = document.createDocumentFragment();
-				list.forEach(node => {
-					const button = document.createElement('button');
-					button.type = 'button';
-					button.className = 'search-result';
-					button.dataset.nodeId = node.id;
-					button.innerHTML = `
-						<div class="search-result__name">${node.properties.name || node.id}</div>
-						<div class="search-result__meta">${node.label || '节点'}</div>
-						<div class="search-result__desc">${formatNodeSummary(node)}</div>
-					`;
-					fragment.appendChild(button);
-				});
-				container.appendChild(fragment);
-			}
+    <script>
+        // 全局变量
+        let graphData = null;
+        let chart = null;
+        let selectedSkills = new Set();
+        let allSkills = [];
+        let currentTab = 'competitions';
+        let currentSearchResults = [];
+        let selectedItem = null;
+        let nodeClicked = false; // 标记节点是否被点击
 
-			function formatNodeSummary(node) {
-				if (!node || !node.properties) return '暂无属性';
-				const entries = Object.entries(node.properties).filter(([key]) => key !== 'name');
-				if (!entries.length) return '暂无更详细的属性';
-				return entries.slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(' · ');
-			}
+        // 点击页面其他地方时隐藏详情卡片
+        document.addEventListener('click', function(e) {
+            if (!nodeClicked) {
+                const tooltip = document.getElementById('nodeTooltip');
+                tooltip.style.display = 'none';
+            }
+            nodeClicked = false;
+        });
+        
+        // 初始化
+        async function init() {
+            try {
+                // 加载数据 - 使用正确的相对路径
+                const dataUrl = new URL('data/competitions.json', window.location.href).href;
+                const response = await fetch(dataUrl);
+                graphData = await response.json();
+                
+                // 收集所有技能
+                allSkills = graphData.skills.map(s => s.name).sort();
 
-			function getLinkNodeId(value) {
-				if (!value) return null;
-				if (typeof value === 'object' && value.id !== undefined) return value.id;
-				return value;
-			}
+                // 渲染图谱
+                renderGraph();
+                
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                document.getElementById('graph').innerHTML = `
+                    <div style="padding:40px; text-align:center; color:#e53e3e;">
+                        <h3>加载失败</h3>
+                        <p>${error.message}</p>
+                        <p>请确保 data/competitions.json 文件存在</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // 渲染技能标签（侧边栏功能已移除，保留空函数）
+        function renderSkills(filter = '') {
+            // 侧边栏已移除
+        }
 
-			function getConnectedNodeIds(centerId) {
-				const ids = new Set([centerId]);
-				graphState.links.forEach(link => {
-					const sourceId = getLinkNodeId(link.source);
-					const targetId = getLinkNodeId(link.target);
-					if (sourceId === centerId) ids.add(targetId);
-					if (targetId === centerId) ids.add(sourceId);
-				});
-				return ids;
-			}
+        // 切换技能选择（侧边栏功能已移除，保留空函数）
+        function toggleSkill(skill) {
+            // 侧边栏已移除
+        }
 
-			function clearHoverState() {
-				graphState.hoveredNodeId = null;
-				if (!graphState.nodeSelection) return;
-				graphState.nodeSelection.classed('hover-focus', false).classed('hover-dim', false);
-				graphState.linkSelection.classed('hover-focus', false).classed('hover-dim', false);
-				graphState.textSelection.classed('hover-focus', false).classed('hover-dim', false);
-			}
+        // 渲染已选技能标签（侧边栏功能已移除，保留空函数）
+        function renderSelectedTags() {
+            // 侧边栏已移除
+        }
 
-			function applyHoverState(node) {
-				if (!node || !graphState.nodeSelection) return;
-				graphState.hoveredNodeId = node.id;
-				const connected = getConnectedNodeIds(node.id);
-				graphState.nodeSelection
-					.classed('hover-focus', d => connected.has(d.id))
-					.classed('hover-dim', d => !connected.has(d.id));
-				graphState.linkSelection
-					.classed('hover-focus', l => {
-						const sourceId = getLinkNodeId(l.source);
-						const targetId = getLinkNodeId(l.target);
-						return sourceId === node.id || targetId === node.id;
-					})
-					.classed('hover-dim', l => {
-						const sourceId = getLinkNodeId(l.source);
-						const targetId = getLinkNodeId(l.target);
-						return sourceId !== node.id && targetId !== node.id;
-					});
-				graphState.textSelection
-					.classed('hover-focus', d => connected.has(d.id))
-					.classed('hover-dim', d => !connected.has(d.id));
-			}
+        // 推荐比赛（侧边栏功能已移除，保留空函数）
+        function recommendCompetitions() {
+            // 侧边栏已移除
+        }
+        
+        // 渲染图谱
+// 渲染图谱
+function renderGraph() {
+    chart = echarts.init(document.getElementById('graph'));
+    
+    // 转换数据
+    const nodes = [];
+    const edges = [];
+    
+    // 添加竞赛节点 - 四角星形状，增大尺寸
+    graphData.competitions.forEach(c => {
+        nodes.push({
+            id: c.id,
+            name: c.name.length > 8 ? c.name.substring(0,6) + '...' : c.name,
+            fullName: c.name,
+            category: 'competition',
+            // 使用自定义四角星形状
+            symbol: 'path://M16,2 L20,10 L29,10 L22,16 L25,24 L16,19 L7,24 L10,16 L3,10 L12,10 Z',
+            symbolSize: 90,  // 从70增大到90
+            itemStyle: {
+                color: {
+                    type: 'radial',
+                    x: 0.5,
+                    y: 0.5,
+                    r: 0.5,
+                    colorStops: [{
+                        offset: 0, color: '#E1BEE7'
+                    }, {
+                        offset: 0.7, color: '#F3E5F5'
+                    }, {
+                        offset: 1, color: '#FFFFFF'
+                    }]
+                },
+                borderColor: '#D1C4E9',
+                borderWidth: 1
+            },
+            label: { 
+                show: true, 
+                fontSize: 11,
+                color: '#555555',  // 中深灰色，比之前浅一点
+                fontWeight: '500',  // 中等粗细
+                fontFamily: 'Microsoft YaHei'
+            },
+            domain: c.domain,
+            // 添加标签配置，控制缩放时的显示
+            labelLayout: {
+                hideOverlap: true,  // 重叠时隐藏
+                moveOverlap: 'shiftY'  // 重叠时移动
+            }
+        });
+    });
+    
+    // 添加技能节点 - 圆形，稍微增大一点
+    graphData.skills.forEach(s => {
+        nodes.push({
+            id: 'skill_' + s.id,
+            name: s.name,
+            category: 'skill',
+            symbol: 'circle',
+            symbolSize: 60,  // 从55增大到60
+            itemStyle: {
+                color: {
+                    type: 'radial',
+                    x: 0.5,
+                    y: 0.5,
+                    r: 0.5,
+                    colorStops: [{
+                        offset: 0, color: '#B3E5FC'
+                    }, {
+                        offset: 0.7, color: '#E1F5FE'
+                    }, {
+                        offset: 1, color: '#FFFFFF'
+                    }]
+                },
+                borderColor: '#81D4FA',
+                borderWidth: 1
+            },
+            label: { 
+                show: true, 
+                fontSize: 10,
+                color: '#555555',  // 中深灰色
+                fontWeight: '500'
+            },
+			competitions: s.competitions || [],
+			fullName: s.name,
+            labelLayout: {
+                hideOverlap: true,  // 重叠时隐藏
+                moveOverlap: 'shiftY'
+            }
+        });
+    });
+    
+    // 添加竞赛-技能关系
+    graphData.relationships.forEach(r => {
+        edges.push({
+            source: r.competitionId,
+            target: 'skill_' + r.skillId,
+            lineStyle: { 
+                color: '#CBD5E0', 
+                width: 1.5, 
+                type: 'dashed',
+                opacity: 0.6
+            }
+        });
+    });
+    
+    // 添加竞赛之间的连接（基于共享技能）
+    for (let i = 0; i < graphData.competitions.length; i++) {
+        for (let j = i + 1; j < graphData.competitions.length; j++) {
+            const c1 = graphData.competitions[i];
+            const c2 = graphData.competitions[j];
+            
+            const sharedSkills = c1.skills.filter(s => c2.skills.includes(s));
+            
+            if (sharedSkills.length > 0) {
+                edges.push({
+                    source: c1.id,
+                    target: c2.id,
+                    lineStyle: {
+                        color: '#AAAAAA',
+                        width: 2,
+                        type: 'dashed',
+                        opacity: 0.8
+                    },
+                    tooltip: {
+                        show: true,
+                        formatter: `共享技能: ${sharedSkills.join('、')}`
+                    }
+                });
+            }
+        }
+    }
+    
+    const option = {
+        title: { show: false },
+        tooltip: { 
+            show: true, 
+            formatter: function(params) {
+                if (params.dataType === 'node') {
+                    return params.data.fullName || params.name;
+                }
+                return params.data.tooltip || '';
+            },
+            backgroundColor: 'rgba(255,255,255,0.95)',
+            borderColor: '#E1BEE7',
+            borderWidth: 1,
+            textStyle: {
+                color: '#555555',
+                fontSize: 12
+            }
+        },
+        series: [{
+            type: 'graph',
+            layout: 'force',
+            data: nodes,
+            links: edges,
+            roam: true,  // 允许缩放和平移
+            draggable: true,
+            focusNodeAdjacency: false,
+            edgeSymbol: ['none', 'none'],
+            force: {
+                repulsion: 1500,
+                edgeLength: 250,
+                gravity: 0.1,
+                friction: 0.1,
+                layoutAnimation: true
+            },
+            lineStyle: { 
+                color: 'source', 
+                curveness: 0.3,
+                opacity: 0.7
+            },
+            label: { 
+                show: true, 
+                position: 'bottom', 
+                fontSize: 11,
+                color: '#555555',  // 中深灰色
+                fontWeight: '500',
+                fontFamily: 'Microsoft YaHei',
+                offset: [0, 15],
+                // 关键：设置最小缩放显示比例
+                showMinZoom: 0.5,  // 缩放小于0.5时隐藏标签
+                showMaxZoom: 10,
+                hideOverlap: true  // 重叠时自动隐藏
+            },
+            // 缩放时的标签行为
+            labelLayout: {
+                hideOverlap: true,
+                moveOverlap: 'shiftY'
+            },
+            emphasis: { 
+                focus: 'adjacency',
+                lineStyle: {
+                    width: 3
+                }
+            },
+            animation: true,
+            animationDuration: 1000,
+            animationEasing: 'cubicOut',
+            // 缩放限制
+            scaleLimit: {
+                min: 0.3,  // 最小缩放比例
+                max: 3      // 最大缩放比例
+            }
+        }]
+    };
+    
+    chart.setOption(option);
 
-			function clearSearchHighlights() {
-				if (!graphState.nodeSelection) return;
-				graphState.nodeSelection.classed('search-match', false).classed('search-related', false).classed('search-dim', false);
-				graphState.linkSelection.classed('search-match', false).classed('search-dim', false);
-				graphState.textSelection.classed('search-match', false).classed('search-dim', false);
-			}
+    // 监听缩放事件，可以在这里添加自定义逻辑
+    chart.on('georoam', function(params) {
+        // 可选：缩放时的额外处理
+        console.log('缩放中...');
+    });
 
-			function highlightSearchMatches(matches) {
-				clearSearchHighlights();
-				if (!matches || !matches.length || !graphState.nodeSelection) return;
-				const matchedIds = new Set(matches.map(node => node.id));
-				const relatedIds = new Set();
-				graphState.links.forEach(link => {
-					const sourceId = getLinkNodeId(link.source);
-					const targetId = getLinkNodeId(link.target);
-					const sourceMatched = matchedIds.has(sourceId);
-					const targetMatched = matchedIds.has(targetId);
-					if (sourceMatched && !matchedIds.has(targetId)) relatedIds.add(targetId);
-					if (targetMatched && !matchedIds.has(sourceId)) relatedIds.add(sourceId);
-				});
-				graphState.nodeSelection
-					.classed('search-match', d => matchedIds.has(d.id))
-					.classed('search-related', d => relatedIds.has(d.id))
-					.classed('search-dim', d => !matchedIds.has(d.id) && !relatedIds.has(d.id));
-				graphState.linkSelection
-					.classed('search-match', l => {
-						const sourceId = getLinkNodeId(l.source);
-						const targetId = getLinkNodeId(l.target);
-						return matchedIds.has(sourceId) || matchedIds.has(targetId);
-					})
-					.classed('search-dim', l => {
-						const sourceId = getLinkNodeId(l.source);
-						const targetId = getLinkNodeId(l.target);
-						return !matchedIds.has(sourceId) && !matchedIds.has(targetId);
-					});
-				graphState.textSelection
-					.classed('search-match', d => matchedIds.has(d.id))
-					.classed('search-dim', d => !matchedIds.has(d.id) && !relatedIds.has(d.id));
-			}
+    // 鼠标悬停节点事件 - 显示详情卡片
+    chart.on('mouseover', function(params) {
+        if (params.dataType === 'node') {
+            const node = params.data;
+            const tooltip = document.getElementById('nodeTooltip');
+            const body = document.getElementById('nodeTooltipBody');
 
-			function showInfoPanel(node, options = {}) {
-				if (!graphUI.infoPanel || !node) return;
-				const { pin = false, preservePin = false } = options;
-				if (pin) {
-					graphState.pinnedNodeId = node.id;
-				} else if (!preservePin) {
-					graphState.pinnedNodeId = null;
-				}
-				const style = getStyle(node.label);
-				const props = node.properties || {};
-				const hiddenKeys = new Set(['detail', '详情']);
-				const entries = Object.entries(props).filter(([key, value]) => {
-					if (!value) return false;
-					if (key === 'name') return false;
-					return !hiddenKeys.has(String(key).toLowerCase());
-				});
-				const propsHtml = entries.length ? entries.slice(0, 6).map(([key, value]) => (
-					`<div class="node-info-panel__prop"><span class="node-info-panel__key">${key}</span><span class="node-info-panel__value">${value}</span></div>`
-				)).join('') : '<div class="node-info-panel__prop node-info-panel__value">暂无更多属性</div>';
-				graphUI.infoPanel.innerHTML = `
-					<div class="node-info-panel__title" style="color:${style.color || '#fff'}">${props.name || node.id}</div>
-					${propsHtml}
-				`;
-				graphUI.infoPanel.classList.add('visible');
-			}
+            if (node.category === 'competition') {
+                // 竞赛节点 - 查找完整数据
+                const comp = graphData.competitions.find(c => c.id === node.id);
+                if (comp) {
+                    document.getElementById('nodeTooltipTitle').textContent = comp.name;
+                    body.innerHTML = `
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">所属领域：</span>
+                            <span class="node-tooltip-value">${comp.domain || '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">技能要求：</span>
+                            <span class="node-tooltip-value">${comp.skills ? comp.skills.join('、') : '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">竞赛简介：</span>
+                            <span class="node-tooltip-value">${comp.description || '-'}</span>
+                        </div>
+                    `;
+                    tooltip.style.display = 'block';
+                }
+            } else if (node.category === 'skill') {
+                // 技能节点 - 查找完整数据
+                const skill = graphData.skills.find(s => s.id === node.id);
+                if (skill) {
+                    document.getElementById('nodeTooltipTitle').textContent = skill.name;
+                    body.innerHTML = `
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">所属领域：</span>
+                            <span class="node-tooltip-value">${skill.category || '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">技能大类：</span>
+                            <span class="node-tooltip-value">${skill.category || '-'}</span>
+                        </div>
+                    `;
+                    tooltip.style.display = 'block';
+                }
+            }
+        }
+    });
 
-			function hideInfoPanel(force = false) {
-				if (!graphUI.infoPanel) return;
-				if (!force && graphState.pinnedNodeId) return;
-				graphState.pinnedNodeId = null;
-				graphUI.infoPanel.classList.remove('visible');
-				graphUI.infoPanel.innerHTML = '';
-			}
+    // 鼠标移出节点事件 - 仅在未点击节点时隐藏详情卡片
+    chart.on('mouseout', function(params) {
+        if (params.dataType === 'node' && !nodeClicked) {
+            const tooltip = document.getElementById('nodeTooltip');
+            tooltip.style.display = 'none';
+        }
+    });
 
-			function notifyParent(type, payload) {
-				if (!window.parent) return;
-				window.parent.postMessage({ type, ...payload }, window.location.origin);
-			}
+    // 点击节点事件 - 显示详情卡片并保持显示
+    chart.on('click', (params) => {
+        nodeClicked = true; // 标记节点被点击
+        if (params.dataType === 'node') {
+            const node = params.data;
+            const tooltip = document.getElementById('nodeTooltip');
+            const body = document.getElementById('nodeTooltipBody');
 
-			function focusOnNode(node, options = {}) {
-				if (!node || !graphState.zoomBehavior) return;
-				const scale = options.scale || Math.max(1.2, graphState.currentZoom.k || 1);
-				const translateX = window.innerWidth / 2 - node.x * scale;
-				const translateY = window.innerHeight / 2 - node.y * scale;
-				const transform = d3.zoomIdentity.translate(translateX, translateY).scale(scale);
-				d3.select('#svg1').transition().duration(600).call(graphState.zoomBehavior.transform, transform);
-			}
+            if (node.category === 'competition') {
+                const comp = graphData.competitions.find(c => c.id === node.id);
+                if (comp) {
+                    header.textContent = comp.name;
+                    body.innerHTML = `
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">所属领域：</span>
+                            <span class="node-tooltip-value">${comp.domain || '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">技能要求：</span>
+                            <span class="node-tooltip-value">${comp.skills ? comp.skills.join('、') : '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">竞赛简介：</span>
+                            <span class="node-tooltip-value">${comp.description || '-'}</span>
+                        </div>
+                    `;
+                    tooltip.style.display = 'block';
+                }
+            } else if (node.category === 'skill') {
+                const skill = graphData.skills.find(s => s.id === node.id);
+                if (skill) {
+                    header.textContent = skill.name;
+                    body.innerHTML = `
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">所属领域：</span>
+                            <span class="node-tooltip-value">${skill.category || '-'}</span>
+                        </div>
+                        <div class="node-tooltip-row">
+                            <span class="node-tooltip-label">技能大类：</span>
+                            <span class="node-tooltip-value">${skill.category || '-'}</span>
+                        </div>
+                    `;
+                    tooltip.style.display = 'block';
+                }
+            }
+        }
+    });
+}
+        
+        // 启动
+        init();
 
-			function zoomBy(factor) {
-				if (!graphState.zoomBehavior) return;
-				d3.select('#svg1').transition().duration(350).call(graphState.zoomBehavior.scaleBy, factor);
-			}
+        // 关闭节点详情卡片
+        function closeNodeTooltip() {
+            const tooltip = document.getElementById('nodeTooltip');
+            tooltip.style.display = 'none';
+            nodeClicked = false;
+        }
 
-			function resetGraphView() {
-				if (!graphState.zoomBehavior) return;
-				graphState.pinnedNodeId = null;
-				clearHoverState();
-				clearSearchHighlights();
-				hideInfoPanel(true);
-				notifyParent('nodeDeselected', {});
-				d3.select('#svg1').transition().duration(500).call(graphState.zoomBehavior.transform, d3.zoomIdentity);
-			}
+        // 放大
+        function zoomIn() {
+            if (chart) {
+                const option = chart.getOption();
+                const currentZoom = option.series[0].zoom || 1;
+                const newZoom = Math.min(currentZoom * 1.3, 3);
+                chart.setOption({
+                    series: [{
+                        zoom: newZoom
+                    }]
+                });
+            }
+        }
 
-			function toggleFullscreen() {
-				const doc = window.document;
-				const docEl = doc.documentElement;
-				const requestFull = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.mozRequestFullScreen || docEl.msRequestFullscreen;
-				const exitFull = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
-				if (!doc.fullscreenElement && !doc.webkitFullscreenElement && !doc.mozFullScreenElement) {
-					if (requestFull) requestFull.call(docEl);
-				} else if (exitFull) {
-					exitFull.call(doc);
-				}
-			}
+        // 缩小
+        function zoomOut() {
+            if (chart) {
+                const option = chart.getOption();
+                const currentZoom = option.series[0].zoom || 1;
+                const newZoom = Math.max(currentZoom * 0.7, 0.3);
+                chart.setOption({
+                    series: [{
+                        zoom: newZoom
+                    }]
+                });
+            }
+        }
 
-			let settingsHintTimer = null;
-			function showSettingsHint() {
-				const hint = document.getElementById('graphSettingsHint');
-				if (!hint) return;
-				hint.classList.add('visible');
-				clearTimeout(settingsHintTimer);
-				settingsHintTimer = setTimeout(() => hint.classList.remove('visible'), 2200);
-			}
+        // 还原
+        function resetZoom() {
+            if (chart) {
+                chart.setOption({
+                    series: [{
+                        zoom: 1,
+                        center: ['50%', '50%']
+                    }]
+                });
+            }
+        }
 
-			function handleControlAction(action) {
-				switch (action) {
-					case 'fullscreen':
-						toggleFullscreen();
-						break;
-					case 'reset':
-						resetGraphView();
-						break;
-					case 'zoom-in':
-						zoomBy(1.2);
-						break;
-					case 'zoom-out':
-						zoomBy(0.8);
-						break;
-					case 'settings':
-						showSettingsHint();
-						break;
-					default:
-						break;
-				}
-			}
+        // 全屏切换
+        function toggleFullscreen() {
+            const elem = document.documentElement;
+            const btn = document.getElementById('fullscreenBtn');
 
-			function runSearch(keyword) {
-				const trimmed = (keyword || '').trim();
-				if (!graphState.nodes.length) {
-					graphState.pendingSearch = trimmed;
-					return;
-				}
-				if (!graphUI.searchInput) return;
-				const lower = trimmed.toLowerCase();
-				const matches = trimmed ? graphState.nodes.filter(node => {
-					const name = (node.properties.name || '').toLowerCase();
-					const label = (node.label || '').toLowerCase();
-					return name.includes(lower) || label.includes(lower);
-				}) : [];
-				renderSearchResults(matches, trimmed);
-				if (!trimmed) {
-					clearSearchHighlights();
-					hideInfoPanel(true);
-					notifyParent('nodeDeselected', {});
-					return;
-				}
-				highlightSearchMatches(matches);
-				if (matches.length) {
-					const target = matches[0];
-					showInfoPanel(target, { pin: true });
-					focusOnNode(target);
-					notifyParent('nodeSelected', {
-						name: target.properties.name,
-						color: getStyle(target.label).color,
-						properties: target.properties
-					});
-				} else {
-					hideInfoPanel(true);
-					notifyParent('nodeDeselected', {});
-				}
-			}
+            if (!document.fullscreenElement) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+                btn.classList.add('active');
+                btn.textContent = '✕';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+                btn.classList.remove('active');
+                btn.textContent = '⛶';
+            }
+        }
 
-			function handleExternalMessage(event) {
-				if (event.origin !== window.location.origin) return;
-				if (!event.data || event.data.type !== 'search') return;
-				const keyword = event.data.keyword || '';
-				if (graphUI.searchInput) {
-					graphUI.searchInput.value = keyword;
-				}
-				toggleSearchOverlay(true);
-				runSearch(keyword);
-			}
+        // 监听全屏变化事件
+        document.addEventListener('fullscreenchange', function() {
+            const btn = document.getElementById('fullscreenBtn');
+            if (!document.fullscreenElement) {
+                btn.classList.remove('active');
+                btn.textContent = '⛶';
+            }
+        });
 
-			if (graphUI.searchToggle) {
-				graphUI.searchToggle.addEventListener('click', () => toggleSearchOverlay(true));
-			}
-			if (graphUI.searchClose) {
-				graphUI.searchClose.addEventListener('click', () => toggleSearchOverlay(false));
-			}
-			if (graphUI.searchOverlay) {
-				graphUI.searchOverlay.addEventListener('click', event => {
-					if (event.target === graphUI.searchOverlay) toggleSearchOverlay(false);
-				});
-			}
-			if (graphUI.searchForm && graphUI.searchInput) {
-				graphUI.searchForm.addEventListener('submit', event => {
-					event.preventDefault();
-					runSearch(graphUI.searchInput.value);
-				});
-				graphUI.searchInput.addEventListener('input', () => {
-					clearTimeout(searchInputTimer);
-					searchInputTimer = setTimeout(() => runSearch(graphUI.searchInput.value), 200);
-				});
-			}
-			if (graphUI.searchResults) {
-				graphUI.searchResults.addEventListener('click', event => {
-					const target = event.target.closest('.search-result');
-					if (!target) return;
-					const node = graphState.nodes.find(n => n.id === target.dataset.nodeId);
-					if (node) {
-						showInfoPanel(node, { pin: true });
-						focusOnNode(node, { scale: 1.4 });
-						highlightSearchMatches([node]);
-						notifyParent('nodeSelected', {
-							name: node.properties.name,
-							color: getStyle(node.label).color,
-							properties: node.properties
-						});
-					}
-				});
-			}
-			if (graphUI.controls) {
-				graphUI.controls.addEventListener('click', event => {
-					const button = event.target.closest('button[data-action]');
-					if (!button) return;
-					handleControlAction(button.dataset.action);
-				});
-			}
-			document.addEventListener('keydown', event => {
-				if (event.key === 'Escape') {
-					if (graphUI.searchOverlay && graphUI.searchOverlay.classList.contains('visible')) {
-						toggleSearchOverlay(false);
-					}
-				}
-			});
+        // 切换搜索卡片显示
+        function toggleSearchCard() {
+            const card = document.getElementById('searchCard');
+            const btn = document.getElementById('toggleCardBtn');
+            if (card.style.display === 'none') {
+                card.style.display = 'block';
+                btn.style.display = 'none';
+            } else {
+                card.style.display = 'none';
+                btn.style.display = 'flex';
+            }
+        }
 
-			window.addEventListener('message', handleExternalMessage);
-			
-			// -----------------------------
-			// 2. 图谱可视化配置 (D3 + Style)
-			// -----------------------------
-			
-			// 定义可爱风格的配色和大小配置
-			// 马卡龙色系 + 层级大小定义
-			const NODE_STYLES = {
-				'Enterprise': { color: '#ffb7b2', radius: 40, rank: 1 }, // 珊瑚红 - 大
-				'Competition': { color: '#ffdac1', radius: 35, rank: 2 }, // 蜜桃橙 - 中大
-				'Project': { color: '#e2f0cb', radius: 30, rank: 3 },    // 抹茶绿 - 中
-				'Team': { color: '#b5ead7', radius: 25, rank: 4 },       // 薄荷蓝 - 中小
-				'Skill': { color: '#c7ceea', radius: 20, rank: 5 },      // 薰衣草紫 - 小
-				'Mentor': { color: '#e0f2f1', radius: 20, rank: 5 },     // 浅青 - 小
-				'Person': { color: '#fff9c4', radius: 18, rank: 6 },     // 浅黄 - 小
-				'default': { color: '#f5f5f5', radius: 15, rank: 7 }     // 默认灰
-			};
-			
-			// 备用颜色生成器（手绘风格通常颜色较浅）
-			function getRandomPastelColor(str) {
-				let hash = 0;
-				for (let i = 0; i < str.length; i++) {
-					hash = str.charCodeAt(i) + ((hash << 5) - hash);
-				}
-				const h = hash % 360;
-				return `hsl(${h}, 70%, 85%)`; // 高明度，低饱和度
-			}
+        // 切换标签页
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tabCompetitions').classList.toggle('active', tab === 'competitions');
+            document.getElementById('tabSkills').classList.toggle('active', tab === 'skills');
+            handleSearch();
+        }
 
-			const LABEL_BLACKLIST = new Set(['Country', 'Region', 'Type', 'Framework', 'Tool', 'Concept', 'Genre', 'Equipment', 'Technique']);
-			
-			var svg = d3.select("#svg1"),
-				width = window.innerWidth,
-				height = window.innerHeight;
+        // 搜索处理
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            const resultsContainer = document.getElementById('searchResults');
 
-			const stage = svg.append("g").attr("class", "graph-stage");
-			graphState.container = stage;
-			graphState.currentZoom = d3.zoomIdentity;
-			graphState.zoomBehavior = d3.zoom()
-				.scaleExtent([0.4, 2.8])
-				.on("zoom", function() {
-					graphState.currentZoom = d3.event.transform;
-					if (graphState.container) {
-						graphState.container.attr("transform", graphState.currentZoom);
-					}
-				});
-			svg.call(graphState.zoomBehavior);
-			svg.on("click", function() {
-				if (d3.event.target && d3.event.target.tagName === 'svg') {
-					clearHoverState();
-					hideInfoPanel(true);
-					graphState.pinnedNodeId = null;
-					notifyParent('nodeDeselected', {});
-				}
-			});
-				
-			// --- 注入 SVG 滤镜 (关键步骤：制造手绘效果) ---
-			var defs = svg.append("defs");
-			
-			// 滤镜1：线条抖动 (Sketch Line)
-			var filterLine = defs.append("filter")
-				.attr("id", "sketch-line")
-				.attr("height", "130%");
-			filterLine.append("feTurbulence")
-				.attr("type", "fractalNoise")
-				.attr("baseFrequency", "0.5") // 频率越高越毛糙
-				.attr("numOctaves", "1")
-				.attr("result", "noise");
-			filterLine.append("feDisplacementMap")
-				.attr("in", "SourceGraphic")
-				.attr("in2", "noise")
-				.attr("scale", "2"); // 偏移量
+            if (!query) {
+                resultsContainer.innerHTML = '<div class="empty-search">输入关键词搜索</div>';
+                currentSearchResults = [];
+                hideDetail();
+                return;
+            }
 
-			// 滤镜2：形状不规则 (Sketch Shape)
-			var filterShape = defs.append("filter")
-				.attr("id", "sketch-shape")
-				.attr("x", "-20%")
-				.attr("y", "-20%")
-				.attr("width", "140%")
-				.attr("height", "140%");
-			filterShape.append("feTurbulence")
-				.attr("type", "fractalNoise")
-				.attr("baseFrequency", "0.03") // 频率低一点，产生大的变形
-				.attr("numOctaves", "3")
-				.attr("result", "noise");
-			filterShape.append("feDisplacementMap")
-				.attr("in", "SourceGraphic")
-				.attr("in2", "noise")
-				.attr("scale", "3"); // 变形程度
-			// --------------------------------------------
-			
-			svg.attr("width", width).attr("height", height);
-			
-			window.addEventListener('resize', function() {
-				width = window.innerWidth;
-				height = window.innerHeight;
-				svg.attr("width", width).attr("height", height);
-				if (simulation) {
-					simulation.force("center", d3.forceCenter(width / 2, height / 2));
-					simulation.alpha(0.2).restart();
-				}
-			});
-			
-			const NEO4J_CONFIG = {
-				url: "bolt://localhost:7687",
-				user: "neo4j",
-				password: "12345678"
-			};
+            if (currentTab === 'competitions') {
+                const results = graphData.competitions.filter(c =>
+                    c.name.toLowerCase().includes(query) ||
+                    c.domain.toLowerCase().includes(query)
+                );
+                currentSearchResults = results;
+                renderCompetitionResults(results);
+            } else {
+                const results = graphData.skills.filter(s =>
+                    s.name.toLowerCase().includes(query)
+                );
+                currentSearchResults = results;
+                renderSkillResults(results);
+            }
+        }
 
-			function identityToString(id) {
-				if (id == null) return '';
-				if (typeof id === 'object' && typeof id.toString === 'function') return id.toString();
-				return String(id);
-			}
-			
-			// 加载数据
-			function loadGraphData() {
-				if (window.neo4j && NEO4J_CONFIG && NEO4J_CONFIG.url) {
-					let driver;
-					try {
-						driver = neo4j.driver(NEO4J_CONFIG.url, neo4j.auth.basic(NEO4J_CONFIG.user, NEO4J_CONFIG.password));
-						const session = driver.session({ defaultAccessMode: neo4j.session.READ });
-						const cypher = 'MATCH p=()-[r]->() RETURN p LIMIT 150'; // 稍微减少节点数保持清爽
-						return session.run(cypher).then(result => {
-							const data = result.records.map(rec => ({ p: rec.get('p') }));
-							session.close(); driver.close();
-							return data;
-						}).catch(err => {
-							console.warn('Neo4j连接失败，切换到演示模式');
-							if(session) session.close(); if(driver) driver.close();
-							return getMockData(); // 使用模拟数据
-						});
-					} catch (e) {
-						return getMockData();
-					}
-				}
-				return getMockData();
-			}
+        // 渲染竞赛搜索结果
+        function renderCompetitionResults(results) {
+            const container = document.getElementById('searchResults');
+            if (results.length === 0) {
+                container.innerHTML = '<div class="empty-search">未找到匹配的竞赛</div>';
+                return;
+            }
 
-			// 简单的模拟数据，防止页面空白
-			function getMockData() {
-				return new Promise(resolve => {
-					// 构造一些虚拟数据结构兼容 p.segments
-					// 这里简化处理，实际如果本地有json文件最好
-					d3.json('data/records.json', function(error, data) {
-						if(!error) resolve(data);
-						else resolve([]); 
-					});
-				});
-			}
-			
-			// 力导向参数调整：手绘风格通常元素间距大一点好看
-			var simulation = d3.forceSimulation()
-				.velocityDecay(0.3) // 增加阻尼，动得慢一点更可爱
-				.force("link", d3.forceLink().id(d => d.id).distance(180))
-				.force("charge", d3.forceManyBody().strength(-550))
-				.force("center", d3.forceCenter(width / 2, height / 2))
-				.force("collision", d3.forceCollide().radius(d => getStyle(d.label).radius + 10));
-			
-			var nodes = [], links = [];
-			
-			// 获取样式辅助函数
-			function getStyle(label) {
-				return NODE_STYLES[label] || NODE_STYLES['default'];
-			}
+            container.innerHTML = results.map(c => `
+                <div class="search-result-item ${selectedItem && selectedItem.id === c.id ? 'selected' : ''}"
+                     onclick="selectCompetition('${c.id}')">
+                    <div class="search-result-name">${c.name}</div>
+                    <div class="search-result-meta">${c.domain} · ${c.skills.length}个技能</div>
+                </div>
+            `).join('');
+        }
 
-			loadGraphData().then(function(graph) {
-				const nodeSet = new Set();
-				nodes = [];
-				links = [];
-				
-				if (graph && graph.length > 0) {
-					for (let item of graph) {
-						if (!item.p || !item.p.segments) continue;
-						for (let segment of item.p.segments) {
-							const startId = identityToString(segment.start.identity);
-							const endId = identityToString(segment.end.identity);
-							
-							if (!nodeSet.has(startId)) {
-								nodeSet.add(startId);
-								nodes.push({ id: startId, label: segment.start.labels[0], properties: segment.start.properties });
-							}
-							if (!nodeSet.has(endId)) {
-								nodeSet.add(endId);
-								nodes.push({ id: endId, label: segment.end.labels[0], properties: segment.end.properties });
-							}
-							links.push({ source: startId, target: endId, type: segment.relationship.type });
-						}
-					}
-				}
-				
-				nodes = nodes.filter(node => !LABEL_BLACKLIST.has(node.label));
-				const allowedIds = new Set(nodes.map(node => node.id));
-				links = links.filter(link => allowedIds.has(link.source) && allowedIds.has(link.target));
+        // 渲染技能搜索结果
+        function renderSkillResults(results) {
+            const container = document.getElementById('searchResults');
+            if (results.length === 0) {
+                container.innerHTML = '<div class="empty-search">未找到匹配的技能</div>';
+                return;
+            }
 
-				if (graphState.container) {
-					graphState.container.selectAll('*').remove();
-				}
+            container.innerHTML = results.map(s => {
+                const compCount = (s.competitions || []).length;
+                return `
+                    <div class="search-result-item ${selectedItem && selectedItem.id === s.id ? 'selected' : ''}"
+                         onclick="selectSkill('${s.id}')">
+                        <div class="search-result-name">${s.name}</div>
+                        <div class="search-result-meta">${compCount}个关联竞赛</div>
+                    </div>
+                `;
+            }).join('');
+        }
 
-				const linkLayer = graphState.container.append("g").attr("class", "links");
-				const nodeLayer = graphState.container.append("g").attr("class", "nodes");
-				const textLayer = graphState.container.append("g").attr("class", "texts");
+        // 选择竞赛
+        function selectCompetition(id) {
+            const comp = graphData.competitions.find(c => c.id === id);
+            if (comp) {
+                selectedItem = comp;
+                showCompetitionDetail(comp);
+                // 高亮图谱中的节点
+                highlightNode(id);
+                // 刷新搜索结果以显示选中状态
+                handleSearch();
+            }
+        }
 
-				const link = linkLayer.selectAll("line").data(links).enter().append("line");
+        // 选择技能
+        function selectSkill(id) {
+            const skill = graphData.skills.find(s => s.id === id);
+            if (skill) {
+                selectedItem = skill;
+                showSkillDetail(skill);
+                // 高亮图谱中的节点
+                highlightNode('skill_' + id);
+                // 刷新搜索结果以显示选中状态
+                handleSearch();
+            }
+        }
 
-				const node = nodeLayer.selectAll("circle").data(nodes).enter()
-					.append("circle")
-					.attr("r", d => getStyle(d.label).radius)
-					.attr("fill", d => {
-						const style = NODE_STYLES[d.label];
-						return style ? style.color : getRandomPastelColor(d.properties.name || d.id);
-					})
-					.call(d3.drag()
-						.on("start", dragstarted)
-						.on("drag", dragged)
-						.on("end", dragended)
-					);
+        // 显示竞赛详情
+        function showCompetitionDetail(comp) {
+            const detailSection = document.getElementById('detailSection');
+            const recommendSection = document.getElementById('recommendSection');
 
-				node.append("title").text(d => d.properties.name);
+            document.getElementById('detailTitle').innerHTML = `<span>竞赛详情</span>`;
+            document.getElementById('detailContent').innerHTML = `
+                <div style="margin-bottom: 8px;">
+                    <strong class="detail-comp-name" style="color: #03A9F4; font-size: 15px; cursor: pointer;" onclick="highlightNode('${comp.id}')" title="点击高亮图中节点">${comp.name}</strong>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <span style="background: #E1F5FE; color: #03A9F4; padding: 2px 8px; border-radius: 12px; font-size: 12px;">${comp.domain}</span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <span style="color: #888; font-size: 12px;">官网链接：</span>
+                    <a href="${comp.website || '#'}" target="_blank" style="color: #03A9F4; font-size: 13px; text-decoration: none;">${comp.website || '-'}</a>
+                </div>
+                <div class="detail-skills">
+                    ${comp.skills.map(s => `<span class="detail-skill-tag">${s}</span>`).join('')}
+                </div>
+            `;
 
-				const text = textLayer.selectAll("text")
-					.data(nodes).enter()
-					.append("text")
-					.text(d => d.properties.name || d.id)
-					.attr("font-size", d => {
-						const r = getStyle(d.label).radius;
-						return Math.max(12, r / 1.8) + "px";
-					})
-					.attr("dy", "0.35em");
+            detailSection.style.display = 'block';
 
-				graphState.nodes = nodes;
-				graphState.links = links;
-				graphState.nodeSelection = node;
-				graphState.linkSelection = link;
-				graphState.textSelection = text;
+            // 显示推荐按钮和推荐结果
+            document.getElementById('recommendSection').style.display = 'block';
+            document.getElementById('recommendResult').innerHTML = '';
+        }
 
-				simulation.nodes(nodes).on("tick", ticked);
-				simulation.force("link").links(links);
-				graphState.simulation = simulation;
-				
-				function ticked() {
-					link
-						.attr("x1", d => d.source.x)
-						.attr("y1", d => d.source.y)
-						.attr("x2", d => d.target.x)
-						.attr("y2", d => d.target.y);
-					
-					node
-						.attr("cx", d => d.x)
-						.attr("cy", d => d.y);
-					
-					text
-						.attr("x", d => d.x)
-						.attr("y", d => d.y); 
-				}
-				
-				let dragging = false;
-				function dragstarted(d) {
-					if (!d3.event.active) simulation.alphaTarget(0.3).restart();
-					d.fx = d.x;
-					d.fy = d.y;
-					dragging = true;
-				}
-				function dragged(d) {
-					d.fx = d3.event.x;
-					d.fy = d3.event.y;
-				}
-				function dragended(d) {
-					if (!d3.event.active) simulation.alphaTarget(0);
-					d.fx = null;
-					d.fy = null;
-					dragging = false;
-				}
+        // 显示技能详情
+        function showSkillDetail(skill) {
+            const detailSection = document.getElementById('detailSection');
+            const recommendSection = document.getElementById('recommendSection');
 
-				node.on('mouseenter', function(d) {
-					if (dragging) return;
-					applyHoverState(d);
-					showInfoPanel(d);
-					notifyParent('nodeSelected', {
-						name: d.properties.name || '未知',
-						color: getStyle(d.label).color,
-						properties: d.properties || {}
-					});
-				});
-				
-				node.on('mouseleave', function(d) {
-					if (dragging) return;
-					if (graphState.hoveredNodeId === d.id) {
-						clearHoverState();
-						hideInfoPanel();
-						notifyParent('nodeDeselected', {});
-					}
-				});
+            const comps = (skill.competitions || []).map(cId => {
+                return graphData.competitions.find(c => c.id === cId);
+            }).filter(c => c);
 
-				node.on('click', function(d) {
-					d3.event.stopPropagation();
-					// 清除 hover 状态，点击时仅保留点击效果
-					clearHoverState();
-				});
+            document.getElementById('detailTitle').innerHTML = `<span>技能详情</span>`;
+            document.getElementById('detailContent').innerHTML = `
+                <div style="margin-bottom: 8px;">
+                    <strong class="detail-skill-name" style="color: #4ECDC4; font-size: 15px; cursor: pointer;" onclick="highlightNode('skill_${skill.id}')" title="点击高亮图中节点">${skill.name}</strong>
+                </div>
+                <div style="color: #666; margin-bottom: 8px;">
+                    关联竞赛: ${comps.length}个
+                </div>
+                ${comps.length > 0 ? `
+                    <div style="margin-top: 8px;">
+                        <div style="font-size: 12px; color: #999; margin-bottom: 6px;">相关竞赛:</div>
+                        <div class="detail-skills">
+                            ${comps.slice(0, 5).map(c => `
+                                <span class="detail-skill-tag" style="background: #F3E5F5; color: #7B1FA2; cursor: pointer;" onclick="selectCompetition('${c.id}')">${c.name}</span>
+                            `).join('')}
+                            ${comps.length > 5 ? `<span style="font-size: 12px; color: #999;">+${comps.length - 5}个</span>` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
 
-				if (graphState.pendingSearch) {
-					runSearch(graphState.pendingSearch);
-					graphState.pendingSearch = null;
-				}
-			});
-			
-			// -----------------------------
-			// 3. 窗口拖拽逻辑 (面板)
-			// -----------------------------
-			// ... (代码已包含在 CSS transform 中，此处保留 JS 拖拽以支持大范围移动)
-		});
-	</script>
+            detailSection.style.display = 'block';
+            recommendSection.style.display = 'block';
+
+            // 立即推荐相关竞赛
+            selectedSkills = new Set([skill.name]);
+            recommendFromSelection();
+        }
+
+        // 隐藏详情
+        function hideDetail() {
+            document.getElementById('detailSection').style.display = 'none';
+            document.getElementById('recommendSection').style.display = 'none';
+            selectedItem = null;
+        }
+
+        // 从选中项推荐相关竞赛
+        function recommendFromSelection() {
+            const recommendResult = document.getElementById('recommendResult');
+
+            if (currentTab === 'skills' && selectedItem) {
+                // 从技能推荐竞赛
+                const comps = (selectedItem.competitions || []).map(cId => {
+                    return graphData.competitions.find(c => c.id === cId);
+                }).filter(c => c);
+
+                if (comps.length === 0) {
+                    recommendResult.innerHTML = '<div class="empty-search">暂无相关竞赛</div>';
+                    return;
+                }
+
+                recommendResult.innerHTML = comps.slice(0, 5).map(c => `
+                    <div class="recommend-item" onclick="selectCompetition('${c.id}')">
+                        <div class="recommend-item-name">${c.name}</div>
+                        <div class="recommend-item-match">${c.domain}</div>
+                    </div>
+                `).join('');
+            } else if (currentTab === 'competitions' && selectedItem) {
+                // 从竞赛推荐相似竞赛
+                const currentComp = selectedItem;
+                const similar = graphData.competitions
+                    .map(c => {
+                        const shared = c.skills.filter(s => currentComp.skills.includes(s));
+                        return { ...c, matchCount: shared.length, sharedSkills: shared };
+                    })
+                    .filter(c => c.id !== currentComp.id && c.matchCount > 0)
+                    .sort((a, b) => b.matchCount - a.matchCount)
+                    .slice(0, 5);
+
+                if (similar.length === 0) {
+                    recommendResult.innerHTML = '<div class="empty-search">暂无相似竞赛</div>';
+                    return;
+                }
+
+                recommendResult.innerHTML = similar.map(c => `
+                    <div class="recommend-item" onclick="selectCompetition('${c.id}')">
+                        <div class="recommend-item-name">${c.name}</div>
+                        <div class="recommend-item-match">共享技能: ${c.sharedSkills.join('、')}</div>
+                    </div>
+                `).join('');
+            } else {
+                recommendResult.innerHTML = '<div class="empty-search">请先选择一个技能或竞赛</div>';
+            }
+        }
+
+        // 高亮图谱中的节点
+        function highlightNode(id) {
+            if (!chart || !graphData) return;
+
+            // 找到所有节点数据
+            const allNodes = chart.getOption().series[0].data;
+            const nodeIndex = allNodes.findIndex(n => n.id === id);
+
+            if (nodeIndex !== -1) {
+                // 先downplay所有节点
+                chart.dispatchAction({
+                    type: 'downplay',
+                    seriesIndex: 0
+                });
+                // 高亮目标节点（节点变大、颜色更亮、边框加粗）
+                chart.dispatchAction({
+                    type: 'highlight',
+                    seriesIndex: 0,
+                    dataIndex: nodeIndex
+                });
+            }
+        }
+
+        // 跳转到孪孪伴学模块（使用 top 确保在 iframe 内时跳转整个页面，而非仅 iframe）
+        function goToLearn() {
+            window.top.location.href = '/twin-study';
+        }
+    </script>
 </body>
 </html>

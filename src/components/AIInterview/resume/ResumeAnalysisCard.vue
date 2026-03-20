@@ -382,6 +382,7 @@ watch(
 }
 
 .next-desc {
+  font-size: 14px;
   color: #6b7280;
   margin-top: 2px;
   line-height: 1.7;
