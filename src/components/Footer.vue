@@ -13,8 +13,8 @@
       </div>
      
     </div>
-    <div class="footer-copyright">Copyright 2025 CDUT All Rights Reserved.
-    </div>
+    <!-- <div class="footer-copyright">Copyright 2025 CDUT All Rights Reserved.
+    </div> -->
   </footer>
   
 </template>

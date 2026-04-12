@@ -163,9 +163,9 @@
     </div>
 
     <div class="sidebar-footer">
-      <div :class="['sidebar-footer-item', { 'sidebar-footer-item-closed': !isOpen }]">
+      <!-- <div :class="['sidebar-footer-item', { 'sidebar-footer-item-closed': !isOpen }]">
         <span v-if="isOpen" class="sidebar-copyright">Copyright 2025 CDUT All Rights Reserved.</span>
-      </div>
+      </div> -->
     </div>
   </div>
 </template>
