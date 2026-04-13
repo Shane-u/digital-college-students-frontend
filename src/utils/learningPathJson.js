@@ -3,9 +3,20 @@
  * 流式返回可能是半截 JSON，需累积后尝试解析
  */
 
+/** 去掉模型常见的 markdown 代码块包裹 */
+function stripMarkdownCodeFence(s) {
+  let t = s.trim()
+  if (!t.startsWith('```')) return t
+  t = t.replace(/^```(?:json)?\s*/i, '')
+  const close = t.lastIndexOf('```')
+  if (close >= 0) t = t.slice(0, close)
+  return t.trim()
+}
+
 /**
  * 尝试从累积字符串中提取完整 JSON 对象
  * 支持 { "nodes": [...] } 结构
+ * 兼容：前文说明、```json 代码块、首尾杂字（从首个 { 起匹配括号）
  * @param {string} accumulated - 累积的字符串
  * @returns {{ parsed: { nodes: Array } | null, rest: string }}
  */
@@ -14,8 +25,10 @@ export function tryParseLearningPathJson(accumulated) {
     return { parsed: null, rest: accumulated || '' }
   }
 
-  const trimmed = accumulated.trim()
-  if (!trimmed.startsWith('{')) return { parsed: null, rest: accumulated }
+  let trimmed = stripMarkdownCodeFence(accumulated.trim())
+  const braceAt = trimmed.indexOf('{')
+  if (braceAt < 0) return { parsed: null, rest: accumulated }
+  trimmed = trimmed.slice(braceAt)
 
   let depth = 0
   let inString = false

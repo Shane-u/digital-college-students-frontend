@@ -40,7 +40,7 @@
               <button
                 type="button"
                 class="lp-selector-item lp-selector-item--row"
-                :class="{ active: selectedPathId === p.id }"
+                :class="{ active: String(selectedPathId) === String(p.id) }"
                 @click="$emit('select-path', p.id)"
               >
                 {{ getPathDisplayName(p) }}

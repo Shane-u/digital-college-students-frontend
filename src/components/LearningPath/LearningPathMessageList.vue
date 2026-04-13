@@ -42,6 +42,7 @@
 <script setup>
 import { ref } from 'vue'
 import LearningPathMindmap from './LearningPathMindmap.vue'
+import { tryParseLearningPathJson } from '../../utils/learningPathJson'
 
 defineProps({
   messages: {
@@ -66,11 +67,16 @@ function displayUserContent(content) {
   return s
 }
 
-// 模型消息：若为纯 JSON 或带大段 JSON 的文本，不展示原始内容（仅保留思维导图时的 fallback 提示）
+// 模型消息：若能解析出路径 JSON 或明显是路径 JSON 片段，不展示原始大段 JSON
 function displayModelContent(content) {
   if (content == null || typeof content !== 'string') return ''
   const s = content.trim()
   if (!s) return ''
+  const { parsed } = tryParseLearningPathJson(s)
+  if (parsed?.nodes?.length) return '已生成学习路径，请查看上方导图。'
+  if (/\{[\s\S]*"nodes"\s*:\s*\[/i.test(s) && s.length > 80) {
+    return '正在生成或未能完整展示学习路径，请稍候重试或重新生成。'
+  }
   if (s.includes('"nodes"') && (s.startsWith('{') || s.length > 500)) return '已生成学习路径，请查看上方导图。'
   return s
 }

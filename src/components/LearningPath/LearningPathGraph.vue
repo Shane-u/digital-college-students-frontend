@@ -109,11 +109,28 @@ const hasGraphData = computed(() => {
 })
 
 const NODE_STYLE = computed(() => ({
-  rootFill: props.theme?.rootFill || '#A78BFA',
-  nodeFill: props.theme?.nodeFill || '#7880f0',
+  rootFill: props.theme?.rootFill,
   linkStroke: props.theme?.linkStroke || '#A5ABB6',
   bg: props.theme?.bg || '#faf8ff'
 }))
+
+/** 按层级配色：与头部紫系协调，饱和度适中、色相拉开 */
+const DEFAULT_LEVEL_FILLS = [
+  '#7c3aed',
+  '#3b82f6',
+  '#0d9488',
+  '#ea580c',
+  '#db2777',
+  '#6366f1',
+  '#059669'
+]
+
+const levelFills = computed(() => {
+  const custom = props.theme?.levelFills
+  if (Array.isArray(custom) && custom.length > 0) return custom
+  return DEFAULT_LEVEL_FILLS
+})
+
 const nodeBg = computed(() => NODE_STYLE.value.bg)
 
 const nodeCardTopic = computed(() => {
@@ -128,6 +145,43 @@ const updateDimensions = () => {
       height: graphContainer.value.clientHeight
     }
   }
+}
+
+/** 关系可能是子→父，按离根 BFS 深度统一为父→子（与 LearningPathGraphAll 一致） */
+const orientLinksParentToChild = (rootId, linkList, nodeIdSet) => {
+  const adj = new Map()
+  const touch = (a, b) => {
+    if (!nodeIdSet.has(a) || !nodeIdSet.has(b)) return
+    if (!adj.has(a)) adj.set(a, [])
+    if (!adj.has(b)) adj.set(b, [])
+    adj.get(a).push(b)
+    adj.get(b).push(a)
+  }
+  linkList.forEach((l) => touch(l.source, l.target))
+  const depth = new Map()
+  if (nodeIdSet.has(rootId)) {
+    depth.set(rootId, 0)
+    const q = [rootId]
+    while (q.length) {
+      const u = q.shift()
+      const du = depth.get(u)
+      for (const v of adj.get(u) || []) {
+        if (!depth.has(v)) {
+          depth.set(v, du + 1)
+          q.push(v)
+        }
+      }
+    }
+  }
+  const inf = 1e9
+  return linkList.map((l) => {
+    const { source: a, target: b } = l
+    const da = depth.get(a) ?? inf
+    const db = depth.get(b) ?? inf
+    if (da < db) return { ...l, source: a, target: b }
+    if (db < da) return { ...l, source: b, target: a }
+    return { ...l, source: a, target: b }
+  })
 }
 
 const buildGraphData = () => {
@@ -147,29 +201,61 @@ const buildGraphData = () => {
     })
   }
 
-  const links = relationships.map(r => ({
+  const mappedNodes = nodes.map(n => ({
+    id: n.nodeId || n.id,
+    ...n
+  }))
+  const idSet = new Set(mappedNodes.map(n => n.id))
+
+  let links = relationships.map(r => ({
     source: r.sourceNodeId,
     target: r.targetNodeId,
     type: r.type || 'PARENT_OF'
-  })).filter(l => {
-    const hasSource = nodes.some(n => (n.nodeId || n.id) === l.source)
-    const hasTarget = nodes.some(n => (n.nodeId || n.id) === l.target)
-    return hasSource && hasTarget
-  })
+  })).filter(l => idSet.has(l.source) && idSet.has(l.target))
+
+  const root = mappedNodes.find(n => n.isStart === true) || mappedNodes[0]
+  if (root?.id) links = orientLinksParentToChild(root.id, links, idSet)
 
   return {
-    nodes: nodes.map(n => ({
-      id: n.nodeId || n.id,
-      ...n
-    })),
+    nodes: mappedNodes,
     links
   }
+}
+
+/** 从根节点沿 PARENT_OF（source→target）BFS 得到层级深度 */
+const computeDepthById = (nodes, links) => {
+  const idSet = new Set(nodes.map(n => n.id))
+  const children = new Map()
+  for (const l of links) {
+    const s = typeof l.source === 'object' ? l.source.id : l.source
+    const t = typeof l.target === 'object' ? l.target.id : l.target
+    if (!idSet.has(s) || !idSet.has(t)) continue
+    if (!children.has(s)) children.set(s, [])
+    children.get(s).push(t)
+  }
+  const root = nodes.find(n => n.isStart === true) || nodes[0]
+  const depthById = new Map()
+  if (!root?.id) return depthById
+  const q = [[root.id, 0]]
+  depthById.set(root.id, 0)
+  while (q.length) {
+    const [id, d] = q.shift()
+    for (const c of children.get(id) || []) {
+      if (!depthById.has(c)) {
+        depthById.set(c, d + 1)
+        q.push([c, d + 1])
+      }
+    }
+  }
+  for (const n of nodes) {
+    if (!depthById.has(n.id)) depthById.set(n.id, 1)
+  }
+  return depthById
 }
 
 const getNodeDisplayName = (d) => d?.name || d?.label || d?.id || ''
 const isStartNode = (d) => d?.isStart === true
 const getNodeRadius = (d) => isStartNode(d) ? 26 : 18
-const getNodeFill = (d) => isStartNode(d) ? NODE_STYLE.value.rootFill : NODE_STYLE.value.nodeFill
 
 const renderGraph = () => {
   updateDimensions()
@@ -177,6 +263,15 @@ const renderGraph = () => {
   const { width, height } = dimensions.value
   const { nodes, links } = buildGraphData()
   if (nodes.length === 0) return
+
+  const depthById = computeDepthById(nodes, links)
+  const fills = levelFills.value
+  const getNodeFill = (d) => {
+    const depth = depthById.get(d.id) ?? 0
+    if (depth === 0 && NODE_STYLE.value.rootFill) return NODE_STYLE.value.rootFill
+    const idx = Math.min(depth, Math.max(0, fills.length - 1))
+    return fills[idx]
+  }
 
   const svg = d3.select(svgRef.value)
   svg.selectAll('*').remove()
@@ -188,6 +283,46 @@ const renderGraph = () => {
     if (n.x == null) n.x = cx + (Math.random() - 0.5) * 100
     if (n.y == null) n.y = cy + (Math.random() - 0.5) * 100
   })
+
+  const linkStroke = NODE_STYLE.value.linkStroke
+  const linkLineEnds = (d) => {
+    const s = d.source
+    const t = d.target
+    const sx = s.x
+    const sy = s.y
+    const tx = t.x
+    const ty = t.y
+    if (!Number.isFinite(sx) || !Number.isFinite(tx)) return { x1: sx, y1: sy, x2: tx, y2: ty }
+    const rS = getNodeRadius(s)
+    const rT = getNodeRadius(t)
+    const dx = tx - sx
+    const dy = ty - sy
+    const len = Math.hypot(dx, dy)
+    if (len < 1e-6) return { x1: sx, y1: sy, x2: tx, y2: ty }
+    const ux = dx / len
+    const uy = dy / len
+    const arrowGap = 6
+    return {
+      x1: sx + ux * rS,
+      y1: sy + uy * rS,
+      x2: tx - ux * (rT + arrowGap),
+      y2: ty - uy * (rT + arrowGap)
+    }
+  }
+
+  const arrowMarkerId = `lp-g-arr-${String(props.pathId || 'p').replace(/\W/g, '_')}`
+  svg.append('defs').append('marker')
+    .attr('id', arrowMarkerId)
+    .attr('viewBox', '0 0 10 10')
+    .attr('refX', 9)
+    .attr('refY', 5)
+    .attr('markerWidth', 7)
+    .attr('markerHeight', 7)
+    .attr('orient', 'auto')
+    .attr('markerUnits', 'userSpaceOnUse')
+    .append('path')
+    .attr('d', 'M0,0 L10,5 L0,10 Z')
+    .attr('fill', linkStroke)
 
   gRoot = svg.append('g')
   zoomBehavior = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (ev) => gRoot.attr('transform', ev.transform))
@@ -205,9 +340,10 @@ const renderGraph = () => {
   linkLayer.selectAll('line')
     .data(links)
     .join('line')
-    .attr('stroke', NODE_STYLE.value.linkStroke)
+    .attr('stroke', linkStroke)
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.7)
+    .attr('marker-end', `url(#${arrowMarkerId})`)
 
   const nodeSel = nodeLayer.selectAll('g.lp-node')
     .data(nodes, d => d.id)
@@ -242,10 +378,10 @@ const renderGraph = () => {
 
   simulation.on('tick', () => {
     linkLayer.selectAll('line')
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y)
+      .attr('x1', d => linkLineEnds(d).x1)
+      .attr('y1', d => linkLineEnds(d).y1)
+      .attr('x2', d => linkLineEnds(d).x2)
+      .attr('y2', d => linkLineEnds(d).y2)
     nodeSel.attr('transform', d => `translate(${d.x},${d.y})`)
   })
 }

@@ -20,7 +20,8 @@
           </h3>
         </div>
         <div class="panel-body">
-          <iframe 
+          <iframe
+            ref="learningPathIframeRef"
             src="/learning-path-graph?from=compare"
             class="knowledge-graph-iframe"
             frameborder="0"
@@ -117,10 +118,18 @@ const effectiveHighlightIds = computed(() =>
   useInternalHighlight.value ? internalHighlightIds.value : (props.highlightIds || [])
 )
 
+const learningPathIframeRef = ref(null)
+
 const handleClearHighlight = () => {
   if (useInternalHighlight.value) {
     internalHighlightIds.value = []
   }
+  try {
+    learningPathIframeRef.value?.contentWindow?.postMessage(
+      { source: 'compare-view', type: 'lp-clear-compare-highlight' },
+      '*'
+    )
+  } catch (_) {}
   emit('clearHighlight')
 }
 
@@ -457,7 +466,7 @@ const loadFlashcardData = async () => {
 .panel-subtitle {
   font-size: 12px;
   font-weight: 400;
-  color: #6b7280;
+  color: #5a3cd0;
   margin-left: 8px;
 }
 

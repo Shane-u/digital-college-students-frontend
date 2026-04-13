@@ -39,6 +39,10 @@
           <span class="legend-dot flashcard"></span>
           <span class="legend-label">学习闪卡节点</span>
         </div>
+        <div class="legend-item">
+          <span class="legend-dot testpoint"></span>
+          <span class="legend-label">测试点节点</span>
+        </div>
       </div>
       <div class="legend-hints">
         <p>🖱️ 单击节点复习内容</p>
@@ -417,34 +421,49 @@ let baseViewBox = { w: 0, h: 0 }
 // 交互状态：用于“初始全显示 + 双击收起/展开”
 const nodeUiState = new Map() // id -> { expanded:boolean, oldX:number, oldY:number }
 let masterGraph = { nodes: [], links: [] } // 全量数据快照（渲染时更新）
+/** 当前可见子图 BFS 深度（根=0），用于同级统一节点大小与知识节点紫色层级 */
+let nodeDepthById = new Map()
 let visibleNodeIds = new Set() // 当前可见节点集合（初始为全量）
 let prevMasterNodeIds = new Set() // 上一轮全量节点 id，用于识别“新节点”并默认显示
 let savedNodePositions = new Map() // id -> {x,y} 收起后保留剩余节点位置，避免弹动
 
 const FAST_FORCE = {
   frictionAlphaTarget: 0.35,
-  linkDistance: 120,
-  linkStrength: 0.55,
-  charge: -320,
-  radialStrength: 0.18,
-  collisionPadding: 6
+  linkDistance: 185,
+  linkStrength: 0.62,
+  charge: -520,
+  radialStrength: 0.28,
+  collisionPadding: 16
 }
 
 // 动画参数（与参考组件一致：duration 900-1000ms, easeOutQuad）
 const ANIM_DURATION = 1000
 const ANIM_EASING = d3.easeQuadOut
-// 图谱节点配色：靛紫系为主 + 琥珀闪卡 + 天空蓝测试点，统一柔和
+// 图谱连线与辅助色
 const NEO4J = {
-  rootFill: '#6366f1',       // 根节点：靛蓝
-  categoryFill: '#818cf8',   // 分类节点：浅靛
-  flashcardFill: '#d97706',   // 闪卡节点：琥珀色
-  testPointFill: '#0ea5e9',   // 测试点：天空蓝
-  categoryStroke: '#ffffff',
-  flashcardStroke: '#ffffff',
-  linkStroke: '#94a3b8',     // 连线：柔和灰蓝
+  linkStroke: '#94a3b8',
   labelFill: '#334155',
   nodeStrokeWidth: 2
 }
+
+/** 知识分类节点：统一紫系，每层明度/饱和度有区分 */
+const CATEGORY_PURPLE_BY_DEPTH = [
+  '#3b0764',
+  '#5b21b6',
+  '#6d28d9',
+  '#7c3aed',
+  '#8b5cf6',
+  '#a78bfa',
+  '#c4b5fd'
+]
+
+const FLASHCARD_FILL = '#eab308'
+const TEST_POINT_FILL = '#22c55e'
+
+/** 根节点单独更大；其余深度同级等大（depth 0 仅根） */
+const ROOT_NODE_RADIUS = 36
+/** 同一 BFS 深度的非根节点半径一致 */
+const RADIUS_BY_DEPTH = [26, 24, 22, 21, 20, 19, 18]
 
 // 识别节点层级/类型，用于动态大小与颜色
 const getGraphNodeDepth = (d) => {
@@ -491,6 +510,58 @@ const isRootNode = (d) => {
   if (id === '根') return true
   const name = getNodeDisplayName(d)
   return name === '根'
+}
+
+/** 从根节点 BFS，得到每个节点深度（用于同级等大小、知识节点分色） */
+const computeBfsDepthsFromRoots = (nodes, links) => {
+  const depthMap = new Map()
+  const idSet = new Set(nodes.map(n => n.id))
+  const children = new Map()
+  nodes.forEach(n => children.set(n.id, []))
+  links.forEach(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source
+    const t = typeof l.target === 'object' ? l.target.id : l.target
+    if (!idSet.has(s) || !idSet.has(t)) return
+    children.get(s).push(t)
+  })
+  const queue = []
+  nodes.forEach(n => {
+    if (isRootNode(n)) {
+      depthMap.set(n.id, 0)
+      queue.push(n.id)
+    }
+  })
+  if (queue.length === 0) {
+    const incoming = new Set()
+    links.forEach(l => {
+      const t = typeof l.target === 'object' ? l.target.id : l.target
+      incoming.add(t)
+    })
+    nodes.forEach(n => {
+      if (!incoming.has(n.id)) {
+        depthMap.set(n.id, 0)
+        queue.push(n.id)
+      }
+    })
+  }
+  if (queue.length === 0 && nodes[0]) {
+    depthMap.set(nodes[0].id, 0)
+    queue.push(nodes[0].id)
+  }
+  while (queue.length) {
+    const u = queue.shift()
+    const du = depthMap.get(u)
+    for (const v of children.get(u) || []) {
+      if (!depthMap.has(v)) {
+        depthMap.set(v, du + 1)
+        queue.push(v)
+      }
+    }
+  }
+  nodes.forEach(n => {
+    if (!depthMap.has(n.id)) depthMap.set(n.id, 1)
+  })
+  return depthMap
 }
 
 // 从当前图谱关系中还原某个节点的层级路径（用于编辑时回填）
@@ -545,40 +616,219 @@ const buildHierarchyPathFromGraph = (graphNodeId) => {
 }
 
 const getNodeRadius = (d) => {
-  // 闪卡节点最小，但不至于太小
-  if (isFlashcardNode(d)) return 14
+  if (isRootNode(d)) return ROOT_NODE_RADIUS
+  const dep = nodeDepthById.get(d.id)
+  const idx = dep != null ? Math.min(dep, RADIUS_BY_DEPTH.length - 1) : Math.min(getGraphNodeDepth(d), RADIUS_BY_DEPTH.length - 1)
+  return RADIUS_BY_DEPTH[idx]
+}
 
-  const depth = getGraphNodeDepth(d)
-  // 根最大，越往下越小（最低不小于 16）
-  if (depth <= 1) return 30
-  if (depth === 2) return 26
-  if (depth === 3) return 22
-  if (depth === 4) return 19
-  return 16
+/**
+ * 核心放射状环形布局（确定性）
+ * - 根/核心节点固定在画布中心
+ * - 严格按 BFS 层级分布在同心圆上
+ * - 角度用“子树扇区分配”，尽量减少交叉并让连线呈辐射状
+ * - 自动调整每一环半径，保证同环节点不重叠
+ */
+const computeCoreRadialRingLayout = (nodes, links, width, height, depthMap) => {
+  const cx = width / 2
+  const cy = height / 2
+  const byId = new Map(nodes.map(n => [n.id, n]))
+  const idSet = new Set(nodes.map(n => n.id))
+
+  // 根节点（优先 Root/根）
+  const roots = nodes.filter(n => isRootNode(n))
+  const root = roots[0] || nodes[0]
+  if (!root) return { angleById: new Map(), posById: new Map() }
+
+  // 出边 children（仅用当前可见子图）
+  const outChildren = new Map()
+  nodes.forEach(n => outChildren.set(n.id, []))
+  links.forEach(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source
+    const t = typeof l.target === 'object' ? l.target.id : l.target
+    if (!idSet.has(s) || !idSet.has(t)) return
+    outChildren.get(s).push(t)
+  })
+
+  // 构造 BFS 树：每个节点只选一个父节点（避免 DAG 造成角度冲突）
+  const parent = new Map()
+  parent.set(root.id, null)
+  const q = [root.id]
+  while (q.length) {
+    const u = q.shift()
+    const ch = outChildren.get(u) || []
+    for (const v of ch) {
+      if (!idSet.has(v)) continue
+      // 优先“更深一层”的边（严格层级）
+      const du = depthMap.get(u) ?? 0
+      const dv = depthMap.get(v) ?? (du + 1)
+      if (dv !== du + 1) continue
+      if (!parent.has(v)) {
+        parent.set(v, u)
+        q.push(v)
+      }
+    }
+  }
+  // 未被 BFS 树覆盖的节点：尽量挂到同层级最近的上层父（fallback），否则挂 root
+  nodes.forEach(n => {
+    if (n.id === root.id) return
+    if (parent.has(n.id)) return
+    const dn = depthMap.get(n.id) ?? 1
+    let p = root.id
+    // 在所有可能入边里找一个 depth = dn-1 的 source
+    for (const l of links) {
+      const s = typeof l.source === 'object' ? l.source.id : l.source
+      const t = typeof l.target === 'object' ? l.target.id : l.target
+      if (t !== n.id) continue
+      const ds = depthMap.get(s)
+      if (ds != null && ds === dn - 1) {
+        p = s
+        break
+      }
+    }
+    parent.set(n.id, p)
+  })
+
+  const treeChildren = new Map()
+  nodes.forEach(n => treeChildren.set(n.id, []))
+  nodes.forEach(n => {
+    const p = parent.get(n.id)
+    if (!p) return
+    if (treeChildren.has(p)) treeChildren.get(p).push(n.id)
+  })
+
+  // 子树权重（叶子=1，内部=子权重和）
+  const weight = new Map()
+  const dfsWeight = (id) => {
+    if (weight.has(id)) return weight.get(id)
+    const ch = treeChildren.get(id) || []
+    if (!ch.length) {
+      weight.set(id, 1)
+      return 1
+    }
+    let sum = 0
+    for (const c of ch) sum += dfsWeight(c)
+    weight.set(id, Math.max(sum, 1))
+    return weight.get(id)
+  }
+  dfsWeight(root.id)
+
+  // 每层节点集合
+  const nodesByDepth = new Map()
+  nodes.forEach(n => {
+    const d = depthMap.get(n.id) ?? 0
+    if (!nodesByDepth.has(d)) nodesByDepth.set(d, [])
+    nodesByDepth.get(d).push(n.id)
+  })
+
+  // 计算每层需要的最小半径（避免同环重叠），并给出均匀环距的基础值
+  const ringPadding = 18
+  const baseRingGap = 150
+  const ringRadiusByDepth = new Map()
+  const maxDepth = Math.max(...Array.from(nodesByDepth.keys()))
+  let prevR = 0
+  for (let d = 0; d <= maxDepth; d++) {
+    if (d === 0) {
+      ringRadiusByDepth.set(0, 0)
+      prevR = 0
+      continue
+    }
+    const ids = nodesByDepth.get(d) || []
+    if (!ids.length) {
+      ringRadiusByDepth.set(d, prevR + baseRingGap)
+      prevR = ringRadiusByDepth.get(d)
+      continue
+    }
+    const minSep = Math.max(...ids.map(id => 2 * getNodeRadius(byId.get(id)) + ringPadding))
+    const minRByCount = (ids.length * minSep) / (2 * Math.PI)
+    const r = Math.max(prevR + baseRingGap, minRByCount)
+    ringRadiusByDepth.set(d, r)
+    prevR = r
+  }
+
+  // 扇区分配：root 占满 2π
+  const angleById = new Map()
+  const spanById = new Map()
+  spanById.set(root.id, { start: -Math.PI, end: Math.PI })
+  angleById.set(root.id, 0)
+
+  const sortChildrenStable = (ids) => {
+    // 优先分类节点，再闪卡，再测试点；同类按显示名稳定排序
+    const typeRank = (nid) => {
+      const n = byId.get(nid)
+      if (!n) return 99
+      if (isTestPointNode(n)) return 2
+      if (isFlashcardNode(n)) return 1
+      return 0
+    }
+    return [...ids].sort((a, b) => {
+      const ra = typeRank(a)
+      const rb = typeRank(b)
+      if (ra !== rb) return ra - rb
+      const na = getNodeDisplayName(byId.get(a)) || String(a)
+      const nb = getNodeDisplayName(byId.get(b)) || String(b)
+      return na.localeCompare(nb, 'zh-Hans-CN')
+    })
+  }
+
+  const assignAngles = (id) => {
+    const span = spanById.get(id)
+    if (!span) return
+    const chRaw = treeChildren.get(id) || []
+    const ch = sortChildrenStable(chRaw)
+    if (!ch.length) return
+    const totalW = ch.reduce((s, c) => s + (weight.get(c) || 1), 0) || 1
+    let cur = span.start
+    for (const c of ch) {
+      const w = weight.get(c) || 1
+      const len = ((span.end - span.start) * w) / totalW
+      const s = cur
+      const e = cur + len
+      spanById.set(c, { start: s, end: e })
+      angleById.set(c, (s + e) / 2)
+      cur = e
+      assignAngles(c)
+    }
+  }
+  assignAngles(root.id)
+
+  // 生成坐标：严格同心圆
+  const posById = new Map()
+  nodes.forEach(n => {
+    const d = depthMap.get(n.id) ?? 0
+    const r = ringRadiusByDepth.get(d) ?? (d * baseRingGap)
+    const a = angleById.get(n.id) ?? 0
+    const x = cx + r * Math.cos(a)
+    const y = cy + r * Math.sin(a)
+    posById.set(n.id, { x, y, a, r })
+  })
+  // 根节点强制在中心（锚定）
+  posById.set(root.id, { x: cx, y: cy, a: 0, r: 0 })
+
+  return { angleById, posById, rootId: root.id, ringRadiusByDepth }
 }
 
 const getNodeFill = (d) => {
-  if (isTestPointNode(d)) return NEO4J.testPointFill
-  if (isFlashcardNode(d)) return NEO4J.flashcardFill
-  if (isRootNode(d)) return NEO4J.rootFill
-  return NEO4J.categoryFill
+  if (isRootNode(d)) return '#2563eb'
+  if (isTestPointNode(d)) return TEST_POINT_FILL
+  if (isFlashcardNode(d)) return FLASHCARD_FILL
+  const dep = nodeDepthById.get(d.id) ?? 0
+  return CATEGORY_PURPLE_BY_DEPTH[Math.min(dep, CATEGORY_PURPLE_BY_DEPTH.length - 1)]
 }
 
-// 根据层级决定节点在径向布局中的半径（越深越远）
+// 根据层级决定节点在径向布局中的半径（越深越远，环距加大以减少连线交叉）
 const radialByDepth = (depth) => {
-  if (depth <= 1) return 0              // 根在中心
-  if (depth === 2) return 180
-  if (depth === 3) return 280
-  if (depth === 4) return 360
-  return 430
+  if (depth <= 1) return 0
+  if (depth === 2) return 210
+  if (depth === 3) return 330
+  if (depth === 4) return 440
+  return 540
 }
 
 const getRadialDistance = (d) => {
-  const depth = getGraphNodeDepth(d)
-  // 测试点节点在闪卡外侧，向外伸展
-  if (isTestPointNode(d)) return 540
-  // 闪卡节点统一推到最外圈，让连线朝外延伸
-  if (isFlashcardNode(d)) return 480
+  const depth = nodeDepthById.get(d.id) ?? getGraphNodeDepth(d)
+  if (isTestPointNode(d)) return 580
+  if (isFlashcardNode(d)) return 520
   return radialByDepth(depth)
 }
 
@@ -594,13 +844,11 @@ const getNodeFontSize = (d) => {
 const getNodeFontWeight = (d) => (isRootNode(d) ? 900 : 800)
 
 const getNodeTextFill = (d) => {
-  // 根节点：白色文字配紫色背景，其它节点：深灰
   if (isRootNode(d)) return '#ffffff'
   return '#111827'
 }
 
 const getNodeTextStroke = (d) => {
-  // 根节点不要描边（纯黑字），其它节点保留白色描边以便阅读
   return isRootNode(d) ? 'none' : 'rgba(255,255,255,0.85)'
 }
 
@@ -736,8 +984,8 @@ const renderGraph = () => {
           id: fullPath,
           label,
           type: 'category',
-          color: NEO4J.categoryFill,
-          stroke: NEO4J.categoryStroke,
+          color: CATEGORY_PURPLE_BY_DEPTH[Math.min(i, CATEGORY_PURPLE_BY_DEPTH.length - 1)],
+          stroke: '#ffffff',
           businessId: null
         })
     })
@@ -762,8 +1010,8 @@ const renderGraph = () => {
       id: card.id,
       label: card.title || '无标题',
       type: 'flashcard',
-      color: NEO4J.flashcardFill,
-      stroke: NEO4J.flashcardStroke,
+      color: FLASHCARD_FILL,
+      stroke: '#ffffff',
       data: card,
       businessId: card.id != null ? String(card.id) : null
     })
@@ -883,7 +1131,25 @@ const renderGraph = () => {
     if (!hasHighlight) return false
     return !neighborNodeIds.has(d.id)
   }
-  
+
+  nodeDepthById = computeBfsDepthsFromRoots(visibleNodes, visibleLinks)
+  const { posById, rootId, ringRadiusByDepth } = computeCoreRadialRingLayout(visibleNodes, visibleLinks, width, height, nodeDepthById)
+
+  const defs = svg.append('defs')
+  defs
+    .append('marker')
+    .attr('id', 'fc-graph-arrow')
+    .attr('viewBox', '0 0 10 10')
+    .attr('refX', 9)
+    .attr('refY', 5)
+    .attr('markerWidth', 7)
+    .attr('markerHeight', 7)
+    .attr('orient', 'auto')
+    .attr('markerUnits', 'userSpaceOnUse')
+    .append('path')
+    .attr('d', 'M0,0 L10,5 L0,10 Z')
+    .attr('fill', NEO4J.linkStroke)
+
   gRoot = svg.append('g')
   zoomBehavior = d3.zoom().scaleExtent([0.1, 10]).on('zoom', (ev) => gRoot.attr('transform', ev.transform))
   svg.call(zoomBehavior)
@@ -928,16 +1194,16 @@ const renderGraph = () => {
       'link',
       d3.forceLink(visibleLinks)
         .id(d => d.id)
-        .distance(140)
-        .strength(0.5)
+        .distance(185)
+        .strength(0.62)
     )
-    .force('charge', d3.forceManyBody().strength(-260))
+    .force('charge', d3.forceManyBody().strength(-520))
     .force('center', d3.forceCenter(width / 2, height / 2))
     .force(
       'radial',
-      d3.forceRadial(d => getRadialDistance(d), width / 2, height / 2).strength(0.25)
+      d3.forceRadial(d => getRadialDistance(d), width / 2, height / 2).strength(0.32)
     )
-    .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 6))
+    .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 16))
   
   const linkLayer = gRoot.append('g').attr('class', 'links').attr('stroke', NEO4J.linkStroke).attr('stroke-opacity', 0.75)
   const nodeLayer = gRoot.append('g').attr('class', 'nodes')
@@ -949,16 +1215,44 @@ const renderGraph = () => {
     const tid = typeof d.target === 'object' ? d.target.id : d.target
     return (neighborNodeIds.has(sid) && neighborNodeIds.has(tid)) ? 0.9 : 0.1
   }
-  
+
+  /** 径向连线：用平滑曲线，整体“沿半径外扩” */
+  const linkPathD = (d) => {
+    const s = d.source
+    const t = d.target
+    const sx = s.x
+    const sy = s.y
+    const tx = t.x
+    const ty = t.y
+    if (!Number.isFinite(sx) || !Number.isFinite(tx)) return `M${sx},${sy} L${tx},${ty}`
+    const rS = getNodeRadius(s)
+    const rT = getNodeRadius(t)
+    const dx = tx - sx
+    const dy = ty - sy
+    const len = Math.hypot(dx, dy)
+    if (len < 1e-6) return `M${sx},${sy} L${tx},${ty}`
+    const ux = dx / len
+    const uy = dy / len
+    const arrowGap = 6
+    const x1 = sx + ux * rS
+    const y1 = sy + uy * rS
+    const x2 = tx - ux * (rT + arrowGap)
+    const y2 = ty - uy * (rT + arrowGap)
+    // 直线：严格径向延伸（不要弯曲）
+    return `M${x1},${y1} L${x2},${y2}`
+  }
+
   linkSel = linkLayer
-    .selectAll('line')
+    .selectAll('path')
     .data(visibleLinks, d => {
       const sid = typeof d.source === 'object' ? d.source.id : d.source
       const tid = typeof d.target === 'object' ? d.target.id : d.target
       return `${sid}\0${tid}`
     })
-    .join('line')
+    .join('path')
+    .attr('fill', 'none')
     .attr('stroke-width', 2)
+    .attr('marker-end', 'url(#fc-graph-arrow)')
     .style('opacity', computeLinkOpacity)
 
   // 每个节点用 <g> 包一组：外圈圆环 + 内圈实心圆 + 可选高亮光晕，模仿模板中的双圆样式
@@ -979,24 +1273,35 @@ const renderGraph = () => {
     )
     .attr('class', 'graph-node')
     .style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
+    // 允许拖拽：保持径向结构的同时给用户“弹性”调整
     .call(
       d3.drag()
         .on('start', (ev) => {
-          if (!ev.active) simulation.alphaTarget(0.3).restart()
+          if (isRootNode(ev.subject)) return
+          if (!simulation) return
+          // 给予更强的“弹性启动”
+          if (!ev.active) simulation.alphaTarget(0.38).restart()
           ev.subject.fx = ev.subject.x
           ev.subject.fy = ev.subject.y
-          // 拖拽时隐藏连线（参考组件交互）
           if (linkSel) linkSel.style('opacity', 0)
         })
         .on('drag', (ev) => {
+          if (isRootNode(ev.subject)) return
           ev.subject.fx = ev.x
           ev.subject.fy = ev.y
         })
         .on('end', (ev) => {
-          if (!ev.active) simulation.alphaTarget(0)
+          if (isRootNode(ev.subject)) return
+          // 松手后给一次回弹能量，再逐步收敛
+          if (simulation && !ev.active) simulation.alpha(0.55).alphaTarget(0.06).restart()
+          // 松手后释放固定点，让布局力场产生轻微“回弹”
           ev.subject.fx = null
           ev.subject.fy = null
           if (linkSel) linkSel.style('opacity', computeLinkOpacity)
+          // 过一会儿再降回静止，避免“刚松手就立刻僵住”
+          setTimeout(() => {
+            if (simulation) simulation.alphaTarget(0)
+          }, 1200)
         })
     )
 
@@ -1018,14 +1323,14 @@ const renderGraph = () => {
     .attr('r', d => getNodeRadius(d))
     .attr('fill', 'none')
     .attr('stroke', d => getNodeFill(d))
-    .attr('stroke-width', d => (isRootNode(d) ? 6 : 4))
+    .attr('stroke-width', 4)
 
   // 内圈实心圆
   nodeSel
     .append('circle')
     .attr('class', 'node-inner')
-    .attr('r', d => getNodeRadius(d) - 4)
-    .attr('fill', d => (isRootNode(d) ? NEO4J.rootFill : getNodeFill(d)))
+    .attr('r', d => Math.max(getNodeRadius(d) - 5, 8))
+    .attr('fill', d => getNodeFill(d))
     .attr('stroke', '#f8fafc')
     .attr('stroke-width', 1.5)
 
@@ -1092,6 +1397,27 @@ const renderGraph = () => {
     .style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   textSel.transition().duration(220).style('opacity', d => (hasHighlight && isDimmedNode(d) ? 0.35 : 1))
   
+  // 应用确定性布局坐标（锚定中心、分层圆环）
+  const applyLayout = () => {
+    visibleNodes.forEach(n => {
+      const p = posById.get(n.id)
+      if (!p) return
+      n.x = p.x
+      n.y = p.y
+    })
+    // 根节点强制中心（再次兜底）
+    if (rootId) {
+      const rNode = visibleNodes.find(n => n.id === rootId)
+      if (rNode) {
+        rNode.x = width / 2
+        rNode.y = height / 2
+        rNode.fx = width / 2
+        rNode.fy = height / 2
+      }
+    }
+  }
+  applyLayout()
+
   // 点击节点显示 content 小卡片（测试点用 isTestPointNode 判断，兼容后端未带 type 的节点）
   nodeSel.on('click', (ev, d) => {
     ev.stopPropagation()
@@ -1257,9 +1583,9 @@ const renderGraph = () => {
         }).transition().duration(ANIM_DURATION).ease(ANIM_EASING).style('opacity', 0)
       }
 
-      // 同步更新连线坐标（动画期间）
+      // 同步更新连线几何（动画期间）
       const tickLinks = () => {
-        linkSel.attr('x1', l => l.source.x).attr('y1', l => l.source.y).attr('x2', l => l.target.x).attr('y2', l => l.target.y)
+        linkSel.attr('d', l => linkPathD(l))
       }
       const tickTexts = () => {
         textSel.attr('x', n => n.x).attr('y', n => (isRootNode(n) ? n.y + 4 : n.y + getNodeRadius(n) + 14))
@@ -1320,21 +1646,11 @@ const renderGraph = () => {
     nextTick(() => {
       renderGraph()
       requestAnimationFrame(() => {
-        if (!simulation || !nodeSel) return
+        if (!nodeSel) return
+        // 新子节点从父节点位置“辐射”到其同心圆目标位置
         const newNodes = visibleNodes.filter(n => childIds.includes(n.id))
-        const N = newNodes.length
-        if (N > 0) {
-          const radius = 130
-          newNodes.forEach((n, i) => {
-            const angle = (2 * Math.PI * i) / N
-            const tx = parentX + radius * Math.cos(angle)
-            const ty = parentY + radius * Math.sin(angle)
-            n._targetX = tx
-            n._targetY = ty
-          })
-        }
         const newNodeSel = nodeLayer.selectAll('g.graph-node').filter(n => childIds.includes(n.id))
-        if (newNodeSel.size() > 0 && N > 0) {
+        if (newNodeSel.size() > 0 && newNodes.length > 0) {
           newNodeSel
             .style('opacity', 0)
             .transition()
@@ -1343,8 +1659,9 @@ const renderGraph = () => {
             .attrTween('transform', function (n) {
               const startX = parentX
               const startY = parentY
-              const endX = n._targetX ?? parentX
-              const endY = n._targetY ?? parentY
+              const endPos = posById.get(n.id)
+              const endX = endPos?.x ?? parentX
+              const endY = endPos?.y ?? parentY
               return (t) => {
                 n.x = startX + (endX - startX) * t
                 n.y = startY + (endY - startY) * t
@@ -1353,32 +1670,22 @@ const renderGraph = () => {
             })
             .style('opacity', d => (isDimmedNode(d) ? 0.18 : 1))
             .on('end', function () {
-              newNodes.forEach(n => {
-                delete n._targetX
-                delete n._targetY
-              })
-              const nodesForFit = simulation ? simulation.nodes() : visibleNodes
+              const nodesForFit = visibleNodes
               if (nodesForFit && nodesForFit.length > 0) {
                 setTimeout(() => {
                   smoothZoomFit(nodesForFit)
-                  if (simulation) simulation.stop()
                 }, 100)
-              } else if (simulation) {
-                simulation.stop()
               }
               setTimeout(() => {
                 showElementText()
               }, 150)
             })
         } else {
-          const nodesForFit = simulation ? simulation.nodes() : visibleNodes
+          const nodesForFit = visibleNodes
           if (nodesForFit && nodesForFit.length > 0) {
             setTimeout(() => {
               smoothZoomFit(nodesForFit)
-              if (simulation) simulation.stop()
             }, 100)
-          } else if (simulation) {
-            simulation.stop()
           }
           setTimeout(() => {
             showElementText()
@@ -1394,8 +1701,8 @@ const renderGraph = () => {
       const gSel = d3.select(this)
       gSel
         .select('.node-outer')
-        .attr('stroke', '#6366f1')
-        .attr('stroke-width', isRootNode(d) ? 8 : 6)
+        .attr('stroke', '#7c3aed')
+        .attr('stroke-width', isRootNode(d) ? 7 : 5)
       gSel
         .select('.node-halo')
         .transition()
@@ -1409,7 +1716,7 @@ const renderGraph = () => {
       gSel
         .select('.node-outer')
         .attr('stroke', getNodeFill(d))
-        .attr('stroke-width', isRootNode(d) ? 6 : 4)
+        .attr('stroke-width', 4)
       gSel
         .select('.node-halo')
         .transition()
@@ -1419,25 +1726,64 @@ const renderGraph = () => {
       gSel.style('filter', 'none')
     })
   
-  simulation.on('tick', () => {
-    linkSel
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y)
+  // 轻量力场：保留径向分层，但允许用户拖拽并产生弹性回弹
+  if (simulation) simulation.stop()
+  const radialRadius = (n) => {
+    const dep = nodeDepthById.get(n.id) ?? 0
+    return ringRadiusByDepth?.get(dep) ?? getRadialDistance(n)
+  }
+  simulation = d3.forceSimulation(visibleNodes)
+    .alpha(0.9)
+    // 更慢的衰减 + 更小的阻尼 => 更“弹”
+    .alphaDecay(0.035)
+    .velocityDecay(0.28)
+    .force(
+      'link',
+      d3.forceLink(visibleLinks)
+        .id(d => d.id)
+        .distance(175)
+        .strength(0.32)
+    )
+    .force('charge', d3.forceManyBody().strength(-260))
+    .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 14).strength(0.75))
+    // 径向约束改弱一点：保结构但允许更自由的弹性位移
+    .force('radial', d3.forceRadial(d => radialRadius(d), cx, cy).strength(0.09))
+    .force('center', d3.forceCenter(cx, cy).strength(0.012))
 
+  // 根节点固定在中心
+  const rootNode = rootId ? visibleNodes.find(n => n.id === rootId) : null
+  if (rootNode) {
+    rootNode.fx = cx
+    rootNode.fy = cy
+  }
+
+  const renderOnce = () => {
+    linkSel.attr('d', d => linkPathD(d))
     nodeSel.attr('transform', d => `translate(${d.x},${d.y})`)
     textSel
       .attr('x', d => d.x)
       .attr('y', d => {
-        // 根节点文字放在圆圈内部，其它节点仍在下方
         if (isRootNode(d)) return d.y + 4
         return d.y + getNodeRadius(d) + 14
       })
+  }
 
-    // 布局稳定后立即停止力导向，避免图谱持续微抖
-    if (simulation.alpha() < 0.02) simulation.stop()
+  simulation.on('tick', () => {
+    if (rootNode) {
+      rootNode.x = cx
+      rootNode.y = cy
+    }
+    renderOnce()
+    // 不要太早 stop：保留一点“呼吸感”
+    if (simulation.alpha() < 0.008) simulation.stop()
   })
+
+  // 初次渲染 + 适配视口
+  renderOnce()
+  setTimeout(() => {
+    const fitNodes = visibleNodes || []
+    if (fitNodes.length > 0) smoothZoomFit(fitNodes, 650)
+  }, 0)
 }
 
 // 结构变化时完整重绘
@@ -1499,7 +1845,7 @@ watch(
     const lg = gRoot.select('.links')
     const tg = gRoot.select('.texts')
     if (!ng.empty()) ng.selectAll('.graph-node').transition().duration(120).ease(d3.easeQuadOut).style('opacity', d => (isDimmed(d) ? 0.18 : 1))
-    if (!lg.empty()) lg.selectAll('line').transition().duration(120).ease(d3.easeQuadOut).style('opacity', linkOpacity)
+    if (!lg.empty()) lg.selectAll('path').transition().duration(120).ease(d3.easeQuadOut).style('opacity', linkOpacity)
     if (!tg.empty()) tg.selectAll('text').transition().duration(120).ease(d3.easeQuadOut).style('opacity', d => (hasHighlight && isDimmed(d) ? 0.35 : 1))
   },
   { deep: false }
@@ -1886,11 +2232,15 @@ const handleOpenAttempts = (paper) => {
 }
 
 .legend-dot.category {
-  background: #a78bfa;
+  background: #7c3aed;
 }
 
 .legend-dot.flashcard {
-  background: #fcd34d;
+  background: #eab308;
+}
+
+.legend-dot.testpoint {
+  background: #22c55e;
 }
 
 .legend-hints {

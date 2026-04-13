@@ -444,10 +444,13 @@ export default {
       if (cards.length === 0) return;
 
       const cardHeight = cards[0].offsetHeight + 10; // 卡片高度 + margin
-      // 计算偏移量，确保当前项在容器中居中显示
+      // 初始进入页面（第0项）时顶部对齐，让首卡与左侧标题齐平；
+      // 其它位置保持“当前项居中”的滚动体验
       const offset =
-        -currentScrollPosition.value * cardHeight +
-        (containerHeight - cardHeight) / 2;
+        currentScrollPosition.value === 0
+          ? 0
+          : -currentScrollPosition.value * cardHeight +
+            (containerHeight - cardHeight) / 2;
 
       if (cardGrid.value && cardGrid.value.style) {
       cardGrid.value.style.transform = `translateY(${offset}px)`;
@@ -892,7 +895,7 @@ export default {
 .sprints_inner-cards-grid {
   position: absolute;
   width: 100%;
-  padding: 40px 30px;
+  padding: 0 30px;
   transition: transform 0.8s cubic-bezier(0.3, 0.8, 0.2, 1);
 }
 

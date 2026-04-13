@@ -1,7 +1,7 @@
 <template>
   <div class="lp-all-container">
     <!-- 顶部标题条：学习路径图谱（对比模式下隐藏） -->
-    <GraphTopHeader v-if="!isCompareMode" title="学 习 路 径 图 谱" />
+    <GraphTopHeader v-if="!isCompareMode" :title="resolvedHeaderTitle" />
 
     <div ref="graphContainer" class="lp-all-area">
       <div v-if="!hasGraphData" class="lp-all-empty">
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { updateJson, matchFlashcards } from '../../api/learningPath'
@@ -79,8 +79,16 @@ const props = defineProps({
   graphsById: { type: Object, default: () => ({}) },
   themeById: { type: Object, default: () => ({}) },
   titleById: { type: Object, default: () => ({}) },
+  /** 顶栏标题（建议父级已做字间空格）；未传时默认「学 习 路 径 图 谱」 */
+  headerTitle: { type: String, default: '' },
   // 对比模式：由父页面在 iframe 中使用时传入，用于隐藏顶部大标题背景
   isCompareMode: { type: Boolean, default: false }
+})
+
+const resolvedHeaderTitle = computed(() => {
+  const t = (props.headerTitle || '').trim()
+  if (t) return t
+  return [...'学习路径图谱'].join(' ')
 })
 
 const emit = defineEmits(['refreshOne'])
@@ -98,6 +106,78 @@ let simulation = null
 let zoomBehavior = null
 let gRoot = null
 let baseViewBox = { w: 0, h: 0 }
+
+/** 对比模式：与闪卡匹配成功时，高亮的学习路径图节点 id（含子树） */
+const compareHighlightNodeIds = ref(null)
+
+/** 沿已定向的父→子边，收集 startId 及全部后代（合成 id：`pathId::nodeId`） */
+const collectDescendantNodeIds = (startId, links, nodeList) => {
+  const idSet = new Set(nodeList.map(n => n.id))
+  const out = new Set()
+  if (!idSet.has(startId)) {
+    out.add(startId)
+    return out
+  }
+  const children = new Map()
+  links.forEach((l) => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source
+    const t = typeof l.target === 'object' ? l.target.id : l.target
+    if (!idSet.has(s) || !idSet.has(t)) return
+    if (!children.has(s)) children.set(s, [])
+    children.get(s).push(t)
+  })
+  const q = [startId]
+  out.add(startId)
+  while (q.length) {
+    const u = q.shift()
+    for (const v of children.get(u) || []) {
+      if (!out.has(v)) {
+        out.add(v)
+        q.push(v)
+      }
+    }
+  }
+  return out
+}
+
+/** 根据 compareHighlightNodeIds 更新节点/文字样式（不重跑力导向） */
+const applyCompareHighlightStyles = () => {
+  if (!svgRef.value) return
+  const raw = compareHighlightNodeIds.value
+  const hl = raw instanceof Set ? raw : raw ? new Set(raw) : null
+  const active = hl && hl.size > 0
+  const zoomG = d3.select(svgRef.value).select('g')
+  if (zoomG.empty()) return
+  zoomG.select('g.lp-nodes').selectAll('g.lp-node').each(function (d) {
+    const on = active && hl.has(d.id)
+    const circ = d3.select(this).select('circle')
+    if (!active) {
+      circ
+        .attr('opacity', 1)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', d.isRoot ? 3 : 2)
+      return
+    }
+    circ
+      .attr('opacity', on ? 1 : 0.34)
+      .attr('stroke', on ? '#f59e0b' : '#fff')
+      .attr('stroke-width', on ? 4 : d.isRoot ? 2 : 1.5)
+  })
+  zoomG.select('g.lp-texts').selectAll('text').each(function (d) {
+    const on = active && hl.has(d.id)
+    d3.select(this).style('opacity', active ? (on ? 1 : 0.38) : 1)
+  })
+  zoomG.select('g.lp-links').selectAll('line').each(function (d) {
+    if (!active || !d) {
+      d3.select(this).attr('stroke-opacity', 0.65)
+      return
+    }
+    const s = typeof d.source === 'object' ? d.source.id : d.source
+    const t = typeof d.target === 'object' ? d.target.id : d.target
+    const em = hl.has(s) && hl.has(t)
+    d3.select(this).attr('stroke-opacity', em ? 0.95 : 0.12)
+  })
+}
 
 // 学习路径节点匹配闪卡的默认参数
 const MATCH_DEFAULTS = {
@@ -119,6 +199,46 @@ const updateDimensions = () => {
       height: graphContainer.value.clientHeight
     }
   }
+}
+
+/**
+ * 后端关系可能是「子→父」；按离根的 BFS 深度统一为「父(浅)→子(深)」，箭头与层级配色才正确。
+ */
+const orientLinksParentToChild = (rootId, linkList, nodeIdSet) => {
+  const adj = new Map()
+  const touch = (a, b) => {
+    if (!nodeIdSet.has(a) || !nodeIdSet.has(b)) return
+    if (!adj.has(a)) adj.set(a, [])
+    if (!adj.has(b)) adj.set(b, [])
+    adj.get(a).push(b)
+    adj.get(b).push(a)
+  }
+  linkList.forEach((l) => touch(l.source, l.target))
+  const depth = new Map()
+  if (nodeIdSet.has(rootId)) {
+    depth.set(rootId, 0)
+    const q = [rootId]
+    while (q.length) {
+      const u = q.shift()
+      const du = depth.get(u)
+      for (const v of adj.get(u) || []) {
+        if (!depth.has(v)) {
+          depth.set(v, du + 1)
+          q.push(v)
+        }
+      }
+    }
+  }
+  const inf = 1e9
+  return linkList.map((l) => {
+    const a = l.source
+    const b = l.target
+    const da = depth.get(a) ?? inf
+    const db = depth.get(b) ?? inf
+    if (da < db) return { ...l, source: a, target: b }
+    if (db < da) return { ...l, source: b, target: a }
+    return { ...l, source: a, target: b }
+  })
 }
 
 const buildCombined = () => {
@@ -158,14 +278,16 @@ const buildCombined = () => {
       })
     })
 
-    // relationships -> links
+    const pathLinks = []
+
+    // relationships -> links（原始方向，稍后按深度统一为父→子）
     rels.forEach((r) => {
       const s = r.sourceNodeId
       const t = r.targetNodeId
       if (!t) return
       const sourceId = (s === pid || s === (g?.pathId || pid)) ? makeRootId(pid) : makeNodeId(pid, s)
       const targetId = makeNodeId(pid, t)
-      links.push({ source: sourceId, target: targetId, type: r.type || 'PARENT_OF', __pathId: pid })
+      pathLinks.push({ source: sourceId, target: targetId, type: r.type || 'PARENT_OF', __pathId: pid })
     })
 
     // fallback: parentNodeId if relationships missing
@@ -174,7 +296,7 @@ const buildCombined = () => {
         const nid = n.nodeId || n.id
         if (!nid) return
         const parent = (n.parentNodeId || '').trim()
-        links.push({
+        pathLinks.push({
           source: parent ? makeNodeId(pid, parent) : makeRootId(pid),
           target: makeNodeId(pid, nid),
           type: parent ? 'PARENT_OF' : 'HAS_NODE',
@@ -182,6 +304,9 @@ const buildCombined = () => {
         })
       })
     }
+
+    const pathNodeIdSet = new Set(nodes.filter(n => String(n.__pathId) === String(pid)).map(n => n.id))
+    orientLinksParentToChild(makeRootId(pid), pathLinks, pathNodeIdSet).forEach((l) => links.push(l))
   })
 
   // 去重 links
@@ -203,10 +328,56 @@ const nodeCardTopic = computed(() => {
 
 const getTheme = (pid) => props.themeById?.[pid] || {}
 const getNodeRadius = (d) => (d.isRoot ? 28 : 18)
-const getNodeFill = (d) => {
-  const th = getTheme(d.__pathId)
-  return d.isRoot ? (th.rootFill || '#A78BFA') : (th.nodeFill || '#7880f0')
+
+/** 与单路径图谱一致：每层一色；忽略 theme.nodeFill，否则会整图同色（如全绿） */
+const DEFAULT_LEVEL_FILLS = [
+  '#7c3aed',
+  '#3b82f6',
+  '#0d9488',
+  '#ea580c',
+  '#db2777',
+  '#6366f1',
+  '#059669'
+]
+
+/** 多根（每条路径一个根）BFS 深度 */
+const computeDepthById = (nodes, links) => {
+  const idSet = new Set(nodes.map(n => n.id))
+  const children = new Map()
+  for (const l of links) {
+    const s = typeof l.source === 'object' ? l.source.id : l.source
+    const t = typeof l.target === 'object' ? l.target.id : l.target
+    if (!idSet.has(s) || !idSet.has(t)) continue
+    if (!children.has(s)) children.set(s, [])
+    children.get(s).push(t)
+  }
+  const depthById = new Map()
+  const roots = nodes.filter(n => n.isRoot === true)
+  const q = []
+  for (const r of roots) {
+    if (r?.id == null) continue
+    depthById.set(r.id, 0)
+    q.push([r.id, 0])
+  }
+  if (q.length === 0 && nodes[0]?.id != null) {
+    depthById.set(nodes[0].id, 0)
+    q.push([nodes[0].id, 0])
+  }
+  while (q.length) {
+    const [id, d] = q.shift()
+    for (const c of children.get(id) || []) {
+      if (!depthById.has(c)) {
+        depthById.set(c, d + 1)
+        q.push([c, d + 1])
+      }
+    }
+  }
+  for (const n of nodes) {
+    if (!depthById.has(n.id)) depthById.set(n.id, 1)
+  }
+  return depthById
 }
+
 const getLinkStroke = (pid) => (props.themeById?.[pid]?.linkStroke || '#A5ABB6')
 
 // 将匹配结果发送给父页面（闪卡图谱对比容器）
@@ -230,6 +401,8 @@ const notifyParentFlashcardMatch = (payload) => {
 
 // 调用后端接口：根据学习路径节点匹配闪卡图谱
 const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
+  compareHighlightNodeIds.value = null
+  applyCompareHighlightStyles()
   try {
     const body = {
       clickedNodeId,
@@ -247,6 +420,7 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
     const keywords = Array.isArray(data?.keywords) ? data.keywords : []
 
     if (!matchedFlashcardIds.length) {
+      compareHighlightNodeIds.value = null
       notifyParentFlashcardMatch({
         success: true,
         empty: true,
@@ -256,6 +430,12 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
       })
       return
     }
+
+    const compositeId = `${pathId}::${clickedNodeId}`
+    const { nodes: bn, links: bl } = buildCombined()
+    compareHighlightNodeIds.value = collectDescendantNodeIds(compositeId, bl, bn)
+    await nextTick()
+    applyCompareHighlightStyles()
 
     notifyParentFlashcardMatch({
       success: true,
@@ -267,6 +447,7 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
     })
   } catch (e) {
     console.error('triggerFlashcardMatch error:', e)
+    compareHighlightNodeIds.value = null
     notifyParentFlashcardMatch({
       success: false,
       error: e?.message || '学习路径节点匹配闪卡失败'
@@ -279,6 +460,16 @@ const renderGraph = () => {
   if (!svgRef.value || dimensions.value.width === 0 || dimensions.value.height === 0) return
   const { width, height } = dimensions.value
   const { nodes, links } = buildCombined()
+  const depthById = computeDepthById(nodes, links)
+  const getNodeFill = (d) => {
+    const depth = depthById.get(d.id) ?? 0
+    const th = getTheme(d.__pathId)
+    const fills = Array.isArray(th.levelFills) && th.levelFills.length > 0 ? th.levelFills : DEFAULT_LEVEL_FILLS
+    if (depth === 0 && th.rootFill) return th.rootFill
+    const idx = Math.min(depth, Math.max(0, fills.length - 1))
+    return fills[idx]
+  }
+
   const svg = d3.select(svgRef.value)
   svg.selectAll('*').remove()
   // 固定内部坐标系（viewBox），拖拽分栏时只变更外部尺寸，让图谱产生“被压缩/拉伸”的效果
@@ -289,6 +480,52 @@ const renderGraph = () => {
     .attr('viewBox', `0 0 ${baseViewBox.w} ${baseViewBox.h}`)
     .attr('preserveAspectRatio', 'xMidYMid meet')
   if (nodes.length === 0) return
+
+  /** 父子连线：从源圆边缘指向目标圆边缘，便于箭头贴在子节点侧 */
+  const linkLineEnds = (d) => {
+    const s = d.source
+    const t = d.target
+    const sx = s.x
+    const sy = s.y
+    const tx = t.x
+    const ty = t.y
+    if (!Number.isFinite(sx) || !Number.isFinite(tx)) return { x1: sx, y1: sy, x2: tx, y2: ty }
+    const rS = getNodeRadius(s)
+    const rT = getNodeRadius(t)
+    const dx = tx - sx
+    const dy = ty - sy
+    const len = Math.hypot(dx, dy)
+    if (len < 1e-6) return { x1: sx, y1: sy, x2: tx, y2: ty }
+    const ux = dx / len
+    const uy = dy / len
+    const arrowGap = 6
+    return {
+      x1: sx + ux * rS,
+      y1: sy + uy * rS,
+      x2: tx - ux * (rT + arrowGap),
+      y2: ty - uy * (rT + arrowGap)
+    }
+  }
+
+  const defs = svg.append('defs')
+  const strokeList = [...new Set(links.map(l => getLinkStroke(l.__pathId)))]
+  strokeList.forEach((stroke, i) => {
+    const mid = `lp-arr-${i}`
+    defs
+      .append('marker')
+      .attr('id', mid)
+      .attr('viewBox', '0 0 10 10')
+      .attr('refX', 9)
+      .attr('refY', 5)
+      .attr('markerWidth', 7)
+      .attr('markerHeight', 7)
+      .attr('orient', 'auto')
+      .attr('markerUnits', 'userSpaceOnUse')
+      .append('path')
+      .attr('d', 'M0,0 L10,5 L0,10 Z')
+      .attr('fill', stroke)
+  })
+  const markerUrlByStroke = new Map(strokeList.map((s, i) => [s, `url(#lp-arr-${i})`]))
 
   const cx = width / 2
   const cy = height / 2
@@ -348,6 +585,7 @@ const renderGraph = () => {
     .attr('stroke', d => getLinkStroke(d.__pathId))
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.65)
+    .attr('marker-end', d => markerUrlByStroke.get(getLinkStroke(d.__pathId)) || null)
 
   const nodeSel = nodeLayer.selectAll('g.lp-node')
     .data(nodes, d => d.id)
@@ -413,10 +651,10 @@ const renderGraph = () => {
   let fitted = false
   simulation.on('tick', () => {
     linkSel
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y)
+      .attr('x1', d => linkLineEnds(d).x1)
+      .attr('y1', d => linkLineEnds(d).y1)
+      .attr('x2', d => linkLineEnds(d).x2)
+      .attr('y2', d => linkLineEnds(d).y2)
     nodeSel.attr('transform', d => `translate(${d.x},${d.y})`)
     textLayer.selectAll('text').attr('x', d => d.x).attr('y', d => d.y)
 
@@ -431,6 +669,8 @@ const renderGraph = () => {
   setTimeout(() => {
     if (!fitted) smoothZoomFit(nodes, 520)
   }, 800)
+
+  applyCompareHighlightStyles()
 }
 
 const closeNodeCard = () => { showNodeCard.value = false }
@@ -485,9 +725,23 @@ watch(
   { deep: true }
 )
 
+watch(compareHighlightNodeIds, () => {
+  nextTick(() => applyCompareHighlightStyles())
+})
+
 let resizeObserver = null
+const onCompareClearHighlightMessage = (ev) => {
+  const d = ev?.data
+  if (d?.source !== 'compare-view' || d?.type !== 'lp-clear-compare-highlight') return
+  compareHighlightNodeIds.value = null
+  nextTick(() => applyCompareHighlightStyles())
+}
+
 onMounted(() => {
   renderGraph()
+  if (props.isCompareMode) {
+    window.addEventListener('message', onCompareClearHighlightMessage)
+  }
   window.addEventListener('resize', updateDimensions)
   if (graphContainer.value) {
     let resizeRaf = null
@@ -517,6 +771,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (simulation) simulation.stop()
+  window.removeEventListener('message', onCompareClearHighlightMessage)
   window.removeEventListener('resize', updateDimensions)
   if (resizeObserver && graphContainer.value) {
     resizeObserver.disconnect()

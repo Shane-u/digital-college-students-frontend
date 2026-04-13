@@ -34,6 +34,7 @@
           :graphs-by-id="graphsById"
           :theme-by-id="themeById"
           :title-by-id="displayNameById"
+          :header-title="graphTopHeaderTitle"
           :is-compare-mode="isCompareMode"
           @refreshOne="reloadOneGraph"
         />
@@ -408,8 +409,28 @@ watch(
 
 const displayPathIds = computed(() => {
   const ids = (pathList.value || []).map(p => p.id).filter(Boolean)
-  if (selectedPathId.value) return ids.filter(id => id === selectedPathId.value)
+  const sel = selectedPathId.value
+  if (sel != null && sel !== '') return ids.filter(id => String(id) === String(sel))
   return ids
+})
+
+/** 顶栏大字标题：与 GraphTopHeader 一致，字间加空格 */
+const graphTopHeaderTitle = computed(() => {
+  const toSpaced = (s) => [...String(s || '')].join(' ')
+  const ids = displayPathIds.value
+  const sel = selectedPathId.value
+
+  /** 当前画布实际只展示一条路径时，用该路径名（含「全部」下仅一条、或单选） */
+  const singleShownId = ids.length === 1 ? ids[0] : null
+  const titlePathId = (sel != null && sel !== '') ? sel : singleShownId
+
+  if (!titlePathId) return toSpaced('学习路径图谱')
+
+  const p = pathList.value.find(x => String(x.id) === String(titlePathId))
+  const gMap = graphsById.value || {}
+  const fromGraph = gMap[titlePathId]?.topic ?? gMap[String(titlePathId)]?.topic
+  const name = p ? getPathDisplayName(p) : (fromGraph || '学习路径')
+  return toSpaced(`${name}图谱`)
 })
 
 // 多路径配色：按 pathId 稳定取色，避免审美疲劳
