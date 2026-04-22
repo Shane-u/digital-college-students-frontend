@@ -399,11 +399,34 @@ const notifyParentFlashcardMatch = (payload) => {
   }
 }
 
+// 点击学习路径图谱空白区域时，通知父页面清除右侧闪卡高亮
+const notifyParentClearCompareHighlight = () => {
+  try {
+    if (window && window.parent && window.parent !== window) {
+      window.parent.postMessage(
+        {
+          source: 'learning-path-graph',
+          type: 'lp-clear-compare-highlight'
+        },
+        '*'
+      )
+    }
+  } catch (e) {
+    console.warn('notifyParentClearCompareHighlight error:', e)
+  }
+}
+
 // 调用后端接口：根据学习路径节点匹配闪卡图谱
 const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
   compareHighlightNodeIds.value = null
   applyCompareHighlightStyles()
   try {
+    notifyParentFlashcardMatch({
+      phase: 'matching',
+      matching: true,
+      pathId,
+      clickedNodeId
+    })
     const body = {
       clickedNodeId,
       maxDescendants: MATCH_DEFAULTS.maxDescendants,
@@ -424,6 +447,7 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
       notifyParentFlashcardMatch({
         success: true,
         empty: true,
+        matching: false,
         pathId,
         clickedNodeId,
         keywords
@@ -440,6 +464,7 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
     notifyParentFlashcardMatch({
       success: true,
       empty: false,
+      matching: false,
       pathId,
       clickedNodeId,
       keywords,
@@ -450,6 +475,7 @@ const triggerFlashcardMatch = async (pathId, clickedNodeId) => {
     compareHighlightNodeIds.value = null
     notifyParentFlashcardMatch({
       success: false,
+      matching: false,
       error: e?.message || '学习路径节点匹配闪卡失败'
     })
   }
@@ -537,6 +563,12 @@ const renderGraph = () => {
   gRoot = svg.append('g')
   zoomBehavior = d3.zoom().scaleExtent([0.15, 6]).on('zoom', (ev) => gRoot.attr('transform', ev.transform))
   svg.call(zoomBehavior)
+  svg.on('click', () => {
+    if (!props.isCompareMode) return
+    compareHighlightNodeIds.value = null
+    nextTick(() => applyCompareHighlightStyles())
+    notifyParentClearCompareHighlight()
+  })
 
   // 自动缩放到视口（尽量让所有图谱在一屏内可见）
   const smoothZoomFit = (nodesToFit, duration = 520) => {

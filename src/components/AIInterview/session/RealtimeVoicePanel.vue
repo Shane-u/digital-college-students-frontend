@@ -9,7 +9,12 @@
 
     <div class="voice-main">
       <div class="voice-video">
-        <video ref="localVideoRef" autoplay muted playsinline></video>
+        <InterviewAvatarStage
+          :local-stream="localStream"
+          :remote-stream="remoteStream"
+          :connected="connected"
+          :muted="muted"
+        />
       </div>
       <!-- 远端音频保持播放，但不展示控件 -->
       <audio ref="remoteAudioRef" class="remote-audio" autoplay />
@@ -43,24 +48,38 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import InterviewAvatarStage from './InterviewAvatarStage.vue'
 
-defineProps({
+const props = defineProps({
+  localStream: { type: Object, default: null },
+  remoteStream: { type: Object, default: null },
   connecting: { type: Boolean, default: false },
   connected: { type: Boolean, default: false },
   muted: { type: Boolean, default: false },
   finishing: { type: Boolean, default: false },
 })
 
-const localVideoRef = ref(null)
 const remoteAudioRef = ref(null)
 
 defineExpose({
-  localVideoRef,
   remoteAudioRef,
 })
 
 defineEmits(['connect', 'toggle-mute', 'hangup'])
+
+watch(
+  () => props.remoteStream,
+  async (s) => {
+    const el = remoteAudioRef.value
+    if (!el) return
+    try {
+      el.srcObject = s || null
+      if (s) await el.play()
+    } catch (_) {}
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -124,12 +143,6 @@ defineEmits(['connect', 'toggle-mute', 'hangup'])
   border-radius: 0;
   overflow: hidden;
   background: #000;
-}
-
-.voice-video :deep(video) {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .remote-audio {

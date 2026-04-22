@@ -93,15 +93,15 @@
     </div>
 
     <div v-else class="empty">
-      <div class="empty-icon">✨</div>
-      <p class="empty-title">还没有简历分析结果</p>
-      <p class="empty-desc">先在左侧上传/选择简历并点击「开始分析简历」，这里会展示优势与追问清单。</p>
+      <img class="empty-image" :src="resumePlaceholderImage" alt="简历分析占位图" />
+      <p class="empty-tip">请上传并分析简历~</p>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import resumePlaceholderImage from '../../../assets/AIInterview/AI_Resume.png'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
@@ -139,7 +139,7 @@ watch(
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 700;
   color: #111827;
   margin: 0;
@@ -407,29 +407,27 @@ watch(
 }
 
 .empty {
-  padding: 22px 12px 18px;
+  padding: 16px 12px 10px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #eff6ff, #fefce8);
-  text-align: left;
+  text-align: center;
 }
 
-.empty-icon {
-  font-size: 24px;
-  margin-bottom: 6px;
+.empty-image {
+  display: block;
+  width: min(100%, 420px);
+  margin: 0 auto;
+  height: auto;
+  object-fit: contain;
 }
 
-.empty-title {
-  font-size: 14px;
+.empty-tip {
+  margin: 10px 0 0;
+  font-size: 22px;
   font-weight: 800;
-  color: #111827;
-  margin: 0;
-}
-
-.empty-desc {
-  font-size: 16px;
-  color: #6b7280;
-  margin: 4px 0 0;
-  line-height: 1.7;
+  letter-spacing: 0.02em;
+  color: #334e68;
+  text-shadow: 0 2px 8px rgba(51, 78, 104, 0.15);
+  line-height: 1.6;
 }
 
 .placeholder {

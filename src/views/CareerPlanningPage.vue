@@ -8,11 +8,11 @@
         class="cp-rail"
         aria-label="职业规划流程"
       >
-        <nav class="cp-rail__crumb" aria-label="面包屑">
+        <!-- <nav class="cp-rail__crumb" aria-label="面包屑">
           <router-link to="/home">首页</router-link>
           <span class="cp-rail__sep">/</span>
           <button type="button" class="cp-rail__link" @click="goToStory">职业规划</button>
-        </nav>
+        </nav> -->
         <ol class="cp-steps" role="list">
           <li
             class="cp-steps__item"
@@ -55,7 +55,7 @@
       <main v-if="journeyPhase === 'story'" class="cp-panel cp-panel--story">
         <div class="cp-story__grid">
           <div class="cp-story__visual" aria-hidden="true">
-            <div class="cp-story__blob">
+            <div class="cp-story__circle">
               <img
                 class="cp-story__img"
                 :src="heroImageUrl"
@@ -314,15 +314,6 @@
           <div class="cp-immerse__grain" />
         </div>
         <div class="cp-report__inner">
-          <div class="cp-report__head">
-            <h2 class="cp-report__title">职业规划报告</h2>
-            <div class="cp-report__actions">
-              <button v-if="workflowFinished" type="button" class="cp-text-btn" @click="goToWorkflowStep">
-                ← 返回工作流
-              </button>
-              <button type="button" class="cp-text-btn" @click="goToStory">返回介绍页</button>
-            </div>
-          </div>
           <div id="reportBox" class="cp-report__body markdown-body markdown-body-custom" v-html="reportHtml" />
           <div id="linksBox" class="cp-report__links workflow-links" v-html="linksHtml" />
         </div>
@@ -341,7 +332,7 @@ import gsap from 'gsap'
 import request from '../api/request'
 import Footer from '../components/Footer.vue'
 import NavBar from '../components/NavBar.vue'
-import heroImageUrl from '../assets/image.png'
+import heroImageUrl from '../assets/zhiyeguihua.gif'
 
 marked.setOptions({
   breaks: true,
@@ -881,15 +872,15 @@ onUnmounted(() => {
 
 <style scoped>
 .career-planning-page {
-  --cp-bg: #f0f4fa;
+  --cp-bg: #f7f3ff;
   --cp-surface: #ffffff;
-  --cp-border: #e2e8f0;
+  --cp-border: #eadffb;
   --cp-text: #1e293b;
   --cp-muted: #64748b;
-  --cp-brand: #2563eb;
-  --cp-brand-soft: #e8f1ff;
-  --cp-brand-hover: #1d4ed8;
-  --cp-focus: rgba(37, 99, 235, 0.25);
+  --cp-brand: #7c3aed;
+  --cp-brand-soft: #f3e8ff;
+  --cp-brand-hover: #6d28d9;
+  --cp-focus: rgba(124, 58, 237, 0.25);
   --cp-glass: rgba(255, 255, 255, 0.58);
   --cp-glass-border: rgba(255, 255, 255, 0.85);
   /*
@@ -904,7 +895,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   color: var(--cp-text);
-  overflow-x: visible;
+  overflow-x: hidden;
   padding-inline: max(0px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right));
 }
 
@@ -1109,20 +1100,18 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.cp-story__blob {
-  width: min(100%, 420px);
-  aspect-ratio: 4 / 5;
-  border-radius: 46% 54% 52% 48% / 42% 48% 52% 58%;
+.cp-story__circle {
+  width: min(100%, 520px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(30, 41, 59, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  background: var(--cp-surface);
+  background: #ffffff;
 }
 
 .cp-story__img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -1310,7 +1299,7 @@ onUnmounted(() => {
 .cp-immerse {
   position: relative;
   isolation: isolate;
-  overflow-x: visible;
+  overflow-x: hidden;
 }
 
 .cp-immerse__scene {
@@ -1324,19 +1313,12 @@ onUnmounted(() => {
 .cp-immerse__gradient {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 120% 80% at 10% -20%, rgba(129, 140, 248, 0.45) 0%, transparent 55%),
-    radial-gradient(ellipse 90% 70% at 95% 10%, rgba(56, 189, 248, 0.35) 0%, transparent 50%),
-    radial-gradient(ellipse 70% 60% at 50% 100%, rgba(167, 139, 250, 0.28) 0%, transparent 45%),
-    linear-gradient(165deg, #f8fafc 0%, #eef2ff 38%, #e0f2fe 72%, #f1f5f9 100%);
+  /* 与项目其他页面保持一致：使用统一底色，不再叠加蓝色沉浸渐变 */
+  background: var(--cp-bg);
 }
 
 .cp-immerse__orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(48px);
-  opacity: 0.55;
-  mix-blend-mode: multiply;
+  display: none;
 }
 
 .cp-immerse__orb--a {
@@ -1368,12 +1350,7 @@ onUnmounted(() => {
 }
 
 .cp-immerse__grain {
-  position: absolute;
-  inset: 0;
-  opacity: 0.22;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.9) 0.8px, transparent 1px);
-  background-size: 3px 3px;
-  mix-blend-mode: overlay;
+  display: none;
 }
 
 @keyframes cpOrbDrift {
@@ -1626,14 +1603,14 @@ onUnmounted(() => {
 }
 
 .cp-assess__nav-btn--primary {
-  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
   color: #fff;
-  box-shadow: 0 10px 28px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 10px 28px rgba(124, 58, 237, 0.35);
 }
 
 .cp-assess__nav-btn--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 14px 34px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 14px 34px rgba(124, 58, 237, 0.4);
 }
 
 .cp-assess__nav-btn:disabled {
@@ -1647,6 +1624,7 @@ onUnmounted(() => {
 .cp-panel--workflow {
   position: relative;
   padding: 16px clamp(14px, 4vw, 36px) max(28px, env(safe-area-inset-bottom));
+  overflow: hidden;
 }
 
 .cp-flow__inner {
@@ -1698,6 +1676,7 @@ onUnmounted(() => {
   width: 100%;
   gap: clamp(28px, 5vh, 48px);
   overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .cp-wf-back-glow {
@@ -2199,8 +2178,8 @@ onUnmounted(() => {
   bottom: 0;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #6366f1, #2563eb, #0ea5e9);
-  box-shadow: 0 0 16px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(90deg, #8b5cf6, #7c3aed, #a855f7);
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.35);
 }
 
 .cp-wf-track__fill--value {
@@ -2243,37 +2222,9 @@ onUnmounted(() => {
 .cp-report__inner {
   position: relative;
   z-index: 1;
-  max-width: 900px;
+  max-width: 1080px;
   margin: 0 auto;
   width: 100%;
-}
-
-.cp-report__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 18px 20px;
-  border-radius: 20px;
-  background: var(--cp-glass);
-  border: 1px solid var(--cp-glass-border);
-  backdrop-filter: blur(16px);
-}
-
-.cp-report__title {
-  margin: 0;
-  font-size: clamp(1.4rem, 2.5vw, 1.85rem);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #0f172a;
-}
-
-.cp-report__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
 .cp-report__body {
@@ -2304,8 +2255,6 @@ onUnmounted(() => {
 .markdown-body-custom {
   padding: 22px clamp(18px, 3vw, 28px);
   border-radius: 20px;
-  max-height: min(70vh, 720px);
-  overflow-y: auto;
   font-size: 14px;
   line-height: 1.65;
   background: rgba(255, 255, 255, 0.78);

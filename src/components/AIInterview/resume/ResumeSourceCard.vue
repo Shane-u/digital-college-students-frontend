@@ -165,7 +165,7 @@ const canAnalyze = computed(() => {
 }
 
 .card-title {
-  font-size: 16px;
+  font-size: 22px;
   font-weight: 700;
   color: #111827;
   margin: 0;

@@ -1,6 +1,6 @@
 <template>
   <div class="chengzhang-guiji">
-    <!-- 标题 -->
+    <!-- 标题（保持原有不动） -->
     <div class="section-title-wrap" v-if="!hideHeader">
       <Star class="title-icon" />
       <h2 class="section-title">成长轨迹</h2>
@@ -9,166 +9,117 @@
       </span>
     </div>
 
-    <!-- 时间轴内容 -->
-    <ul
-      class="timeline-wrapper animate__animated"
-      ref="timelineWrapper"
-      @scroll="scrollEvent"
-      @mouseenter="handleMouseEnter"
-      @mouseleave="handleMouseLeave"
-      @wheel="handleWheel"
-    >
-      <li
-        class="timeline-item"
-        v-for="item in props.timelineList"
-        :key="item.id"
+    <!-- 时间轴（仅改样式与动画） -->
+    <div class="timeline-shell" ref="timelineShell" :style="{ '--axis-start': `${axisStart}px` }">
+      <!-- Central axis base -->
+      <div class="timeline-axis-base" />
+      <div class="timeline-axis-glow" />
+      <div class="timeline-axis-energy" />
+
+      <!-- Progress axis -->
+      <div class="timeline-axis-progress" :style="progressStyle">
+        <div class="timeline-axis-progress-tip" />
+      </div>
+
+      <ul
+        class="timeline-wrapper timeline-scrollbar"
+        ref="timelineWrapper"
+        @scroll="handleScroll"
+        @mouseenter="handleMouseEnter"
+        @mouseleave="handleMouseLeave"
+        @wheel="handleWheel"
       >
-        <div class="timeline-box">
-          <div class="out-circle">
-            <div class="in-circle"></div>
-            <!-- 修复：气泡包裹整个时间节点区域，确保点击触发 -->
-            <div class="timeline-date">
-              <el-popover placement="bottom" trigger="hover" width="200">
-                <!-- Element Plus 使用 #reference 作为触发元素 -->
-                <template #reference>
-                  <span class="timeline-title" @click="handleDateClick(item)">
-                    {{ item.title }}
-                  </span>
-                </template>
-                <!-- 内容直接放在组件标签内 -->
-                <div
-                  style="padding: 8px 0; line-height: 1.6; text-align: center"
-                >
-                  {{ item.content }}
-                </div>
-              </el-popover>
+        <li v-for="el in timelineElements" :key="el.key" class="timeline-el">
+          <div v-if="el.type === 'year'" class="year-marker" :ref="setFirstYearRef" @click="handleDateClick(el.parent)">
+            <div class="year-pill">
+              <span class="year-text">{{ el.year }}</span>
             </div>
           </div>
-          <!-- 子项线条区域 -->
+
           <div
-            class="long-line"
-            v-show="item.isShow"
-            :style="`width:${
-              item.children && item.children.length > 0
-                ? item.children.length * SLOT_WIDTH
-                : SLOT_WIDTH
-            }px`"
+            v-else
+            class="milestone-wrap"
+            :class="el.isEven ? 'is-even' : 'is-odd'"
           >
             <div
-              v-for="(subItem, index) in item.children"
-              :key="subItem.id"
-              class="sub-item-box"
+              class="milestone-connector"
+              :class="el.isEven ? 'connector-down' : 'connector-up'"
+              ref="connectorEls"
+            />
+
+            <div
+              class="milestone-card perspective"
+              :data-even="el.isEven ? '1' : '0'"
+              ref="cardEls"
+              @click="handleSubDateClick(el.subItem)"
             >
-              <!-- 时间轴上的小圆点，放在线上 -->
-              <div
-                class="sub-item-node"
-                @click="handleSubDateClick(subItem)"
-                title="查看该日期详情"
-              >
-                <span class="sub-item-dot"></span>
+              <div class="card-media">
+                <img
+                  v-if="getPhotoForSubItem(el.subItem)"
+                  :src="getPhotoForSubItem(el.subItem)"
+                  class="media-blur"
+                  referrerpolicy="no-referrer"
+                  alt=""
+                />
+                <img
+                  v-if="getPhotoForSubItem(el.subItem)"
+                  :src="getPhotoForSubItem(el.subItem)"
+                  class="media-main"
+                  referrerpolicy="no-referrer"
+                  :alt="el.subItem.content || ''"
+                />
+                <div v-else class="media-fallback">
+                  <div class="fallback-badge">暂无图片</div>
+                </div>
+
+                <div class="card-badge">
+                  <span class="badge-year">{{ formatYear(el.subItem.name) }}</span>
+                </div>
               </div>
 
-              <!-- 奇数在上、偶数在下的卡片与连线 -->
-              <div
-                :class="`sub-line-box ${
-                  index % 2 === 0 ? 'top-line-box' : 'bottom-line-box'
-                }`"
-                v-show="subItem.content"
-              >
-                <!-- 上方卡片：先卡片再竖线 -->
-                <template v-if="index % 2 === 0">
-                  <div class="children-box top-children-box">
-                    <div
-                      class="timeline-card"
-                      @click="handleSubDateClick(subItem)"
-                    >
-                      <div class="card-year-badge">
-                        {{ formatYear(subItem.name) }}
-                      </div>
-                      <div
-                        v-if="getPhotoForSubItem(subItem)"
-                        class="card-image-wrapper"
-                      >
-                        <img
-                          :src="getPhotoForSubItem(subItem)"
-                          alt=""
-                          class="card-image"
-                        />
-                        <div class="card-image-overlay">
-                          <div class="card-title-text">
-                            {{ subItem.content }}
-                          </div>
-                        </div>
-                      </div>
-                      <div v-else class="card-text-only">
-                        <div class="card-title-text">
-                          {{ subItem.content }}
-                        </div>
-                      </div>
-                      <div class="card-date-text">
-                        {{ formatDateLabel(subItem.name) }}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="children-line-box top-line"></div>
-                </template>
+              <div class="card-title">
+                {{ el.subItem.content }}
+              </div>
 
-                <!-- 下方卡片：先竖线再卡片 -->
-                <template v-else>
-                  <div class="children-line-box bottom-line"></div>
-                  <div class="children-box bottom-children-box">
-                    <div
-                      class="timeline-card"
-                      @click="handleSubDateClick(subItem)"
-                    >
-                      <div class="card-year-badge">
-                        {{ formatYear(subItem.name) }}
-                      </div>
-                      <div
-                        v-if="getPhotoForSubItem(subItem)"
-                        class="card-image-wrapper"
-                      >
-                        <img
-                          :src="getPhotoForSubItem(subItem)"
-                          alt=""
-                          class="card-image"
-                        />
-                        <div class="card-image-overlay">
-                          <div class="card-title-text">
-                            {{ subItem.content }}
-                          </div>
-                        </div>
-                      </div>
-                      <div v-else class="card-text-only">
-                        <div class="card-title-text">
-                          {{ subItem.content }}
-                        </div>
-                      </div>
-                      <div class="card-date-text">
-                        {{ formatDateLabel(subItem.name) }}
-                      </div>
-                    </div>
-                  </div>
-                </template>
+              <div class="card-footer">
+                <div class="footer-left">
+                  <span class="footer-dot" />
+                  {{ formatDateLabel(el.subItem.name) }}
+                </div>
+                <div class="footer-tag">
+                  里程碑
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </li>
-    </ul>
+        </li>
+
+        <li class="timeline-end-spacer" />
+      </ul>
+    </div>
   </div>
 </template>
   
 <script setup>
-import { ref, defineProps, defineEmits, onMounted, onUnmounted } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, defineProps, defineEmits, watch } from "vue";
 import Star from "./Star.vue";
-import { ElPopover } from "element-plus";
 import { getPhotoWallList } from "../api/growthRecord";
+import gsap from "gsap";
 
 const timelineWrapper = ref(null);
 const isMouseOverTimeline = ref(false);
 const photosByDate = ref({});
-const SLOT_WIDTH = 220;
+const scrollProgress = ref(0);
+const rafId = ref(0);
+const observer = ref(null);
+const wheelTargetScroll = ref(0);
+let smoothScrollTo = null;
+const timelineShell = ref(null);
+const firstYearEl = ref(null);
+const axisStart = ref(0);
+
+const cardEls = ref([]);
+const connectorEls = ref([]);
 
 const props = defineProps({
   timelineList: {
@@ -336,9 +287,9 @@ const emit = defineEmits([
   "subDateClick",
 ]);
 
-const scrollEvent = (e) => {
-  emit("scrollEvent", e);
-};
+const progressStyle = computed(() => ({
+  transform: `translateY(-50%) scaleX(${Math.max(0, Math.min(1, scrollProgress.value))})`
+}));
 
 const handleBottomClick = () => {
   emit("handleBottomClick");
@@ -380,48 +331,63 @@ const isAtRightEnd = () => {
   return scrollLeft + clientWidth >= scrollWidth - 1;
 };
 
+const updateScrollProgress = () => {
+  const el = timelineWrapper.value;
+  if (!el) return;
+  const max = el.scrollWidth - el.clientWidth;
+  scrollProgress.value = max <= 0 ? 0 : el.scrollLeft / max;
+  updateAxisStart();
+};
+
+const setFirstYearRef = (el) => {
+  if (!firstYearEl.value && el) {
+    firstYearEl.value = el;
+  }
+};
+
+const updateAxisStart = () => {
+  const shellEl = timelineShell.value;
+  const yearEl = firstYearEl.value;
+  if (!shellEl || !yearEl) return;
+  const shellRect = shellEl.getBoundingClientRect();
+  const yearRect = yearEl.getBoundingClientRect();
+  // 轴线起点跟随第一个年份节点，避免滚动后视觉断层
+  axisStart.value = Math.max(0, yearRect.left - shellRect.left + yearRect.width / 2);
+};
+
+const handleScroll = (e) => {
+  emit("scrollEvent", e);
+  if (rafId.value) cancelAnimationFrame(rafId.value);
+  rafId.value = requestAnimationFrame(() => {
+    updateScrollProgress();
+  });
+};
+
 // 处理滚轮事件
 const handleWheel = (e) => {
   if (!timelineWrapper.value || !isMouseOverTimeline.value) return;
 
   const deltaY = e.deltaY;
-  // 调整滚动速度，增大滚动幅度
-  const scrollAmount = Math.abs(deltaY) * 2;
-  const isAtLeft = isAtLeftEnd();
-  const isAtRight = isAtRightEnd();
+  const deltaX = e.deltaX;
+  const dominantDelta = Math.abs(deltaY) > Math.abs(deltaX) ? deltaY : deltaX;
+  const el = timelineWrapper.value;
+  const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+  const current = Number.isFinite(wheelTargetScroll.value) ? wheelTargetScroll.value : el.scrollLeft;
 
-  // 向下滚动（正deltaY）- 时间轴向右滚动
-  if (deltaY > 0) {
-    // 如果已经在右端，允许页面滚动（不阻止默认行为）
-    if (isAtRight) {
-      return; // 允许事件冒泡，页面可以继续向下滚动
-    }
-    // 阻止默认滚动，滚动时间轴向右
-    e.preventDefault();
-    e.stopPropagation();
-    const maxScroll =
-      timelineWrapper.value.scrollWidth - timelineWrapper.value.clientWidth;
-    const newScrollLeft = Math.min(
-      timelineWrapper.value.scrollLeft + scrollAmount,
-      maxScroll
-    );
-    timelineWrapper.value.scrollLeft = newScrollLeft;
+  if (dominantDelta === 0) return;
+  if (dominantDelta < 0 && current <= 0) return;
+  if (dominantDelta > 0 && current >= maxScroll) return;
+
+  e.preventDefault();
+
+  const next = Math.min(maxScroll, Math.max(0, current + dominantDelta * 2.4));
+  wheelTargetScroll.value = next;
+
+  if (!smoothScrollTo) {
+    el.scrollLeft = next;
+    return;
   }
-  // 向上滚动（负deltaY）- 时间轴向左滚动
-  else if (deltaY < 0) {
-    // 如果已经在左端，允许页面滚动（不阻止默认行为）
-    if (isAtLeft) {
-      return; // 允许事件冒泡，页面可以继续向上滚动
-    }
-    // 阻止默认滚动，滚动时间轴向左
-    e.preventDefault();
-    e.stopPropagation();
-    const newScrollLeft = Math.max(
-      timelineWrapper.value.scrollLeft - scrollAmount,
-      0
-    );
-    timelineWrapper.value.scrollLeft = newScrollLeft;
-  }
+  smoothScrollTo(next);
 };
 
 // 从照片墙加载图片，按日期分组
@@ -486,15 +452,182 @@ const formatDateLabel = (raw) => {
   return `${y}.${m}.${d}`;
 };
 
+const timelineElements = computed(() => {
+  const list = Array.isArray(props.timelineList) ? props.timelineList : [];
+  const elements = [];
+  let globalIndex = 0;
+
+  list.forEach((yearItem) => {
+    const year = String(yearItem?.date ?? yearItem?.title ?? "");
+    elements.push({
+      type: "year",
+      key: `year-${yearItem?.id ?? year}`,
+      year,
+      parent: yearItem,
+    });
+
+    const children = Array.isArray(yearItem?.children) ? yearItem.children : [];
+    children.forEach((subItem) => {
+      elements.push({
+        type: "card",
+        key: `card-${yearItem?.id ?? year}-${subItem?.id ?? subItem?.name ?? globalIndex}`,
+        subItem,
+        isEven: globalIndex % 2 === 0,
+      });
+      globalIndex += 1;
+    });
+  });
+
+  return elements;
+});
+
+const resetAndAnimate = (el, isEven, immediate = false) => {
+  const from = {
+    opacity: 0,
+    y: isEven ? -200 : 200,
+    scale: 0.6,
+    rotateY: isEven ? 30 : -30,
+    rotateX: 15,
+    z: -300,
+  };
+  const to = {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    rotateY: 0,
+    rotateX: 0,
+    z: 0,
+    duration: immediate ? 0 : 0.42,
+    ease: immediate ? "none" : "power3.out",
+    overwrite: true,
+  };
+
+  gsap.set(el, { transformPerspective: 2000, transformOrigin: "50% 50%" });
+  if (immediate) {
+    gsap.set(el, to);
+  } else {
+    gsap.fromTo(el, from, to);
+  }
+};
+
+const resetHidden = (el, isEven) => {
+  gsap.set(el, {
+    opacity: 0,
+    y: isEven ? -200 : 200,
+    scale: 0.6,
+    rotateY: isEven ? 30 : -30,
+    rotateX: 15,
+    z: -300,
+    transformPerspective: 2000,
+    transformOrigin: "50% 50%",
+  });
+};
+
+const animateConnector = (el, immediate = false) => {
+  gsap.set(el, { transformOrigin: "50% 0%" });
+  if (immediate) {
+    gsap.set(el, { scaleY: 1, opacity: 1 });
+    return;
+  }
+  gsap.fromTo(el, { scaleY: 0, opacity: 0 }, { scaleY: 1, opacity: 1, duration: 0.28, ease: "power3.out", overwrite: true });
+};
+
+const setupInView = async () => {
+  await nextTick();
+  const root = timelineWrapper.value;
+  if (!root) return;
+
+  observer.value?.disconnect?.();
+  observer.value = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const target = entry.target;
+        const isEven = target?.dataset?.even === "1";
+
+        if (entry.isIntersecting) {
+          resetAndAnimate(target, isEven, false);
+          const connector = target?.__connectorEl;
+          if (connector) animateConnector(connector, false);
+          const node = target?.__nodeEl;
+          if (node) gsap.fromTo(node, { scale: 0 }, { scale: 1, duration: 0.24, ease: "power3.out", overwrite: true });
+        } else {
+          resetHidden(target, isEven);
+          const connector = target?.__connectorEl;
+          if (connector) gsap.set(connector, { scaleY: 0, opacity: 0 });
+          const node = target?.__nodeEl;
+          if (node) gsap.set(node, { scale: 0 });
+        }
+      });
+    },
+    { root, threshold: 0.18, rootMargin: "-6% 0px -6% 0px" }
+  );
+
+  // bind connectors/nodes to cards and initialize hidden state
+  const cards = Array.isArray(cardEls.value) ? cardEls.value : [];
+  const connectors = Array.isArray(connectorEls.value) ? connectorEls.value : [];
+  cards.forEach((cardEl, idx) => {
+    if (!cardEl) return;
+    const isEven = cardEl?.dataset?.even === "1";
+
+    // associate nearest connector and node (same milestone-wrap)
+    const wrap = cardEl.closest(".milestone-wrap");
+    const node = wrap ? wrap.querySelector(".milestone-node") : null;
+    const connector = wrap ? wrap.querySelector(".milestone-connector") : connectors[idx] || null;
+
+    cardEl.__connectorEl = connector;
+    cardEl.__nodeEl = node;
+
+    resetHidden(cardEl, isEven);
+    if (connector) gsap.set(connector, { scaleY: 0, opacity: 0, transformOrigin: "50% 0%" });
+    if (node) gsap.set(node, { scale: 0, transformOrigin: "50% 50%" });
+
+    observer.value.observe(cardEl);
+  });
+
+  // initial progress
+  updateScrollProgress();
+};
+
 onMounted(async () => {
   // 确保时间轴可以横向滚动，并设置平滑滚动
   if (timelineWrapper.value) {
     timelineWrapper.value.style.overflowX = "scroll";
-    timelineWrapper.value.style.scrollBehavior = "smooth";
+    // 避免与 GSAP 滚动缓动冲突，使用即时滚动底座
+    timelineWrapper.value.style.scrollBehavior = "auto";
+    smoothScrollTo = gsap.quickTo(timelineWrapper.value, "scrollLeft", {
+      duration: 0.22,
+      ease: "power2.out",
+    });
+    wheelTargetScroll.value = timelineWrapper.value.scrollLeft;
   }
 
   // 加载成长轨迹相关照片
   await loadTimelinePhotos();
+
+  await setupInView();
+  await nextTick();
+  requestAnimationFrame(updateAxisStart);
+  window.addEventListener("resize", updateAxisStart);
+});
+
+watch(
+  () => props.timelineList,
+  async () => {
+    cardEls.value = [];
+    connectorEls.value = [];
+    firstYearEl.value = null;
+    await setupInView();
+    await nextTick();
+    requestAnimationFrame(updateAxisStart);
+  },
+  { deep: true }
+);
+
+onUnmounted(() => {
+  observer.value?.disconnect?.();
+  if (rafId.value) cancelAnimationFrame(rafId.value);
+  smoothScrollTo = null;
+  window.removeEventListener("resize", updateAxisStart);
 });
 
 // 暴露 ref 给父组件
@@ -562,278 +695,346 @@ defineExpose({
 }
 
 /* 滚动条样式 */
-.timeline-wrapper::-webkit-scrollbar {
-  width: 4px;
-  height: 12px;
+.timeline-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
-.timeline-wrapper::-webkit-scrollbar-thumb {
+.timeline-scrollbar::-webkit-scrollbar-thumb {
   border-radius: 10px;
   opacity: 0.2;
   background-color: #dadada;
 }
-.timeline-wrapper::-webkit-scrollbar-track {
+.timeline-scrollbar::-webkit-scrollbar-track {
   border-radius: 10px;
+}
+
+.timeline-shell {
+  position: relative;
+  width: 100%;
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.timeline-axis-base {
+  position: absolute;
+  top: 50%;
+  left: var(--axis-start, 0px);
+  width: calc(100% - var(--axis-start, 0px));
+  height: 2px;
+  transform: translateY(-50%);
+  background: rgba(168, 85, 247, 0.12);
+  z-index: 1;
+}
+
+.timeline-axis-glow {
+  position: absolute;
+  top: 50%;
+  left: var(--axis-start, 0px);
+  width: calc(100% - var(--axis-start, 0px));
+  height: 96px;
+  transform: translateY(-50%);
+  background: linear-gradient(to bottom, rgba(168, 85, 247, 0.06), transparent, rgba(168, 85, 247, 0.06));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.timeline-axis-energy {
+  position: absolute;
+  top: 50%;
+  left: var(--axis-start, 0px);
+  width: calc(100% - var(--axis-start, 0px));
+  height: 2px;
+  transform: translateY(-50%);
+  opacity: 0.3;
+  background: linear-gradient(90deg, transparent, #a855f7, #6366f1, #a855f7, transparent);
+  background-size: 200% 100%;
+  animation: axisFlow 15s linear infinite;
+  z-index: 2;
+}
+
+@keyframes axisFlow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+.timeline-axis-progress {
+  position: absolute;
+  top: 50%;
+  left: var(--axis-start, 0px);
+  width: calc(100% - var(--axis-start, 0px));
+  height: 3px;
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(to right, #7c3aed, #6366f1, #a855f7);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.6), 0 0 10px rgba(139, 92, 246, 0.4);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.timeline-axis-progress-tip {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  filter: blur(1px);
+  box-shadow: 0 0 20px #fff, 0 0 40px #a855f7;
 }
 
 ul.timeline-wrapper {
   font-family: DS-Digital, sans-serif;
   list-style: none;
   margin: 0;
-  padding: 250px 20px 260px 20px;
+  padding: 90px 10vw 90px 24px;
   white-space: nowrap;
   overflow-x: scroll;
+  scrollbar-width: none; /* Firefox: hide scrollbar but keep scrollable */
+  -ms-overflow-style: none; /* Legacy Edge/IE */
   position: relative;
-  z-index: 5; /* 确保时间轴在最上层 */
+  z-index: 10; /* 覆盖轴线层 */
   background: transparent; /* 透明背景，不受蒙层影响 */
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 520px;
 }
 
-/* 时间线主样式 */
-.timeline-item {
+.timeline-el {
   position: relative;
-  display: inline-block;
-}
-
-.timeline-item .timeline-box {
-  text-align: center;
   display: flex;
   align-items: center;
 }
 
-.timeline-item .timeline-box .out-circle {
-  width: 14px;
-  height: 14px;
-  background: #6a4c8a;
-  border: 2px solid #fff; /* 白色边框增强对比 */
-  box-shadow: 0px 2px 8px 0px rgba(106, 76, 138, 0.8),
-    0 0 0 2px rgba(255, 255, 255, 0.5); /* 增强阴影和光晕 */
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
+.timeline-end-spacer {
+  min-width: 50vw;
+  height: 1px;
+  flex: 0 0 auto;
+}
+
+.year-marker {
   position: relative;
-  z-index: 7; /* 最高层级 */
-}
-
-.timeline-item .timeline-box .out-circle .in-circle {
-  width: 6px;
-  height: 6px;
-  margin: 0 auto;
-  background: #fff; /* 白色内圆，增强对比 */
-  border-radius: 50%;
-  box-shadow: 0 0 4px rgba(106, 76, 138, 0.6);
-}
-
-/* 时间节点区域样式 */
-.timeline-item .timeline-box .out-circle .timeline-date {
-  color: #000;
-  margin-top: 55px;
-  font-weight: 600;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
-  align-items: center; /* 确保按钮和日期居中 */
-}
-
-/* 时间节点标题样式 - 仅显示文字，无按钮样式 */
-.timeline-title {
-  color: #000;
-  font-weight: 600;
+  align-items: center;
+  z-index: 20;
   cursor: pointer;
-  font-size: 16px;
-  font-family: DS-Digital, sans-serif;
-  transition: color 0.2s ease;
+  user-select: none;
 }
 
-.timeline-title:hover {
-  color: #6a4c8a;
-}
-
-/* 长线条样式 */
-.long-line {
-  height: 8px; /* 时间轴更粗一些，更接近参考图 */
-  background: rgba(106, 76, 138, 0.9); /* 提高不透明度 */
-  box-shadow: 0px 2px 8px 0px rgba(106, 76, 138, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.3); /* 增强阴影和光晕 */
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  /* 左右间距再缩小 */
-  position: relative;
-  z-index: 6; /* 确保线条清晰可见 */
-}
-
-.long-line .sub-item-box {
-  margin-top: 0;
-  position: relative;
-  z-index: 8; /* 确保子元素在蒙层之上，比时间轴层级更高 */
-  width: 220px; /* 收紧节点间距，提升紧凑度 */
-  flex: 0 0 auto;
-  text-align: center;
-}
-
-/* 时间轴子节点上的小圆点，居中在线上 */
-.sub-item-node {
-  position: absolute;
-  top: 50%;
-  left: 50%; /* 与竖线和卡片中心对齐（卡片宽 260px） */
-  transform: translate(-50%, -50%);
+.year-pill {
+  padding: 12px 32px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid #7c3aed;
+  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
+  backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
 }
 
-.sub-item-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #6a4c8a;
-  border: 2px solid #ffffff;
-  box-shadow: 0 0 0 2px rgba(106, 76, 138, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+.year-text {
+  font-size: 26px;
+  font-weight: 900;
+  color: #7c3aed;
+  letter-spacing: -0.04em;
+  font-style: italic;
 }
 
-.sub-item-node:hover .sub-item-dot {
-  transform: scale(1.1);
-  box-shadow: 0 0 0 3px rgba(106, 76, 138, 0.45);
-}
-
-.long-line .sub-item-box .sub-line-box {
+.milestone-wrap {
   position: relative;
-  width: 100%;
-  height: 230px; /* 统一高度，由内部 top/bottom 布局控制 */
-}
-
-.long-line .sub-item-box .sub-line-box .children-line-box {
-  position: absolute;
-  left: 50%; /* 与圆点和卡片中心对齐 */
-  width: 0;
-  z-index: 6; /* 在线条层级，低于卡片 */
-}
-
-.long-line .sub-item-box .sub-line-box .children-box {
-  flex-wrap: wrap;
   display: flex;
-  justify-content: flex-start;
+  flex-direction: column;
   align-items: center;
-  border: none;
-  background: transparent;
-  box-shadow: none;
+  min-width: 460px;
+  padding: 0 64px;
+  z-index: 20;
 }
 
-.long-line .top-line-box {
-  margin-top: -230px; /* 上方卡片整体稍微靠近时间轴 */
-  height: 210px; /* 收紧高度，让布局更紧凑 */
-  position: relative;
-  z-index: 8;
+.milestone-wrap.is-even {
+  padding-bottom: 112px;
 }
 
-.long-line .bottom-line-box {
-  margin-top: 30px; /* 下方卡片距离时间轴稍微收紧 */
-  height: 210px; /* 与上方保持一致，避免重叠 */
+.milestone-wrap.is-odd {
+  padding-top: 112px;
 }
 
-.long-line .top-line {
-  top: 150px; /* 从卡片下沿稍下方开始 */
-  bottom: 0; /* 连接到时间轴中心附近，不穿过卡片 */
-  border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
-}
-
-.long-line .bottom-line {
-  top: -18px; /* 从时间轴位置开始 */
-  bottom: 200px; /* 在卡片上沿稍上方结束，不穿过卡片 */
-  border-left: 1px solid rgba(106, 76, 138, 0.7); /* 确保线条显示 */
-}
-
-.long-line .top-children-box,
-.long-line .bottom-children-box {
+.milestone-connector {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 260px;
-  z-index: 8; /* 确保方框显示在最上层 */
-}
-
-.long-line .top-children-box {
-  top: 0; /* 紧贴 sub-line-box 顶部 */
-}
-
-.long-line .bottom-children-box {
-  bottom: 0; /* 紧贴 sub-line-box 底部 */
-}
-
-/* 时间轴卡片样式（参考示例图片布局） */
-.timeline-card {
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #ffffff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  position: relative;
-}
-
-.card-year-badge {
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 6px 14px;
-  background: #ffffff;
-  color: #3366cc;
-  font-weight: 700;
-  font-size: 16px;
-  border-bottom-right-radius: 12px;
-  z-index: 2;
-}
-
-.card-image-wrapper {
-  position: relative;
+  width: 6px;
   height: 160px;
-  background: #f3f3f3;
+  border-radius: 999px;
+  background: linear-gradient(to bottom, rgba(139, 92, 246, 0.55), transparent);
+  z-index: 6;
+  opacity: 0;
+  transform: scaleY(0);
 }
 
-.card-image {
+.milestone-connector.connector-down {
+  bottom: 0;
+  transform-origin: top center;
+  transform: translateY(100%) scaleY(0);
+}
+
+.milestone-connector.connector-up {
+  top: 0;
+  transform-origin: top center;
+  transform: translateY(-100%) scaleY(0) rotate(180deg);
+}
+
+.milestone-card {
+  position: relative;
+  width: 100%;
+  padding: 20px;
+  border-radius: 56px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 30px 80px rgba(139, 92, 246, 0.14);
+  backdrop-filter: blur(28px);
+  cursor: pointer;
+  transition: box-shadow 0.5s ease, transform 0.5s ease;
+  will-change: transform, opacity;
+}
+
+.milestone-card:hover {
+  box-shadow: 0 50px 100px rgba(139, 92, 246, 0.3);
+}
+
+.perspective {
+  transform-style: preserve-3d;
+}
+
+.card-media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 45px;
+  margin-bottom: 20px;
+  background: rgba(88, 28, 135, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.media-blur {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  display: block;
+  filter: blur(20px);
+  opacity: 0.2;
+  transform: scale(1.1);
 }
 
-.card-image-overlay {
+.media-main {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  padding: 0;
+  z-index: 2;
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.milestone-card:hover .media-main {
+  transform: scale(1.05);
+}
+
+.media-fallback {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 10px 14px;
-  background: linear-gradient(
-    to top,
-    rgba(0, 0, 0, 0.75),
-    rgba(0, 0, 0, 0.1)
-  );
-  color: #ffffff;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(139, 92, 246, 0.24), transparent 55%),
+    radial-gradient(circle at 70% 70%, rgba(99, 102, 241, 0.18), transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.card-text-only {
-  padding: 14px;
-  background: #f6f6f6;
-  color: #333333;
-}
-
-.card-title-text {
+.fallback-badge {
+  padding: 10px 16px;
+  border-radius: 999px;
   font-size: 14px;
-  font-weight: 600;
-  line-height: 1.6;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; /* 标题过长时使用省略号 */
+  font-weight: 800;
+  color: rgba(124, 58, 237, 0.9);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  backdrop-filter: blur(8px);
 }
 
-.card-date-text {
-  padding: 8px 14px 12px;
+.card-badge {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  padding: 10px 10px;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: #fff;
   font-size: 13px;
-  color: #3366cc;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  z-index: 5;
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
 }
 
-/* 冗余样式清除（原代码未使用，避免干扰） */
-.timeline-content {
-  display: none;
+.badge-year {
+  display: inline-block;
+}
+
+.card-title {
+  font-size: 26px;
+  font-weight: 900;
+  margin-bottom: 10px;
+  color: #1a0b33;
+  line-height: 1.15;
+  transition: color 0.25s ease;
+  white-space: normal;
+}
+
+.milestone-card:hover .card-title {
+  color: #7c3aed;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid rgba(167, 139, 250, 0.25);
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #7c3aed;
+  font-weight: 900;
+}
+
+.footer-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #a855f7;
+  box-shadow: 0 0 15px rgba(139, 92, 246, 1);
+}
+
+.footer-tag {
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(124, 58, 237, 0.06);
+  color: rgba(124, 58, 237, 0.6);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 </style>

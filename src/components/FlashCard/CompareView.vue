@@ -71,6 +71,19 @@
         </div>
       </div>
     </div>
+
+    <div v-if="matchingLoading" class="match-loading-mask">
+      <div class="match-loading-card">
+        <span class="match-loading-spinner" aria-hidden="true"></span>
+        <span class="match-loading-text">正在匹配中...</span>
+      </div>
+    </div>
+
+    <Transition name="match-tip-fade">
+      <div v-if="centerTipVisible" class="match-tip-center" role="status" aria-live="polite">
+        <div class="match-tip-card">抱歉，未查询到对应的闪卡节点。</div>
+      </div>
+    </Transition>
     
     <!-- 拖动时的遮罩层 -->
     <div v-if="isDragging" class="drag-overlay"></div>
@@ -119,6 +132,18 @@ const effectiveHighlightIds = computed(() =>
 )
 
 const learningPathIframeRef = ref(null)
+const matchingLoading = ref(false)
+const centerTipVisible = ref(false)
+let centerTipTimer = null
+
+const showCenterTip = (duration = 2200) => {
+  centerTipVisible.value = true
+  if (centerTipTimer) clearTimeout(centerTipTimer)
+  centerTipTimer = setTimeout(() => {
+    centerTipVisible.value = false
+    centerTipTimer = null
+  }, duration)
+}
 
 const handleClearHighlight = () => {
   if (useInternalHighlight.value) {
@@ -136,8 +161,25 @@ const handleClearHighlight = () => {
 /** 接收学习路径 iframe 发来的「节点 → 闪卡匹配」结果 */
 const handleLearningPathMatchMessage = (event) => {
   const payload = event?.data
-  if (!payload || payload.type !== 'lp-flashcard-match') return
+  if (!payload) return
   if (!useInternalHighlight.value) return
+  if (payload.type === 'lp-clear-compare-highlight') {
+    matchingLoading.value = false
+    internalHighlightIds.value = []
+    centerTipVisible.value = false
+    if (centerTipTimer) {
+      clearTimeout(centerTipTimer)
+      centerTipTimer = null
+    }
+    return
+  }
+  if (payload.type !== 'lp-flashcard-match') return
+
+  if (payload.matching === true || payload.phase === 'matching') {
+    matchingLoading.value = true
+    return
+  }
+  matchingLoading.value = false
 
   if (payload.success === false) {
     if (payload.error) ElMessage.error(payload.error)
@@ -148,7 +190,7 @@ const handleLearningPathMatchMessage = (event) => {
     : []
   if (!ids.length || payload.empty) {
     internalHighlightIds.value = []
-    ElMessage.success('抱歉，未查询到对应的闪卡节点。')
+    showCenterTip()
     return
   }
   internalHighlightIds.value = ids.map(id => String(id))
@@ -231,6 +273,10 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', handleDragMove)
   window.removeEventListener('mouseup', handleDragEnd)
   document.removeEventListener('mouseleave', handleDragEnd)
+  if (centerTipTimer) {
+    clearTimeout(centerTipTimer)
+    centerTipTimer = null
+  }
 })
 
 const startDragging = (e) => {
@@ -355,6 +401,80 @@ const loadFlashcardData = async () => {
   z-index: 1000;
   display: flex;
   flex-direction: column;
+}
+
+.match-loading-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.match-loading-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
+  color: #334155;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.match-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(79, 70, 229, 0.25);
+  border-top-color: #4f46e5;
+  animation: match-spin 0.8s linear infinite;
+}
+
+.match-loading-text {
+  letter-spacing: 0.02em;
+}
+
+.match-tip-center {
+  position: fixed;
+  inset: 0;
+  z-index: 1140;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.match-tip-card {
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.92);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.3);
+}
+
+.match-tip-fade-enter-active,
+.match-tip-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.match-tip-fade-enter-from,
+.match-tip-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes match-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .close-btn {

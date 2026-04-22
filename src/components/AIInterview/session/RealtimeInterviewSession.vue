@@ -16,6 +16,8 @@
     <div class="layout">
       <RealtimeVoicePanel
         ref="voicePanelRef"
+        :local-stream="localStreamRef"
+        :remote-stream="remoteStreamRef"
         :connecting="connecting"
         :connected="connected"
         :muted="muted"
@@ -77,6 +79,8 @@ const finishing = ref(false)
 let ws = null
 let pc = null
 let localStream = null
+const localStreamRef = ref(null)
+const remoteStreamRef = ref(null)
 
 const loadingQuestion = ref(false)
 const currentQuestion = ref(null)
@@ -166,6 +170,8 @@ const cleanup = () => {
     if (localStream) localStream.getTracks().forEach((t) => t.stop())
   } catch (_) {}
   localStream = null
+  localStreamRef.value = null
+  remoteStreamRef.value = null
 }
 
 const connect = async () => {
@@ -236,18 +242,16 @@ const startWebRTC = async () => {
     })
 
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+    localStreamRef.value = localStream
     localStream.getTracks().forEach((track) => pc.addTrack(track, localStream))
     await log('local media added')
-
-    try {
-      const el = voicePanelRef.value?.localVideoRef
-      if (el) el.srcObject = localStream
-    } catch (_) {}
 
     pc.ontrack = async (event) => {
       const el = voicePanelRef.value?.remoteAudioRef
       if (!el) return
-      el.srcObject = event.streams[0]
+      const s = event.streams[0]
+      remoteStreamRef.value = s || null
+      el.srcObject = s
       try {
         await el.play()
       } catch (e) {
@@ -424,7 +428,7 @@ onUnmounted(() => {
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.18fr);
   gap: 12px;
   flex: 1;
   min-height: 0;
