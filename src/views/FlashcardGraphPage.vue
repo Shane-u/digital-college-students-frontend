@@ -86,6 +86,7 @@
         v-else-if="viewState === 'CATEGORY_SELECT'"
         :card="pendingSaveCard"
         :category-tree="categoryTree"
+        :confirming="categorySaving"
         @confirm="handleCategoryHierarchyConfirm"
         @back="handleCategoryHierarchyBack"
       />
@@ -158,6 +159,7 @@ const currentReviewIndex = ref(0)
 const showCategoryDialog = ref(false)
 const pendingSaveCard = ref(null)
 const categoryTree = ref([])
+const categorySaving = ref(false)
 const showPreviewModal = ref(false)
 const previewCard = ref(null)
 // Neo4j 代理返回的原始 nodes/links，用于图谱直接渲染（避免只认 Flashcard 导致 data:[]）
@@ -403,7 +405,7 @@ const handleConfirmSave = async (card) => {
 
 // 层级标签选择确认（子组件 emit 传：pathStr, categoryPath；兼容只传一个对象的情况）
 const handleCategoryHierarchyConfirm = async (...args) => {
-  if (!pendingSaveCard.value) return
+  if (!pendingSaveCard.value || categorySaving.value) return
   
   let path = ''
   let pathArr = []
@@ -417,6 +419,7 @@ const handleCategoryHierarchyConfirm = async (...args) => {
   }
   if (!path && pathArr.length > 0) path = pathArr.join(' / ')
 
+  categorySaving.value = true
   try {
     await saveCardWithCategory(pendingSaveCard.value, pathArr, path)
     viewState.value = 'GRAPH'
@@ -424,6 +427,8 @@ const handleCategoryHierarchyConfirm = async (...args) => {
   } catch (error) {
     console.error('保存失败:', error)
     ElMessage.error(error?.message || '保存失败，请重试')
+  } finally {
+    categorySaving.value = false
   }
 }
 

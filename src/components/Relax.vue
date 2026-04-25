@@ -4,9 +4,6 @@
     <div class="section-title-wrap">
       <Star class="title-icon" />
       <h2 class="section-title">闲暇时光</h2>
-      <span class="view-more-container">
-        <a href="#" class="view-more">查看更多-></a>
-      </span>
     </div>
     
     <div class="photo-wall-container" 

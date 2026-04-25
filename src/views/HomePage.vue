@@ -86,7 +86,9 @@
           <div class="section-title-wrap">
             <Shalou class="title-icon Shalou-near" />
             <h2 class="section-title">职业规划</h2>
-            <span class="view-more-container"><a href="" class="view-more">查看更多-></a></span>
+            <span class="view-more-container">
+              <router-link to="/career/planning" class="view-more">查看更多-></router-link>
+            </span>
 
           </div>
           

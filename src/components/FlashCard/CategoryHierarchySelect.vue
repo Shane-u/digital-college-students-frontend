@@ -13,10 +13,10 @@
       </div>
       <button 
         class="confirm-btn"
-        :disabled="!canConfirm"
+        :disabled="!canConfirm || confirming"
         @click="handleConfirm"
       >
-        完成并入库
+        {{ confirming ? '正在入库中…' : '完成并入库' }}
       </button>
     </div>
 
@@ -64,7 +64,7 @@
         <h3 class="section-title">选择大类</h3>
         <div class="category-tags">
           <div
-            v-for="category in selectedL2?.children || []"
+            v-for="category in selectedL3Options"
             :key="category.id"
             class="tag-wrapper tag-wrapper-inline"
           >
@@ -102,7 +102,7 @@
         <h3 class="section-title">选择小类（可选）</h3>
         <div class="category-tags">
           <div
-            v-for="subCategory in (selectedL3.children || [])"
+            v-for="subCategory in selectedL4Options"
             :key="subCategory.id"
             class="tag-wrapper tag-wrapper-inline"
           >
@@ -162,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 
 const props = defineProps({
   card: {
@@ -172,6 +172,10 @@ const props = defineProps({
   categoryTree: {
     type: Array,
     default: () => []
+  },
+  confirming: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -184,11 +188,54 @@ const filteredCoursesFromTree = computed(() =>
 
 // 用户通过「增加其他课程」新增的课程，保留在页面上显示
 const customCourses = ref([])
+const customL3Map = ref({})
+const customL4Map = ref({})
 // 用户删除的树内课程 id（不展示，不修改 prop）
 const deletedL2Ids = ref(new Set())
+const CATEGORY_CUSTOM_STORAGE_KEY = 'flashcard_category_hierarchy_custom_v1'
+
+const persistCustomData = () => {
+  try {
+    localStorage.setItem(
+      CATEGORY_CUSTOM_STORAGE_KEY,
+      JSON.stringify({
+        customCourses: customCourses.value,
+        customL3Map: customL3Map.value,
+        customL4Map: customL4Map.value
+      })
+    )
+  } catch (_) {}
+}
+
+const loadCustomData = () => {
+  try {
+    const raw = localStorage.getItem(CATEGORY_CUSTOM_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    customCourses.value = Array.isArray(parsed?.customCourses) ? parsed.customCourses : []
+    customL3Map.value = parsed?.customL3Map && typeof parsed.customL3Map === 'object' ? parsed.customL3Map : {}
+    customL4Map.value = parsed?.customL4Map && typeof parsed.customL4Map === 'object' ? parsed.customL4Map : {}
+  } catch (_) {
+    customCourses.value = []
+    customL3Map.value = {}
+    customL4Map.value = {}
+  }
+}
 const filteredCourses = computed(() => {
   const fromTree = filteredCoursesFromTree.value.filter(c => !deletedL2Ids.value.has(c.id))
   return [...fromTree, ...customCourses.value]
+})
+const selectedL3Options = computed(() => {
+  if (!selectedL2.value) return []
+  const base = Array.isArray(selectedL2.value.children) ? selectedL2.value.children : []
+  const custom = customL3Map.value[selectedL2.value.id] || []
+  return [...base, ...custom]
+})
+const selectedL4Options = computed(() => {
+  if (!selectedL3.value) return []
+  const base = Array.isArray(selectedL3.value.children) ? selectedL3.value.children : []
+  const custom = customL4Map.value[selectedL3.value.id] || []
+  return [...base, ...custom]
 })
 
 const selectedL2 = ref(null)
@@ -284,21 +331,26 @@ const handleAddCategory = () => {
     selectedL3.value = null
     selectedL4.value = null
   } else if (addingLevel.value === 'L3' && selectedL2.value) {
-    // 添加到 L2 的 children
-    if (!selectedL2.value.children) {
-      selectedL2.value.children = []
+    // 添加到 L2 的自定义 children 映射
+    const parentId = selectedL2.value.id
+    const list = Array.isArray(customL3Map.value[parentId]) ? customL3Map.value[parentId] : []
+    customL3Map.value = {
+      ...customL3Map.value,
+      [parentId]: [...list, newCategory]
     }
-    selectedL2.value.children.push(newCategory)
     selectedL3.value = newCategory
+    selectedL4.value = null
   } else if (addingLevel.value === 'L4' && selectedL3.value) {
-    // 添加到 L3 的 children
-    if (!selectedL3.value.children) {
-      selectedL3.value.children = []
+    // 添加到 L3 的自定义 children 映射
+    const parentId = selectedL3.value.id
+    const list = Array.isArray(customL4Map.value[parentId]) ? customL4Map.value[parentId] : []
+    customL4Map.value = {
+      ...customL4Map.value,
+      [parentId]: [...list, newCategory]
     }
-    selectedL3.value.children.push(newCategory)
     selectedL4.value = newCategory
   }
-  
+  persistCustomData()
   closeAddDialog()
 }
 
@@ -333,9 +385,11 @@ const deleteL2 = (course, e) => {
   e.stopPropagation()
   if (isCustomCourse(course)) {
     customCourses.value = customCourses.value.filter(c => c.id !== course.id)
+    delete customL3Map.value[course.id]
   } else {
     deletedL2Ids.value = new Set([...deletedL2Ids.value, course.id])
   }
+  persistCustomData()
   if (selectedL2.value?.id === course.id) {
     selectedL2.value = null
     selectedL3.value = null
@@ -346,8 +400,18 @@ const deleteL2 = (course, e) => {
 // 删除 L3（大类）
 const deleteL3 = (category, e) => {
   e.stopPropagation()
-  if (!selectedL2.value?.children) return
-  selectedL2.value.children = selectedL2.value.children.filter(c => c.id !== category.id)
+  if (String(category?.id || '').startsWith('custom-') && selectedL2.value?.id) {
+    const parentId = selectedL2.value.id
+    const list = Array.isArray(customL3Map.value[parentId]) ? customL3Map.value[parentId] : []
+    customL3Map.value = {
+      ...customL3Map.value,
+      [parentId]: list.filter(c => c.id !== category.id)
+    }
+    delete customL4Map.value[category.id]
+    persistCustomData()
+  } else if (selectedL2.value?.children) {
+    selectedL2.value.children = selectedL2.value.children.filter(c => c.id !== category.id)
+  }
   if (selectedL3.value?.id === category.id) {
     selectedL3.value = null
     selectedL4.value = null
@@ -357,10 +421,23 @@ const deleteL3 = (category, e) => {
 // 删除 L4（小类）
 const deleteL4 = (subCategory, e) => {
   e.stopPropagation()
-  if (!selectedL3.value?.children) return
-  selectedL3.value.children = selectedL3.value.children.filter(c => c.id !== subCategory.id)
+  if (String(subCategory?.id || '').startsWith('custom-') && selectedL3.value?.id) {
+    const parentId = selectedL3.value.id
+    const list = Array.isArray(customL4Map.value[parentId]) ? customL4Map.value[parentId] : []
+    customL4Map.value = {
+      ...customL4Map.value,
+      [parentId]: list.filter(c => c.id !== subCategory.id)
+    }
+    persistCustomData()
+  } else if (selectedL3.value?.children) {
+    selectedL3.value.children = selectedL3.value.children.filter(c => c.id !== subCategory.id)
+  }
   if (selectedL4.value?.id === subCategory.id) selectedL4.value = null
 }
+
+onMounted(() => {
+  loadCustomData()
+})
 </script>
 
 <style scoped>

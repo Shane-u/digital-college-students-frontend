@@ -5,7 +5,7 @@
       <Star class="title-icon" />
       <h2 class="section-title">成长轨迹</h2>
       <span class="view-more-container">
-        <a href="#" class="view-more">查看更多-></a>
+        <router-link to="/growth/milestone" class="view-more">查看更多-></router-link>
       </span>
     </div>
 
