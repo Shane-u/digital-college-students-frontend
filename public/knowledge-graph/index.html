@@ -406,6 +406,13 @@
             padding: 16px 20px;
             background: linear-gradient(135deg, #9575CD, #B39DDB);
             color: white;
+            cursor: move;
+            user-select: none;
+        }
+
+        .search-card.dragging {
+            cursor: move;
+            box-shadow: 0 10px 32px rgba(0,0,0,0.18);
         }
 
         .search-card-header h3 {
@@ -753,9 +760,68 @@
             }
             nodeClicked = false;
         });
+
+        function initDraggableSearchCard() {
+            const card = document.getElementById('searchCard');
+            const header = card?.querySelector('.search-card-header');
+            if (!card || !header) return;
+
+            let isDragging = false;
+            let offsetX = 0;
+            let offsetY = 0;
+
+            const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+            const startDrag = (event) => {
+                if (event.target.closest('button, input, a')) return;
+                const pointer = event.touches ? event.touches[0] : event;
+                const rect = card.getBoundingClientRect();
+                isDragging = true;
+                offsetX = pointer.clientX - rect.left;
+                offsetY = pointer.clientY - rect.top;
+                card.classList.add('dragging');
+                card.style.left = `${rect.left}px`;
+                card.style.top = `${rect.top}px`;
+                card.style.right = 'auto';
+                card.style.bottom = 'auto';
+                document.body.style.userSelect = 'none';
+            };
+
+            const moveDrag = (event) => {
+                if (!isDragging) return;
+                const pointer = event.touches ? event.touches[0] : event;
+                const cardWidth = card.offsetWidth;
+                const cardHeight = card.offsetHeight;
+                const nextLeft = clamp(pointer.clientX - offsetX, 0, window.innerWidth - cardWidth);
+                const nextTop = clamp(pointer.clientY - offsetY, 0, window.innerHeight - cardHeight);
+                card.style.left = `${nextLeft}px`;
+                card.style.top = `${nextTop}px`;
+                if (event.cancelable) event.preventDefault();
+            };
+
+            const stopDrag = () => {
+                if (!isDragging) return;
+                isDragging = false;
+                card.classList.remove('dragging');
+                document.body.style.userSelect = '';
+            };
+
+            header.addEventListener('mousedown', startDrag);
+            document.addEventListener('mousemove', moveDrag);
+            document.addEventListener('mouseup', stopDrag);
+            header.addEventListener('touchstart', startDrag, { passive: true });
+            document.addEventListener('touchmove', moveDrag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+            window.addEventListener('resize', () => {
+                const rect = card.getBoundingClientRect();
+                card.style.left = `${clamp(rect.left, 0, window.innerWidth - card.offsetWidth)}px`;
+                card.style.top = `${clamp(rect.top, 0, window.innerHeight - card.offsetHeight)}px`;
+            });
+        }
         
         // 初始化
         async function init() {
+            initDraggableSearchCard();
             try {
                 // 加载数据 - 使用正确的相对路径
                 const dataUrl = new URL('data/competitions.json', window.location.href).href;
@@ -1468,6 +1534,11 @@ function renderGraph() {
 
         // 跳转到孪孪伴学模块（使用 top 确保在 iframe 内时跳转整个页面，而非仅 iframe）
         function goToLearn() {
+            if (currentTab === 'skills' && selectedItem && selectedItem.name) {
+                const skill = encodeURIComponent(selectedItem.name);
+                window.top.location.href = `/twin-study?skill=${skill}`;
+                return;
+            }
             window.top.location.href = '/twin-study';
         }
     </script>

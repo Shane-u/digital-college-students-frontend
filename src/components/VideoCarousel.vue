@@ -28,9 +28,9 @@
 
 <script setup>
 import { ref } from 'vue';
-import com1 from '../assets/competition/com1.jpg';
-import com2 from '../assets/competition/com2.jpg';
-import com3 from '../assets/competition/com3.jpg';
+import com1 from '../assets/competition/com_1.jpg';
+import com2 from '../assets/competition/com_2.jpg';
+import com3 from '../assets/competition/com_3.jpg';
 
 // 默认激活第一张（索引0）
 const activeIndex = ref(0);

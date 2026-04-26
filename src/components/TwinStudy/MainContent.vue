@@ -169,7 +169,7 @@
 <script setup>
 import { ref, onMounted, nextTick, onUnmounted, watch, computed } from 'vue'
 import { h } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import MessageList from './MessageList.vue'
 import LearningPathMessageList from '../LearningPath/LearningPathMessageList.vue'
 import { useFlashCardGeneration } from '../../composables/useFlashCardGeneration'
@@ -311,6 +311,7 @@ const pathMessageList = computed(() => {
 })
 
 const placeholderText = computed(() => {
+  if (learningSkillPrompt.value) return learningSkillPrompt.value
   return isStudyPathScene.value
     ? '请在这里输入与你“学习路径规划”相关的问题...'
     : '问孪孪伴学...'
@@ -485,6 +486,12 @@ const handleInput = (e) => {
 }
 
 const router = useRouter()
+const route = useRoute()
+
+const learningSkillPrompt = computed(() => {
+  const skill = typeof route.query.skill === 'string' ? route.query.skill.trim() : ''
+  return skill ? `当前想要学习‘${skill}’，请给出‘${skill}’的学习路径` : ''
+})
 
 // 使用闪卡生成状态
 const flashCardState = useFlashCardGeneration()
