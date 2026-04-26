@@ -12,8 +12,8 @@
       <!-- AI 回复：左侧，思维导图 + 下方纵向两个按钮 -->
       <div v-else-if="msg.role === 'model'" class="path-msg-item path-msg-model">
         <div class="path-msg-avatar path-msg-avatar-model">
-          <div v-if="msg.isStreaming" class="path-msg-spinner"></div>
-          <span v-else class="path-msg-sparkle">✨</span>
+          <img :src="luanluanAvatar" alt="孪孪头像" class="path-msg-avatar-img" />
+          <div v-if="msg.isStreaming" class="path-msg-spinner path-msg-spinner-overlay"></div>
         </div>
         <div class="path-msg-content">
           <template v-if="msg.pathJson">
@@ -43,6 +43,7 @@
 import { ref } from 'vue'
 import LearningPathMindmap from './LearningPathMindmap.vue'
 import { tryParseLearningPathJson } from '../../utils/learningPathJson'
+import luanluanAvatar from '../../assets/luanluan.jpg'
 
 defineProps({
   messages: {
@@ -126,8 +127,19 @@ function displayModelContent(content) {
 }
 
 .path-msg-avatar-model {
-  background: #e0f2fe;
-  color: #0284c7;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+.path-msg-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  background: #eef2ff;
+  padding: 4px;
+  display: block;
 }
 
 .path-msg-spinner {
@@ -137,6 +149,15 @@ function displayModelContent(content) {
   border-top-color: #0284c7;
   border-radius: 50%;
   animation: path-spin 0.7s linear infinite;
+}
+
+.path-msg-spinner-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 2px;
 }
 
 @keyframes path-spin {

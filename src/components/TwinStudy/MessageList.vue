@@ -5,9 +5,9 @@
       :key="msg.id"
       :class="['message-item', { 'message-user': msg.role === 'user', 'message-model': msg.role === 'model' }]"
     >
-      <div v-if="msg.role === 'model'" class="message-avatar">
-        <LoaderIcon v-if="msg.isStreaming" class="spinner" />
-        <SparklesIcon v-else />
+      <div v-if="msg.role === 'model'" class="message-avatar model-avatar">
+        <img :src="luanluanAvatar" alt="孪孪头像" class="model-avatar-img" />
+        <LoaderIcon v-if="msg.isStreaming" class="spinner avatar-spinner" />
       </div>
 
       <div :class="['message-content-wrapper', { 'message-user-wrapper': msg.role === 'user' }]">
@@ -129,6 +129,7 @@ import { renderMarkdownToHtml } from '../../utils/markdownRender'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 import { useFlashCardGeneration } from '../../composables/useFlashCardGeneration'
+import luanluanAvatar from '../../assets/luanluan.jpg'
 
 const SparklesIcon = () => h('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'currentColor' }, [
   h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5' })
@@ -634,6 +635,33 @@ onUnmounted(() => {
   color: #0284c7;
   flex-shrink: 0;
   margin-top: 4px;
+}
+
+.message-avatar.model-avatar {
+  position: relative;
+  background: #fff;
+  color: transparent;
+  overflow: hidden;
+}
+
+.model-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  background: #eef2ff;
+  padding: 4px;
+  display: block;
+}
+
+.avatar-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 50%;
+  padding: 2px;
 }
 
 .message-avatar.user-avatar {

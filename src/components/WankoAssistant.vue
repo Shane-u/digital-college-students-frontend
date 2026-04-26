@@ -18,15 +18,18 @@
       class="mascot-image-wrapper" 
       @click="handleMascotClick"
     >
-      <!-- 提示文字 -->
-      <div v-if="showTip" class="mascot-tip">
-        点击我就可以与我聊天啦~
+      <!-- 深蓝色循环提示气泡 -->
+      <div v-if="showVoiceTip" class="mascot-tip" @click.stop="handleMascotClick">
+        快来试试语音玩转平台~
       </div>
-      <img 
-        :src="sanbikongGif" 
-        alt="看板娘" 
+      <video
+        :src="sanbikongVideo"
         class="mascot-image"
-      />
+        autoplay
+        muted
+        loop
+        playsinline
+      ></video>
     </div>
     
     <!-- 聊天对话框 -->
@@ -59,8 +62,8 @@
           <!-- 普通消息 -->
           <template v-else>
             <div v-if="shouldRenderMessage(msg)" class="message-bubble-wrapper">
-              <div v-if="msg.position !== 'right'" class="message-avatar">
-                <img :src="sanbikongGif" alt="助手头像" />
+              <div v-if="msg.position !== 'right'" class="message-avatar assistant-avatar">
+                <img :src="robotAvatar" alt="助手头像" class="assistant-avatar-img" />
               </div>
               <div
                 class="message-stack"
@@ -115,12 +118,15 @@
       <!-- 快捷回复 -->
       <div class="quick-replies">
         <button
-          v-for="(reply, index) in quickActions"
+          v-for="(reply, index) in quickReplyItems"
           :key="index"
           class="quick-reply-btn"
           :class="{ 
             'highlight': reply.isHighlight,
-            'new': reply.isNew
+            'new': reply.isNew,
+            'voice-action': reply.name === '语音操作',
+            'voice-control': reply.isVoiceControl,
+            'voice-hangup': reply.name === '挂断'
           }"
           @click="handleQuickReplyClick(reply)"
         >
@@ -148,7 +154,16 @@
             placeholder="有问题，尽管问，Shift+Enter换行"
             class="message-input"
           />
+          <VoiceWaveVisualizer
+            v-if="showVoiceVisualizer"
+            class="voice-wave-slot"
+            style="position:absolute;top:50%;right:12px;transform:translateY(-50%);z-index:3;"
+            :volume="micVolume"
+            :is-speaking="isVoiceSpeaking"
+            :is-muted="isVoiceMuted"
+          />
           <button
+            v-if="!showVoiceVisualizer"
             class="send-btn"
             type="button"
             :class="sendButtonClass"
@@ -159,7 +174,9 @@
           </button>
         </div>
       </div>
+
     </div>
+    <audio ref="audioRef" autoplay playsinline />
   </div>
 </template>
 
@@ -167,23 +184,48 @@
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { marked } from 'marked';
 import { streamChat } from '../api/chatApi';
-import sanbikongGif from '../assets/sanbikong.gif';
+import sanbikongVideo from '../assets/sanbikong.mp4';
+import robotAvatar from '../assets/luanluan.jpg';
+import VoiceWaveVisualizer from './common/VoiceWaveVisualizer.vue';
 
 export default {
   name: 'WankoAssistant',
+  components: {
+    VoiceWaveVisualizer
+  },
   setup() {
-    const isExpanded = ref(false);
+    const isExpanded = ref(true);
     const isChatOpen = ref(false);
     const userMessage = ref('');
     const messages = ref([]);
     const isTyping = ref(false);
     const deepThinkingEnabled = ref(false);
     const messagesContainer = ref(null);
-    const showTip = ref(false);
-    let tipTimer = null;
+    const showVoiceTip = ref(false);
+    let tipInterval = null;
+    let tipHideTimer = null;
     let abortController = null; // 用于取消流式请求
     let currentSessionId = ref(''); // 当前会话ID
     const userAvatarUrl = ref('');
+    const voiceActionVisible = ref(false);
+    const voiceConnecting = ref(false);
+    const isVoiceConnected = ref(false);
+    const isVoiceMuted = ref(false);
+    const isVoiceStreaming = ref(false);
+    const micVolume = ref(0);
+    const isVoiceSpeaking = ref(false);
+    const voiceAssistantMsgIndex = ref(-1);
+    const audioRef = ref(null);
+    const WS_URL = import.meta.env.VITE_WS2_URL || 'ws://localhost:8081/ws2';
+    let voiceWs = null;
+    let peerConnection = null;
+    let localStream = null;
+    let voiceStreamBuffer = '';
+    let micAudioContext = null;
+    let micSource = null;
+    let micAnalyser = null;
+    let micDataArray = null;
+    let micRaf = null;
     
     const markedOptions = {
       gfm: true, 
@@ -205,12 +247,20 @@ export default {
     ];
     
     // 快捷回复
-    const quickActions = ref([
-      { name: '联系人工服务', isNew: true, isHighlight: true },
-      { name: '竞赛信息', isNew: true },
-      { name: '职业规划', isHighlight: true },
-      // { name: '学习资源' },
-    ]);
+    const quickActions = [
+      { name: '语音操作', isNew: true, isHighlight: true },
+    ];
+    const showVoiceVisualizer = computed(() => voiceConnecting.value || isVoiceConnected.value);
+    const quickReplyItems = computed(() => {
+      const items = [...quickActions];
+      if (voiceActionVisible.value) {
+        items.push(
+          { name: isVoiceMuted.value ? '取消静音' : '静音', isVoiceControl: true },
+          { name: '挂断', isVoiceControl: true }
+        );
+      }
+      return items;
+    });
     
     const scrollToBottom = () => {
       nextTick(() => {
@@ -224,37 +274,267 @@ export default {
       messages.value.push(msg);
       scrollToBottom();
     };
+
+    const ensureVoiceAssistantMessage = () => {
+      const current = messages.value[voiceAssistantMsgIndex.value];
+      if (current && current.type === 'text' && current.position === 'left') {
+        return;
+      }
+      appendMsg({
+        type: 'text',
+        content: { text: '' },
+        position: 'left',
+      });
+      voiceAssistantMsgIndex.value = messages.value.length - 1;
+    };
+
+    const updateVoiceAssistantText = (text) => {
+      ensureVoiceAssistantMessage();
+      if (messages.value[voiceAssistantMsgIndex.value]) {
+        messages.value[voiceAssistantMsgIndex.value].content.text = text || '';
+      }
+    };
+
+    const extractVoiceText = (msg) => {
+      if (!msg) return '';
+      if (typeof msg.text === 'string') return msg.text;
+      if (typeof msg.content === 'string') return msg.content;
+      if (typeof msg.message === 'string') return msg.message;
+      if (typeof msg.payload === 'string') return msg.payload;
+      if (msg.payload && typeof msg.payload === 'object') {
+        if (typeof msg.payload.text === 'string') return msg.payload.text;
+        if (typeof msg.payload.message === 'string') return msg.payload.message;
+        if (typeof msg.payload.content === 'string') return msg.payload.content;
+      }
+      return '';
+    };
+
+    const closeVoiceConnection = () => {
+      if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+        voiceWs.close();
+      }
+      voiceWs = null;
+      isVoiceConnected.value = false;
+      isVoiceMuted.value = false;
+      isVoiceStreaming.value = false;
+      voiceStreamBuffer = '';
+      voiceAssistantMsgIndex.value = -1;
+      stopMicMonitor();
+    };
+
+    const stopMicMonitor = () => {
+      if (micRaf) {
+        cancelAnimationFrame(micRaf);
+        micRaf = null;
+      }
+      if (micSource) {
+        try { micSource.disconnect(); } catch {}
+        micSource = null;
+      }
+      if (micAnalyser) {
+        try { micAnalyser.disconnect(); } catch {}
+        micAnalyser = null;
+      }
+      if (micAudioContext) {
+        micAudioContext.close().catch(() => {});
+        micAudioContext = null;
+      }
+      micDataArray = null;
+      micVolume.value = 0;
+      isVoiceSpeaking.value = false;
+    };
+
+    const startMicMonitor = (stream) => {
+      stopMicMonitor();
+      if (!stream) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      micAudioContext = new AudioCtx();
+      micSource = micAudioContext.createMediaStreamSource(stream);
+      micAnalyser = micAudioContext.createAnalyser();
+      micAnalyser.fftSize = 256;
+      micAnalyser.smoothingTimeConstant = 0.8;
+      micSource.connect(micAnalyser);
+      micDataArray = new Uint8Array(micAnalyser.fftSize);
+
+      const measure = () => {
+        if (!micAnalyser || !micDataArray) return;
+        micAnalyser.getByteTimeDomainData(micDataArray);
+        let sum = 0;
+        for (let i = 0; i < micDataArray.length; i += 1) {
+          const v = (micDataArray[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / micDataArray.length);
+        const normalized = Math.min(1, rms * 10);
+        micVolume.value = normalized < 0.03 || isVoiceMuted.value ? 0 : normalized;
+        isVoiceSpeaking.value = !isVoiceMuted.value && micVolume.value > 0.08;
+        micRaf = requestAnimationFrame(measure);
+      };
+      micRaf = requestAnimationFrame(measure);
+    };
+
+    const connectVoiceDirectly = async () => {
+      if (isVoiceConnected.value || voiceConnecting.value) return;
+      voiceActionVisible.value = true;
+      voiceConnecting.value = true;
+      if (!WS_URL) {
+        voiceConnecting.value = false;
+        voiceActionVisible.value = false;
+        return;
+      }
+      try {
+        voiceWs = new WebSocket(WS_URL);
+      } catch (error) {
+        voiceConnecting.value = false;
+        voiceActionVisible.value = false;
+        return;
+      }
+
+      voiceWs.onopen = async () => {
+        try {
+          peerConnection = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+          });
+          localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+          startMicMonitor(localStream);
+
+          peerConnection.ontrack = (event) => {
+            if (audioRef.value && event.streams[0]) {
+              audioRef.value.srcObject = event.streams[0];
+              audioRef.value.play().catch(() => {});
+            }
+          };
+
+          const offer = await peerConnection.createOffer();
+          await peerConnection.setLocalDescription(offer);
+          voiceWs.send(JSON.stringify({ event: 'offer', sdp: offer.sdp }));
+          isVoiceConnected.value = true;
+        } catch (error) {
+          closeVoiceConnection();
+          voiceActionVisible.value = false;
+        }
+        voiceConnecting.value = false;
+      };
+
+      voiceWs.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.event === 'answer' && msg.sdp) {
+            peerConnection?.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: msg.sdp })).catch(() => {});
+          } else if (msg.event === 'hangup') {
+            closeVoiceConnection();
+            voiceActionVisible.value = false;
+          } else if (msg.event === 'frontendCommand' && msg.payload) {
+            window.dispatchEvent(new CustomEvent('frontendCommand', { detail: msg.payload }));
+            const commandText = extractVoiceText(msg);
+            if (commandText) {
+              voiceStreamBuffer = commandText;
+              isVoiceStreaming.value = false;
+              // 每条语音指令反馈单独占一个助手气泡
+              voiceAssistantMsgIndex.value = -1;
+              updateVoiceAssistantText(voiceStreamBuffer);
+              voiceAssistantMsgIndex.value = -1;
+            }
+          } else if (msg.event === 'llmStream' || msg.event === 'llmDelta') {
+            const deltaText = extractVoiceText(msg);
+            if (!deltaText) return;
+            if (!isVoiceStreaming.value) {
+              // 新一轮流式回复：创建新的助手气泡而不是覆盖上一条
+              voiceStreamBuffer = '';
+              voiceAssistantMsgIndex.value = -1;
+            }
+            isVoiceStreaming.value = true;
+            voiceStreamBuffer += deltaText;
+            updateVoiceAssistantText(voiceStreamBuffer);
+          } else if (msg.event === 'llmFinal' || msg.event === 'llmResponse') {
+            const finalText = extractVoiceText(msg);
+            if (!finalText) return;
+            // 某些后端只发 final，不发 stream：也要新建气泡
+            if (!isVoiceStreaming.value) {
+              voiceAssistantMsgIndex.value = -1;
+            }
+            voiceStreamBuffer = finalText;
+            isVoiceStreaming.value = false;
+            updateVoiceAssistantText(voiceStreamBuffer);
+            // 完成后重置索引，确保下一条回复新建气泡
+            voiceAssistantMsgIndex.value = -1;
+          }
+        } catch (error) {
+          console.error('语音消息解析失败:', error);
+        }
+      };
+
+      voiceWs.onclose = () => {
+        closeVoiceConnection();
+        voiceActionVisible.value = false;
+        voiceConnecting.value = false;
+      };
+
+      voiceWs.onerror = () => {
+        voiceActionVisible.value = false;
+        voiceConnecting.value = false;
+      };
+    };
+
+    const hangupVoice = () => {
+      if (voiceWs && voiceWs.readyState === WebSocket.OPEN) {
+        voiceWs.send(JSON.stringify({ command: 'hangup', reason: 'user_requested', initiator: 'caller' }));
+      }
+      closeVoiceConnection();
+      voiceActionVisible.value = false;
+    };
+
+    const toggleVoiceMute = () => {
+      if (!localStream) return;
+      const track = localStream.getAudioTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        isVoiceMuted.value = !track.enabled;
+        if (isVoiceMuted.value) {
+          micVolume.value = 0;
+          isVoiceSpeaking.value = false;
+        }
+      }
+    };
+
+    const triggerVoiceTip = () => {
+      showVoiceTip.value = false;
+      nextTick(() => {
+        showVoiceTip.value = true;
+      });
+      if (tipHideTimer) clearTimeout(tipHideTimer);
+      tipHideTimer = setTimeout(() => {
+        showVoiceTip.value = false;
+      }, 2200);
+    };
+
+    const startVoiceTipLoop = () => {
+      triggerVoiceTip();
+      if (tipInterval) clearInterval(tipInterval);
+      tipInterval = setInterval(() => {
+        if (!isChatOpen.value && isExpanded.value) {
+          triggerVoiceTip();
+        }
+      }, 5000);
+    };
     
     const toggleMascot = () => {
-      const wasExpanded = isExpanded.value;
       isExpanded.value = !isExpanded.value;
-      
-      // 如果关闭动画，同时关闭聊天
       if (!isExpanded.value) {
         isChatOpen.value = false;
-        // 清除提示文字
-        if (tipTimer) {
-          clearTimeout(tipTimer);
-          tipTimer = null;
-        }
-        showTip.value = false;
-      } else {
-        // 动画刚出来时，等动画完全显示后再显示提示文字
-        if (!wasExpanded) {
-          // 先隐藏提示文字
-          showTip.value = false;
-          // 等动画完成（0.4s）后再显示提示文字
-          setTimeout(() => {
-            showTip.value = true;
-            if (tipTimer) {
-              clearTimeout(tipTimer);
-            }
-            tipTimer = setTimeout(() => {
-              showTip.value = false;
-              tipTimer = null;
-            }, 3000);
-          }, 400); // 等待动画完成
-        }
+        showVoiceTip.value = false;
+      } else if (!isChatOpen.value) {
+        triggerVoiceTip();
       }
     };
   
@@ -271,6 +551,7 @@ export default {
       // 点击已展开的 GIF 打开聊天
       if (isExpanded.value && !isChatOpen.value) {
         isChatOpen.value = true;
+        showVoiceTip.value = false;
         scrollToBottom();
       }
     };
@@ -541,12 +822,26 @@ export default {
     };
     
     const handleQuickReplyClick = (item) => {
+      if (item.name === '语音操作') {
+        isChatOpen.value = true;
+        connectVoiceDirectly();
+        return;
+      }
+      if (item.name === '静音' || item.name === '取消静音') {
+        toggleVoiceMute();
+        return;
+      }
+      if (item.name === '挂断') {
+        hangupVoice();
+        return;
+      }
       handleSend('text', item.name);
     };
     
     onMounted(() => {
       messages.value = [...initialMessages];
       scrollToBottom();
+      startVoiceTipLoop();
       // 读取用户头像
       try {
         const profile = JSON.parse(localStorage.getItem('userProfile') || '{}');
@@ -581,15 +876,16 @@ export default {
       if (abortController) {
         abortController.abort();
       }
-      if (tipTimer) {
-        clearTimeout(tipTimer);
-      }
+      if (tipInterval) clearInterval(tipInterval);
+      if (tipHideTimer) clearTimeout(tipHideTimer);
+      hangupVoice();
       stopTyping();
       isTyping.value = false;
     });
     
     return {
-      sanbikongGif,
+      sanbikongVideo,
+      robotAvatar,
       isExpanded,
       isChatOpen,
       userMessage,
@@ -597,8 +893,16 @@ export default {
       isTyping,
       deepThinkingEnabled,
       messagesContainer,
-      quickActions,
-      showTip,
+      quickReplyItems,
+      showVoiceTip,
+      showVoiceVisualizer,
+      voiceActionVisible,
+      voiceConnecting,
+      isVoiceConnected,
+      isVoiceMuted,
+      micVolume,
+      isVoiceSpeaking,
+      isVoiceStreaming,
       toggleMascot,
       handleMascotClick,
       toggleChat,
@@ -615,7 +919,10 @@ export default {
       toggleReasoning,
       shouldRenderMessage,
       hasVisibleContent,
-      userAvatarUrl
+      userAvatarUrl,
+      toggleVoiceMute,
+      hangupVoice,
+      audioRef
     };
   }
 };
@@ -634,7 +941,7 @@ export default {
 .sidebar-toggle {
   position: fixed;
   right: 0;
-  bottom: 200px;
+  bottom: 96px;
   /* width: 40px; */
   /* height: 120px; */
   padding: 6px;
@@ -680,9 +987,9 @@ export default {
   position: fixed;
   right: 0;
   bottom: 0;
-  width: 300px;
-  height: 300px;
-  overflow: hidden;
+  width: 200px;
+  height: 200px;
+  overflow: visible;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   animation: slideInFromRight 0.4s ease-out;
@@ -712,19 +1019,23 @@ export default {
 /* 提示文字 */
 .mascot-tip {
   position: absolute;
-  top: 10px;
+  top: -14px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(10, 34, 84, 0.95);
   color: #fff;
-  padding: 8px 16px;
-  border-radius: 20px;
+  padding: 10px 16px;
+  border-radius: 18px;
   font-size: 14px;
-  white-space: nowrap;
+  line-height: 1.4;
+  text-align: center;
+  width: 190px;
+  white-space: normal;
   z-index: 999999;
-  pointer-events: none;
+  pointer-events: auto;
   opacity: 0;
-  animation: fadeInOut 3s ease-in-out;
+  animation: fadeInOut 2.2s ease-in-out;
+  box-shadow: 0 8px 20px rgba(10, 34, 84, 0.35);
 }
 
 @keyframes fadeInOut {
@@ -906,6 +1217,17 @@ export default {
   object-fit: cover;
 }
 
+.message-avatar.assistant-avatar {
+  background: #eef2ff;
+}
+
+.assistant-avatar-img {
+  object-fit: contain;
+  object-position: center bottom;
+  background: #eef2ff;
+  padding: 4px;
+}
+
 .user-avatar {
   background: linear-gradient(135deg, rgb(120,93,148) 0%, #764ba2 100%);
   display: flex;
@@ -1056,6 +1378,42 @@ export default {
   color: rgb(204, 134, 235);
 }
 
+.quick-reply-btn.voice-action {
+  color: #7b43cf;
+  border-color: #bfa0ef;
+  background: #f6f0ff;
+}
+
+.quick-reply-btn.voice-action:hover {
+  color: #fff;
+  border-color: #7b43cf;
+  background: linear-gradient(135deg, #6d34c7 0%, #8a56dd 100%);
+}
+
+.quick-reply-btn.voice-control {
+  background: #fff;
+  border-color: #d0d7e5;
+  color: #334155;
+}
+
+.quick-reply-btn.voice-control:hover {
+  border-color: #94a3b8;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+.quick-reply-btn.voice-hangup {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fff;
+}
+
+.quick-reply-btn.voice-hangup:hover {
+  color: #fff;
+  border-color: #dc2626;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
 
 /* 输入区域 */
 .input-area {
@@ -1068,7 +1426,7 @@ export default {
   width: 100%;
   border: 1px solid #ddd;
   border-radius: 24px;
-  padding: 10px 48px 10px 16px;
+  padding: 10px 136px 10px 16px;
   font-size: 14px;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -1081,6 +1439,13 @@ export default {
 
 .input-row {
   position: relative;
+}
+
+.voice-wave-slot {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
 }
 
 .send-btn {
@@ -1185,8 +1550,8 @@ export default {
   }
   
   .mascot-image-wrapper {
-    width: 200px;
-    height: 200px;
+    width: 170px;
+    height: 170px;
   }
 }
 </style>

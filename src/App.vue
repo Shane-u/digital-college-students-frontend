@@ -7,8 +7,6 @@
     </router-view>
     <!-- 全局看板娘组件 -->
     <WankoAssistant />
-    <!-- 全局语音操作按钮 -->
-    <VoiceModeButton />
     <!-- 语音 WebSocket 桥接 -->
     <VoiceWsBridge />
     <!-- 全局指令监听 -->
@@ -18,7 +16,6 @@
 
 <script>
 import WankoAssistant from './components/WankoAssistant.vue';
-import VoiceModeButton from './components/VoiceModeButton.vue';
 import VoiceWsBridge from './components/VoiceWsBridge.vue';
 import CommandListener from './components/CommandListener.vue';
 
@@ -26,7 +23,6 @@ export default {
   name: 'App',
   components: {
     WankoAssistant,
-    VoiceModeButton,
     VoiceWsBridge,
     CommandListener
   }

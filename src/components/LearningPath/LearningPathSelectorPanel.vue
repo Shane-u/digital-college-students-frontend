@@ -175,7 +175,10 @@ const userInitial = computed(() => {
   width: 100%;
   height: 100%;
   border-radius: 999px;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center bottom;
+  background: #eef2ff;
+  padding: 6px;
 }
 
 .lp-avatar-initial {
