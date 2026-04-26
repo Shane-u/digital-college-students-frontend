@@ -37,7 +37,6 @@
             >
               <div class="row-top">
                 <div class="row-title">报告</div>
-                <div class="row-score">{{ getRowScore(r) }}</div>
               </div>
               <div class="row-sub">
                 <span class="pill subtle">{{ formatTime(getRowTime(r)) }}</span>

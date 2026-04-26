@@ -38,7 +38,7 @@
               :class="{ active: selected?.resumeId === r.resumeId }"
               @click="select(r)"
             >
-              <div class="row-title">{{ r.originalFilename || `简历 #${r.resumeId}` }}</div>
+              <div class="row-title">{{ getDisplayName(r) }}</div>
             </button>
           </div>
 
@@ -51,7 +51,7 @@
             <div v-else class="detail">
               <div class="detail-top">
                 <div class="detail-title-row">
-                  <span class="detail-name">{{ selected.originalFilename || `简历 #${selected.resumeId}` }}</span>
+                  <span class="detail-name">{{ getDisplayName(selected) }}</span>
                   <a v-if="selected.fileUrl" class="detail-download" :href="selected.fileUrl" target="_blank" rel="noopener noreferrer">下载</a>
                 </div>
               </div>
@@ -103,12 +103,43 @@ const normalize = (r) => {
   }
 }
 
+const normalizeDisplayFilename = (name) => {
+  const text = String(name || '').trim()
+  if (!text) return ''
+  return text.toLowerCase() === 'platform-resume.txt' ? '平台简历' : text
+}
+
+const getDisplayName = (item) => {
+  const filename = normalizeDisplayFilename(item?.originalFilename)
+  return filename || `简历 #${item?.resumeId}`
+}
+
+const buildDedupKey = (item) => {
+  const filename = String(item?.originalFilename || '').trim().toLowerCase()
+  // 平台简历强制只保留一条，避免列表重复堆叠
+  if (filename === 'platform-resume.txt') {
+    return 'platform-resume.txt'
+  }
+  const fileUrl = String(item?.fileUrl || '').trim()
+  const rawText = String(item?.rawText || '').trim().slice(0, 500)
+  return `${filename}::${fileUrl}::${rawText}`
+}
+
 const refresh = async () => {
   loading.value = true
   error.value = ''
   try {
     const list = await aiInterviewApi.listResumes({ userId: effectiveUserId.value })
-    items.value = (Array.isArray(list) ? list : []).map(normalize)
+    const normalized = (Array.isArray(list) ? list : []).map(normalize)
+    const seen = new Set()
+    const deduped = []
+    for (const item of normalized) {
+      const key = buildDedupKey(item)
+      if (seen.has(key)) continue
+      seen.add(key)
+      deduped.push(item)
+    }
+    items.value = deduped
     selected.value = items.value[0] || null
   } catch (e) {
     error.value = e?.message || '请求失败'

@@ -239,15 +239,29 @@
 
     <!-- Footer -->
     <Footer />
+
+    <GuessYouLikeModal
+      :visible="guessModalVisible"
+      title="猜你想看"
+      subtitle="这些竞赛活动可能正适合你，先看看再冲刺"
+      :items="guessItems"
+      :loading="guessLoading"
+      :error="guessError"
+      @close="guessModalVisible = false"
+      @select="handleGuessSelect"
+    />
   </div>
 </template>
 
 <script>
 import Footer from "../components/Footer.vue";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import Pagination from "../components/Pagination.vue";
 import NavBar from "../components/NavBar.vue";
+import GuessYouLikeModal from "../components/common/GuessYouLikeModal.vue";
 import { getHonorContestList } from "../api/competitionApi.js";
+import { getEduCompetitionRecommendations } from "../api/recommendationApi";
 import { ElMessage } from "element-plus";
 
 export default {
@@ -256,14 +270,20 @@ export default {
     Pagination,
     NavBar,
     Footer,
+    GuessYouLikeModal,
   },
   setup() {
+    const router = useRouter();
     const isNavTransparent = ref(false);
     const competitions = ref([]);
     const total = ref(0);
     const currentPage = ref(1);
     const itemsPerPage = 10;
     const loading = ref(false);
+    const guessModalVisible = ref(false);
+    const guessLoading = ref(false);
+    const guessError = ref("");
+    const guessItems = ref([]);
 
     // 过滤器状态
     const searchQuery = ref("");
@@ -380,6 +400,7 @@ export default {
 
       // 初始化加载数据
       fetchCompetitions();
+      openGuessModal();
     });
 
     onUnmounted(() => {
@@ -558,6 +579,27 @@ export default {
       return Math.ceil(total.value / itemsPerPage);
     });
 
+    const openGuessModal = async () => {
+      guessModalVisible.value = true;
+      guessLoading.value = true;
+      guessError.value = "";
+      try {
+        guessItems.value = await getEduCompetitionRecommendations();
+      } catch (error) {
+        console.error("获取猜你想看推荐失败:", error);
+        guessError.value = "推荐加载失败，请稍后重试";
+      } finally {
+        guessLoading.value = false;
+      }
+    };
+
+    const handleGuessSelect = (item) => {
+      if (item && item.to) {
+        router.push(item.to);
+      }
+      guessModalVisible.value = false;
+    };
+
     const displayedCompetitions = computed(() => {
       return competitions.value;
     });
@@ -614,6 +656,11 @@ export default {
       loading,
       getCompetitionDescription,
       handleImageError,
+      guessModalVisible,
+      guessLoading,
+      guessError,
+      guessItems,
+      handleGuessSelect,
     };
   },
 };

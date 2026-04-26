@@ -300,6 +300,17 @@
 
     <!-- Footer -->
     <Footer />
+
+    <GuessYouLikeModal
+      :visible="guessModalVisible"
+      title="猜你想看"
+      subtitle="结合职业趋势与你当前浏览页，为你准备了这些方向"
+      :items="guessItems"
+      :loading="guessLoading"
+      :error="guessError"
+      @close="guessModalVisible = false"
+      @select="handleGuessSelect"
+    />
   </div>
 </template>
 
@@ -309,7 +320,9 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import Pagination from "../components/Pagination.vue";
 import NavBar from "../components/NavBar.vue";
+import GuessYouLikeModal from "../components/common/GuessYouLikeModal.vue";
 import request from "../api/request";
+import { getCareerRecommendations } from "../api/recommendationApi";
 
 // 模拟数据 - 实际项目中应该从API获取
 const mockCareers = [
@@ -361,6 +374,7 @@ export default {
     Pagination,
     NavBar,
     Footer,
+    GuessYouLikeModal,
   },
   setup() {
     const router = useRouter();
@@ -369,6 +383,10 @@ export default {
     const currentPage = ref(1);
     const itemsPerPage = 9;
     const total = ref(0);
+    const guessModalVisible = ref(false);
+    const guessLoading = ref(false);
+    const guessError = ref("");
+    const guessItems = ref([]);
 
     // 过滤器状态
     const searchQuery = ref("");
@@ -580,8 +598,35 @@ export default {
       window.scrollTo(0, 0);
     };
 
+    const openGuessModal = async () => {
+      guessModalVisible.value = true;
+      guessLoading.value = true;
+      guessError.value = "";
+      try {
+        guessItems.value = await getCareerRecommendations();
+      } catch (error) {
+        console.error("获取猜你想看推荐失败:", error);
+        guessError.value = "推荐加载失败，请稍后重试";
+      } finally {
+        guessLoading.value = false;
+      }
+    };
+
+    const handleGuessSelect = (item) => {
+      if (item && item.externalUrl) {
+        window.open(item.externalUrl, "_blank", "noopener,noreferrer");
+        guessModalVisible.value = false;
+        return;
+      }
+      if (item && item.to) {
+        router.push(item.to);
+      }
+      guessModalVisible.value = false;
+    };
+
     onMounted(() => {
       fetchCareers(currentPage.value);
+      openGuessModal();
     });
 
     return {
@@ -605,6 +650,11 @@ export default {
       sizeOptions,
       toggleSection,
       selectFilter,
+      guessModalVisible,
+      guessLoading,
+      guessError,
+      guessItems,
+      handleGuessSelect,
     };
   },
 };

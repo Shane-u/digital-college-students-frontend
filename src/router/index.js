@@ -94,6 +94,11 @@ const routes = [
     component: () => import('../views/CareerPlanningPage.vue')
   },
   {
+    path: '/career/planning/assessment',
+    name: 'CareerPlanningAssessmentFlow',
+    component: () => import('../views/CareerPlanningPage.vue')
+  },
+  {
     path: '/competition/detail/:id',
     name: 'ContestDetail',
     component: () => import('../views/ContestDetailPage.vue')

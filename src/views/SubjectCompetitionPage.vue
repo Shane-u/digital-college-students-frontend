@@ -228,15 +228,29 @@
 
     <!-- Footer -->
     <Footer />
+
+    <GuessYouLikeModal
+      :visible="guessModalVisible"
+      title="猜你想看"
+      subtitle="精选学科专业竞赛，帮你快速找到主场"
+      :items="guessItems"
+      :loading="guessLoading"
+      :error="guessError"
+      @close="guessModalVisible = false"
+      @select="handleGuessSelect"
+    />
   </div>
 </template>
 
 <script>
 import Footer from "../components/Footer.vue";
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
 import Pagination from "../components/Pagination.vue";
 import NavBar from "../components/NavBar.vue";
+import GuessYouLikeModal from "../components/common/GuessYouLikeModal.vue";
 import { getContestList } from "../api/competitionApi.js";
+import { getSubjectCompetitionRecommendations } from "../api/recommendationApi";
 import { ElMessage } from "element-plus";
 
 export default {
@@ -245,10 +259,16 @@ export default {
     Pagination,
     NavBar,
     Footer,
+    GuessYouLikeModal,
   },
   setup() {
+    const router = useRouter();
     const isNavTransparent = ref(false);
     const isSubmenuOpen = ref(false);
+    const guessModalVisible = ref(false);
+    const guessLoading = ref(false);
+    const guessError = ref("");
+    const guessItems = ref([]);
 
     // 过滤器状态
     const searchQuery = ref("");
@@ -446,6 +466,7 @@ export default {
 
       // 初始化加载数据
       fetchCompetitions();
+      openGuessModal();
     });
 
     onUnmounted(() => {
@@ -565,6 +586,27 @@ export default {
       return competitions.value;
     });
 
+    const openGuessModal = async () => {
+      guessModalVisible.value = true;
+      guessLoading.value = true;
+      guessError.value = "";
+      try {
+        guessItems.value = await getSubjectCompetitionRecommendations();
+      } catch (error) {
+        console.error("获取猜你想看推荐失败:", error);
+        guessError.value = "推荐加载失败，请稍后重试";
+      } finally {
+        guessLoading.value = false;
+      }
+    };
+
+    const handleGuessSelect = (item) => {
+      if (item && item.to) {
+        router.push(item.to);
+      }
+      guessModalVisible.value = false;
+    };
+
     const selectSubject = (subject) => {
       if (selectedSubject.value === subject) {
         selectedSubject.value = ""; // 如果再次点击已选中的，则取消选择
@@ -642,6 +684,11 @@ export default {
       loading,
       getCompetitionDescription,
       handleImageError,
+      guessModalVisible,
+      guessLoading,
+      guessError,
+      guessItems,
+      handleGuessSelect,
     };
   },
 };

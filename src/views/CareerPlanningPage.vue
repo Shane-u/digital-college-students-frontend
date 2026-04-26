@@ -68,10 +68,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watchEffect } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, watchEffect } from 'vue'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import gsap from 'gsap'
+import { useRoute, useRouter } from 'vue-router'
 import request from '../api/request'
 import Footer from '../components/Footer.vue'
 import NavBar from '../components/NavBar.vue'
@@ -92,6 +93,10 @@ marked.setOptions({
 
 /** 介绍页 | 测评 | 工作流 | 报告 — 各步全屏切换 */
 const journeyPhase = ref('story')
+const router = useRouter()
+const route = useRoute()
+const CAREER_PLANNING_BASE_PATH = '/career/planning'
+const CAREER_PLANNING_FLOW_PATH = '/career/planning/assessment'
 
 const userId = ref('')
 const DEFAULT_WORKFLOW_INPUT = '我想咨询一下未来的我的竞赛和职业规划怎么样规划'
@@ -428,8 +433,12 @@ async function fetchAssessmentQuestions() {
   }
 }
 
-async function enterAssessment() {
+async function enterAssessment(options = {}) {
+  const { syncRoute = true } = options
   journeyPhase.value = 'assessment'
+  if (syncRoute && route.path !== CAREER_PLANNING_FLOW_PATH) {
+    router.push(CAREER_PLANNING_FLOW_PATH)
+  }
   assessmentCompleted.value = false
   currentQuestionIndex.value = 0
   answers.value = {}
@@ -440,6 +449,9 @@ async function enterAssessment() {
 
 function goToStory() {
   journeyPhase.value = 'story'
+  if (route.path !== CAREER_PLANNING_BASE_PATH) {
+    router.push(CAREER_PLANNING_BASE_PATH)
+  }
 }
 
 const totalQuestions = computed(() => assessmentQuestions.value.length)
@@ -569,11 +581,28 @@ function openHistoryReport() {
     linksHtml.value = links
     workflowFinished.value = true
     journeyPhase.value = 'report'
+    if (route.path !== CAREER_PLANNING_FLOW_PATH) {
+      router.push(CAREER_PLANNING_FLOW_PATH)
+    }
   } catch (e) {
     console.error('读取历史报告失败:', e)
     ElMessage.error('读取历史报告失败，请稍后重试')
   }
 }
+
+watch(
+  () => route.path,
+  async (path) => {
+    if (path === CAREER_PLANNING_FLOW_PATH && journeyPhase.value === 'story') {
+      await enterAssessment({ syncRoute: false })
+      return
+    }
+    if (path === CAREER_PLANNING_BASE_PATH && journeyPhase.value !== 'story') {
+      goToStory()
+    }
+  },
+  { immediate: true }
+)
 
 async function handleStart() {
   if (!hasAssessmentResult.value) {
