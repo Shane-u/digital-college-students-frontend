@@ -49,19 +49,19 @@ export default defineConfig({
     proxy: {
       // Neo4j 图谱代理：update/delete 必须走 8122，否则后端 8121 会 404
       '/api/neo4j-graph/update': {
-        target: 'http:/192.168.31.205:8122',
+        target: 'http://localhost:8122',
         changeOrigin: true
       },
       '/api/neo4j-graph/delete': {
-        target: 'http://192.168.31.205:8122',
+        target: 'http://localhost:8122',
         changeOrigin: true
       },
       '/api/neo4j-graph': {
-        target: 'http://192.168.31.205:8122',
+        target: 'http://localhost:8122',
         changeOrigin: true
       },
       '/api': {
-        target: 'http://192.168.31.205:8121', // 后端服务地址
+        target: 'http://localhost:8121', // 后端服务地址
         changeOrigin: true, // 允许跨域
         secure: false, // 如果是https接口，需要配置这个参数
         // rewrite: (path) => path.replace(/^\/api/, '') // 如果后端不需要/api前缀，可以取消注释此行
