@@ -230,6 +230,10 @@ onMounted(() => {
   ensureBgPlaying()
 })
 
+defineExpose({
+  pipVideoRef,
+})
+
 onBeforeUnmount(() => {
   cleanupAudio()
 })

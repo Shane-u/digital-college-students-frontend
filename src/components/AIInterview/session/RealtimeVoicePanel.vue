@@ -10,11 +10,22 @@
     <div class="voice-main">
       <div class="voice-video">
         <InterviewAvatarStage
+          ref="avatarStageRef"
           :local-stream="localStream"
           :remote-stream="remoteStream"
           :connected="connected"
           :muted="muted"
         />
+        <div v-if="connected" class="emotion-overlay" aria-live="polite">
+          <div class="emotion-pill" :style="{ borderColor: (emotionStatus?.color || '#64748b') }">
+            <span class="emotion-emoji">{{ emotionStatus?.emoji || '⏳' }}</span>
+            <span class="emotion-label">{{ emotionStatus?.label || '识别中…' }}</span>
+            <span class="emotion-conf">{{ formatConf(emotionStatus?.confidence) }}</span>
+          </div>
+          <div v-if="emotionStatus?.adviceVisible" class="emotion-advice-mini">
+            {{ emotionStatus?.adviceText }}
+          </div>
+        </div>
       </div>
       <!-- 远端音频保持播放，但不展示控件 -->
       <audio ref="remoteAudioRef" class="remote-audio" autoplay />
@@ -58,12 +69,22 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   muted: { type: Boolean, default: false },
   finishing: { type: Boolean, default: false },
+  emotionStatus: { type: Object, default: null },
 })
 
+const formatConf = (c) => {
+  const n = Number(c)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  return `${Math.round(n * 100)}%`
+}
+
+const avatarStageRef = ref(null)
 const remoteAudioRef = ref(null)
+const localVideoRef = ref(null)
 
 defineExpose({
   remoteAudioRef,
+  localVideoRef,
 })
 
 defineEmits(['connect', 'toggle-mute', 'hangup'])
@@ -77,6 +98,14 @@ watch(
       el.srcObject = s || null
       if (s) await el.play()
     } catch (_) {}
+  },
+  { immediate: true }
+)
+
+watch(
+  avatarStageRef,
+  (v) => {
+    localVideoRef.value = v?.pipVideoRef || null
   },
   { immediate: true }
 )
@@ -138,11 +167,64 @@ watch(
 }
 
 .voice-video {
+  position: relative;
   width: 100%;
   height: 100%;
   border-radius: 0;
   overflow: hidden;
   background: #000;
+}
+
+.emotion-overlay {
+  position: absolute;
+  right: 10px;
+  bottom: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.emotion-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  backdrop-filter: blur(10px);
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.emotion-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.emotion-label {
+  white-space: nowrap;
+}
+
+.emotion-conf {
+  opacity: 0.85;
+  font-weight: 800;
+}
+
+.emotion-advice-mini {
+  max-width: min(320px, calc(100vw - 40px));
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.28);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.45;
 }
 
 .remote-audio {

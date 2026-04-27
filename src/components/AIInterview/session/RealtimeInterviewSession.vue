@@ -22,6 +22,7 @@
         :connected="connected"
         :muted="muted"
         :finishing="finishing"
+        :emotion-status="emotionStatus"
         @connect="connect"
         @toggle-mute="toggleMute"
         @hangup="hangup"
@@ -47,6 +48,7 @@
 </template>
 
 <script setup>
+import axios from 'axios'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
 import { ElMessageBox } from 'element-plus'
@@ -84,6 +86,176 @@ const remoteStreamRef = ref(null)
 
 const loadingQuestion = ref(false)
 const currentQuestion = ref(null)
+
+const EMOTION_TEXT = {
+  happy: { text: '✅ 你的表达很有感染力，保持这个节奏继续说～', color: '#4f46e5' },
+  neutral: { text: '💡 可以稍微加一点表情和语气，让你的重点更有画面感哦。', color: '#2563eb' },
+  sad: { text: '💛 先放轻松一点，慢慢组织语言。你正在把思路说清楚～', color: '#f59e0b' },
+  angry: { text: '✨ 试试放松一下眉眼和下颌，给自己一秒呼吸；然后用更温和的语气继续回答。', color: '#7c3aed' },
+  fear: { text: '🌿 别紧张，深呼吸一次。把回答拆成“结论-理由-例子”，你会更稳。', color: '#10b981' },
+  disgust: { text: '💡 保持自然表情就好。把注意力更多放回问题本身，继续把逻辑说完。', color: '#ec4899' },
+  surprise: { text: '✅ 你的反应很灵动。先用一句话确认问题含义，然后再开始你的答案即可～', color: '#f97316' },
+}
+
+const EMOTION_META = {
+  happy: { label: '状态不错', emoji: '😊', color: '#4f46e5' },
+  neutral: { label: '较平稳', emoji: '😐', color: '#2563eb' },
+  sad: { label: '需要放松', emoji: '😢', color: '#f59e0b' },
+  angry: { label: '稍显严肃', emoji: '😠', color: '#7c3aed' },
+  fear: { label: '有点紧张', emoji: '😨', color: '#10b981' },
+  disgust: { label: '注意表情', emoji: '🤢', color: '#ec4899' },
+  surprise: { label: '反应灵动', emoji: '😮', color: '#f97316' },
+}
+
+const EMOTION_CONF_THRESHOLD = 0.65
+const EMOTION_STABLE_COUNT_REQUIRED = 2
+const DETECT_INTERVAL_MS = 1000
+const SAME_EMOTION_COOLDOWN_MS = 30000
+const GLOBAL_COOLDOWN_MS = 12000
+
+const emotionStatus = ref({
+  emotion: null,
+  confidence: 0,
+  label: '识别中…',
+  emoji: '⏳',
+  color: '#64748b',
+  updatedAt: 0,
+  adviceText: '',
+  adviceVisible: false,
+})
+
+let emotionDetectTimer = null
+let adviceTimer = null
+let predicting = false
+let captureCanvas = null
+let captureCtx = null
+let lastStableEmotion = null
+let stableHitCount = 0
+const lastShownAtByEmotion = ref({})
+const lastAnyShownAt = ref(0)
+
+const emotionAxios = axios.create({
+  baseURL: '/api',
+  withCredentials: true,
+  timeout: 30000,
+})
+
+const getVideoEl = () => {
+  const maybe = voicePanelRef.value?.localVideoRef
+  return maybe?.value || maybe || null
+}
+
+const captureFrameAsBlob = async (videoEl) => {
+  const vw = videoEl?.videoWidth || 0
+  const vh = videoEl?.videoHeight || 0
+  if (!vw || !vh) return null
+  const maxW = 320
+  const scale = Math.min(1, maxW / vw)
+  const w = Math.max(1, Math.round(vw * scale))
+  const h = Math.max(1, Math.round(vh * scale))
+
+  if (!captureCanvas) {
+    captureCanvas = document.createElement('canvas')
+    captureCtx = captureCanvas.getContext('2d')
+  }
+  if (!captureCanvas || !captureCtx) return null
+
+  captureCanvas.width = w
+  captureCanvas.height = h
+  captureCtx.drawImage(videoEl, 0, 0, w, h)
+
+  return new Promise((resolve) => {
+    captureCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.75)
+  })
+}
+
+const canShowEmotion = (emotion) => {
+  const now = Date.now()
+  if (now - lastAnyShownAt.value < GLOBAL_COOLDOWN_MS) return false
+  const last = lastShownAtByEmotion.value[emotion] || 0
+  if (now - last < SAME_EMOTION_COOLDOWN_MS) return false
+  return true
+}
+
+const showAdvice = (emotion) => {
+  if (!canShowEmotion(emotion)) return
+  const payload = EMOTION_TEXT[emotion]
+  if (!payload) return
+  emotionStatus.value.adviceText = payload.text
+  emotionStatus.value.adviceVisible = true
+
+  const now = Date.now()
+  lastAnyShownAt.value = now
+  lastShownAtByEmotion.value[emotion] = now
+
+  if (adviceTimer) window.clearTimeout(adviceTimer)
+  adviceTimer = window.setTimeout(() => {
+    emotionStatus.value.adviceVisible = false
+  }, 5200)
+}
+
+const detectEmotionOnce = async () => {
+  if (predicting) return
+  if (!connected.value || finishing.value || !isRunning.value) return
+
+  const videoEl = getVideoEl()
+  if (!videoEl || videoEl.readyState < 2) return
+
+  predicting = true
+  try {
+    const blob = await captureFrameAsBlob(videoEl)
+    if (!blob) return
+
+    const form = new FormData()
+    form.append('file', blob, 'frame.jpg')
+    const resp = await emotionAxios.post('/emotion/predict', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    const body = resp?.data?.data ?? resp?.data
+    const emotion = body?.emotion
+    const confidence = Number(body?.confidence)
+    if (!emotion || !Number.isFinite(confidence)) return
+
+    const meta = EMOTION_META[emotion] || {}
+    emotionStatus.value = {
+      ...emotionStatus.value,
+      emotion,
+      confidence,
+      label: meta.label || emotion,
+      emoji: meta.emoji || '🙂',
+      color: meta.color || '#64748b',
+      updatedAt: Date.now(),
+    }
+
+    if (confidence < EMOTION_CONF_THRESHOLD) return
+    if (emotion === lastStableEmotion) stableHitCount += 1
+    else {
+      lastStableEmotion = emotion
+      stableHitCount = 1
+    }
+    if (stableHitCount >= EMOTION_STABLE_COUNT_REQUIRED) {
+      showAdvice(emotion)
+      stableHitCount = 0
+    }
+  } catch (_) {
+    // 面试过程中忽略识别异常，避免影响主流程
+  } finally {
+    predicting = false
+  }
+}
+
+const startEmotionDetect = () => {
+  if (emotionDetectTimer) return
+  emotionDetectTimer = window.setInterval(() => {
+    detectEmotionOnce()
+  }, DETECT_INTERVAL_MS)
+}
+
+const stopEmotionDetect = () => {
+  if (!emotionDetectTimer) return
+  window.clearInterval(emotionDetectTimer)
+  emotionDetectTimer = null
+}
 
 const typeLabel = computed(() => {
   const map = {
@@ -165,6 +337,8 @@ const cleanup = () => {
   rtcStatus.value = 'CLOSED'
   connected.value = false
   connecting.value = false
+  stopEmotionDetect()
+  emotionStatus.value.adviceVisible = false
 
   try {
     if (localStream) localStream.getTracks().forEach((t) => t.stop())
@@ -260,6 +434,9 @@ const startWebRTC = async () => {
       connected.value = true
       rtcStatus.value = 'CONNECTED'
       await log('remote track received', { tracks: event.streams[0]?.getTracks?.().length })
+      nextTick(() => {
+        startEmotionDetect()
+      })
     }
 
     const offer = await pc.createOffer()
@@ -409,6 +586,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   cleanup()
+  stopEmotionDetect()
+  if (adviceTimer) window.clearTimeout(adviceTimer)
 })
 </script>
 

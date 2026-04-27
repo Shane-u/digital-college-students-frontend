@@ -99,7 +99,8 @@ export default defineConfig({
       origin: '*', // 允许所有来源
       credentials: true // 允许携带凭证（cookies）
     },
-    compress: false
+    compress: false,
+    allowedHosts: ['frp-any.com']
   }
 })
 
