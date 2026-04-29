@@ -90,10 +90,11 @@
 
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import ReviewStage from './ReviewStage.vue'
 import { aiInterviewApi } from '../../api/aiInterview'
 import { mapInterviewReportToReview } from './session/reportMapper'
+import { confirmAction } from '../../utils/confirm'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -138,38 +139,22 @@ const persist = () => {
 
 const confirmClearAll = async () => {
   if (records.value.length === 0) return
-  try {
-    await ElMessageBox.confirm(
-      '清空后将无法恢复，确定要清空所有面试记录吗？',
-      '清空确认',
-      {
-        confirmButtonText: '清空',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    await clearAll()
-  } catch (_) {
-    // 用户取消
-  }
+  const ok = await confirmAction('清空后将无法恢复，确定要清空所有面试记录吗？', {
+    title: '清空确认',
+    confirmButtonText: '清空'
+  })
+  if (!ok) return
+  await clearAll()
 }
 
 const confirmRemoveOne = async (id) => {
   if (!id) return
-  try {
-    await ElMessageBox.confirm(
-      '删除后将无法恢复，确定要删除这条面试记录吗？',
-      '删除确认',
-      {
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    await removeOne(id)
-  } catch (_) {
-    // 用户取消
-  }
+  const ok = await confirmAction('删除后将无法恢复，确定要删除这条面试记录吗？', {
+    title: '删除确认',
+    confirmButtonText: '删除'
+  })
+  if (!ok) return
+  await removeOne(id)
 }
 
 const clearAll = async () => {

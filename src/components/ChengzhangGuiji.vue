@@ -13,11 +13,9 @@
     <div class="timeline-shell" ref="timelineShell" :style="{ '--axis-start': `${axisStart}px` }">
       <!-- Central axis base -->
       <div class="timeline-axis-base" />
-      <div class="timeline-axis-glow" />
-      <div class="timeline-axis-energy" />
 
       <!-- Progress axis -->
-      <div class="timeline-axis-progress" :style="progressStyle">
+      <div class="timeline-axis-progress" :class="axisProgressClass" :style="progressStyle">
         <div class="timeline-axis-progress-tip" />
       </div>
 
@@ -39,7 +37,10 @@
           <div
             v-else
             class="milestone-wrap"
-            :class="el.isEven ? 'is-even' : 'is-odd'"
+            :class="[
+              el.isEven ? 'is-even' : 'is-odd',
+              !getPhotoForSubItem(el.subItem) ? 'no-media' : ''
+            ]"
           >
             <div
               class="milestone-connector"
@@ -53,28 +54,25 @@
               ref="cardEls"
               @click="handleSubDateClick(el.subItem)"
             >
-              <div class="card-media">
+              <div v-if="getPhotoForSubItem(el.subItem)" class="card-media">
                 <img
-                  v-if="getPhotoForSubItem(el.subItem)"
                   :src="getPhotoForSubItem(el.subItem)"
                   class="media-blur"
                   referrerpolicy="no-referrer"
                   alt=""
                 />
                 <img
-                  v-if="getPhotoForSubItem(el.subItem)"
                   :src="getPhotoForSubItem(el.subItem)"
                   class="media-main"
                   referrerpolicy="no-referrer"
                   :alt="el.subItem.content || ''"
                 />
-                <div v-else class="media-fallback">
-                  <div class="fallback-badge">暂无图片</div>
-                </div>
-
                 <div class="card-badge">
                   <span class="badge-year">{{ formatYear(el.subItem.name) }}</span>
                 </div>
+              </div>
+              <div v-else class="card-badge card-badge--inline">
+                <span class="badge-year">{{ formatYear(el.subItem.name) }}</span>
               </div>
 
               <div class="card-title">
@@ -110,10 +108,13 @@ const timelineWrapper = ref(null);
 const isMouseOverTimeline = ref(false);
 const photosByDate = ref({});
 const scrollProgress = ref(0);
+const axisFlowDirection = ref("right");
+const axisIsMoving = ref(false);
 const rafId = ref(0);
 const observer = ref(null);
 const wheelTargetScroll = ref(0);
 let smoothScrollTo = null;
+let scrollStopTimer = null;
 const timelineShell = ref(null);
 const firstYearEl = ref(null);
 const axisStart = ref(0);
@@ -291,6 +292,12 @@ const progressStyle = computed(() => ({
   transform: `translateY(-50%) scaleX(${Math.max(0, Math.min(1, scrollProgress.value))})`
 }));
 
+const axisProgressClass = computed(() => ({
+  "flow-right": axisFlowDirection.value === "right",
+  "flow-left": axisFlowDirection.value === "left",
+  "is-moving": axisIsMoving.value
+}));
+
 const handleBottomClick = () => {
   emit("handleBottomClick");
 };
@@ -357,6 +364,18 @@ const updateAxisStart = () => {
 
 const handleScroll = (e) => {
   emit("scrollEvent", e);
+  const currentLeft = e?.target?.scrollLeft ?? timelineWrapper.value?.scrollLeft ?? 0;
+  const prev = Number.isFinite(wheelTargetScroll.value) ? wheelTargetScroll.value : currentLeft;
+  const delta = currentLeft - prev;
+  if (Math.abs(delta) > 0.2) {
+    axisFlowDirection.value = delta > 0 ? "right" : "left";
+    axisIsMoving.value = true;
+    if (scrollStopTimer) clearTimeout(scrollStopTimer);
+    scrollStopTimer = setTimeout(() => {
+      axisIsMoving.value = false;
+    }, 150);
+  }
+  wheelTargetScroll.value = currentLeft;
   if (rafId.value) cancelAnimationFrame(rafId.value);
   rafId.value = requestAnimationFrame(() => {
     updateScrollProgress();
@@ -382,6 +401,8 @@ const handleWheel = (e) => {
 
   const next = Math.min(maxScroll, Math.max(0, current + dominantDelta * 2.4));
   wheelTargetScroll.value = next;
+  // 先按目标值即时更新进度，减少“填充条跟手延迟”
+  scrollProgress.value = maxScroll <= 0 ? 0 : next / maxScroll;
 
   if (!smoothScrollTo) {
     el.scrollLeft = next;
@@ -595,7 +616,7 @@ onMounted(async () => {
     // 避免与 GSAP 滚动缓动冲突，使用即时滚动底座
     timelineWrapper.value.style.scrollBehavior = "auto";
     smoothScrollTo = gsap.quickTo(timelineWrapper.value, "scrollLeft", {
-      duration: 0.22,
+      duration: 0.08,
       ease: "power2.out",
     });
     wheelTargetScroll.value = timelineWrapper.value.scrollLeft;
@@ -626,6 +647,7 @@ watch(
 onUnmounted(() => {
   observer.value?.disconnect?.();
   if (rafId.value) cancelAnimationFrame(rafId.value);
+  if (scrollStopTimer) clearTimeout(scrollStopTimer);
   smoothScrollTo = null;
   window.removeEventListener("resize", updateAxisStart);
 });
@@ -721,41 +743,13 @@ defineExpose({
   top: 50%;
   left: var(--axis-start, 0px);
   width: calc(100% - var(--axis-start, 0px));
-  height: 2px;
+  height: 14px;
   transform: translateY(-50%);
-  background: rgba(168, 85, 247, 0.12);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(243, 235, 255, 0.92));
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.65), inset 0 -2px 4px rgba(139, 92, 246, 0.08);
   z-index: 1;
-}
-
-.timeline-axis-glow {
-  position: absolute;
-  top: 50%;
-  left: var(--axis-start, 0px);
-  width: calc(100% - var(--axis-start, 0px));
-  height: 96px;
-  transform: translateY(-50%);
-  background: linear-gradient(to bottom, rgba(168, 85, 247, 0.06), transparent, rgba(168, 85, 247, 0.06));
-  pointer-events: none;
-  z-index: 1;
-}
-
-.timeline-axis-energy {
-  position: absolute;
-  top: 50%;
-  left: var(--axis-start, 0px);
-  width: calc(100% - var(--axis-start, 0px));
-  height: 2px;
-  transform: translateY(-50%);
-  opacity: 0.3;
-  background: linear-gradient(90deg, transparent, #a855f7, #6366f1, #a855f7, transparent);
-  background-size: 200% 100%;
-  animation: axisFlow 15s linear infinite;
-  z-index: 2;
-}
-
-@keyframes axisFlow {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
 }
 
 .timeline-axis-progress {
@@ -763,13 +757,47 @@ defineExpose({
   top: 50%;
   left: var(--axis-start, 0px);
   width: calc(100% - var(--axis-start, 0px));
-  height: 3px;
+  height: 10px;
   transform: translateY(-50%) scaleX(0);
   transform-origin: left center;
-  background: linear-gradient(to right, #7c3aed, #6366f1, #a855f7);
-  box-shadow: 0 0 25px rgba(139, 92, 246, 0.6), 0 0 10px rgba(139, 92, 246, 0.4);
+  border-radius: 999px;
+  overflow: hidden;
+  background: linear-gradient(to right, #8b5cf6, #7c3aed, #6366f1, #a855f7);
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.45), 0 0 10px rgba(139, 92, 246, 0.3);
   z-index: 3;
   pointer-events: none;
+}
+
+.timeline-axis-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 170%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 22%,
+    rgba(255, 255, 255, 0.05) 45%,
+    rgba(255, 255, 255, 0.42) 66%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0.95;
+  animation-duration: 1.15s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-play-state: paused;
+}
+
+.timeline-axis-progress.flow-right::before {
+  animation-name: axisFlowRight;
+}
+
+.timeline-axis-progress.flow-left::before {
+  animation-name: axisFlowLeft;
+}
+
+.timeline-axis-progress.is-moving::before {
+  animation-play-state: running;
 }
 
 .timeline-axis-progress-tip {
@@ -777,12 +805,22 @@ defineExpose({
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
   background: #fff;
   filter: blur(1px);
   box-shadow: 0 0 20px #fff, 0 0 40px #a855f7;
+}
+
+@keyframes axisFlowRight {
+  from { transform: translateX(-40%); }
+  to { transform: translateX(40%); }
+}
+
+@keyframes axisFlowLeft {
+  from { transform: translateX(40%); }
+  to { transform: translateX(-40%); }
 }
 
 ul.timeline-wrapper {
@@ -851,17 +889,26 @@ ul.timeline-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 460px;
-  padding: 0 64px;
+  min-width: 360px;
+  padding: 0 30px;
   z-index: 20;
 }
 
 .milestone-wrap.is-even {
-  padding-bottom: 112px;
+  padding-bottom: 92px;
 }
 
 .milestone-wrap.is-odd {
-  padding-top: 112px;
+  padding-top: 92px;
+}
+
+.milestone-wrap.no-media {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.milestone-wrap.no-media .milestone-connector {
+  display: none;
 }
 
 .milestone-connector {
@@ -890,11 +937,11 @@ ul.timeline-wrapper {
 .milestone-card {
   position: relative;
   width: 100%;
-  padding: 20px;
-  border-radius: 56px;
+  padding: 14px;
+  border-radius: 34px;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 30px 80px rgba(139, 92, 246, 0.14);
+  box-shadow: 0 16px 42px rgba(139, 92, 246, 0.14);
   backdrop-filter: blur(28px);
   cursor: pointer;
   transition: box-shadow 0.5s ease, transform 0.5s ease;
@@ -902,7 +949,7 @@ ul.timeline-wrapper {
 }
 
 .milestone-card:hover {
-  box-shadow: 0 50px 100px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 24px 58px rgba(139, 92, 246, 0.26);
 }
 
 .perspective {
@@ -911,10 +958,10 @@ ul.timeline-wrapper {
 
 .card-media {
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  border-radius: 45px;
-  margin-bottom: 20px;
+  border-radius: 22px;
+  margin-bottom: 12px;
   background: rgba(88, 28, 135, 0.04);
   display: flex;
   align-items: center;
@@ -940,6 +987,20 @@ ul.timeline-wrapper {
   padding: 0;
   z-index: 2;
   transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.2) 0%,
+    rgba(168, 85, 247, 0.13) 45%,
+    rgba(99, 102, 241, 0.16) 100%
+  );
 }
 
 .milestone-card:hover .media-main {
@@ -970,18 +1031,26 @@ ul.timeline-wrapper {
 
 .card-badge {
   position: absolute;
-  top: 0px;
-  left: 0px;
-  padding: 10px 10px;
+  top: 4px;
+  left: 4px;
+  padding: 7px 8px;
   border-radius: 999px;
   background: #7c3aed;
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   z-index: 5;
-  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.16);
+}
+
+.card-badge.card-badge--inline {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 10px;
+  box-shadow: 0 10px 20px rgba(139, 92, 246, 0.22);
 }
 
 .badge-year {
@@ -989,11 +1058,11 @@ ul.timeline-wrapper {
 }
 
 .card-title {
-  font-size: 26px;
-  font-weight: 900;
-  margin-bottom: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 8px;
   color: #1a0b33;
-  line-height: 1.15;
+  line-height: 1.25;
   transition: color 0.25s ease;
   white-space: normal;
 }
@@ -1006,35 +1075,35 @@ ul.timeline-wrapper {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 16px;
+  padding-top: 10px;
   border-top: 1px solid rgba(167, 139, 250, 0.25);
 }
 
 .footer-left {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
   color: #7c3aed;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .footer-dot {
-  width: 12px;
-  height: 12px;
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
   background: #a855f7;
   box-shadow: 0 0 15px rgba(139, 92, 246, 1);
 }
 
 .footer-tag {
-  padding: 6px 12px;
-  border-radius: 10px;
+  padding: 5px 8px;
+  border-radius: 8px;
   background: rgba(124, 58, 237, 0.06);
   color: rgba(124, 58, 237, 0.6);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 </style>

@@ -451,11 +451,12 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted, onUnmounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import NavBar from '../components/NavBar.vue'
 import { polishText } from '../api/chatApi'
+import { confirmAction } from '../utils/confirm'
 
 // 响应式数据
 const activeSections = ref(['personal', 'education', 'projects', 'work', 'skills', 'awards'])
@@ -579,10 +580,9 @@ const fillPreviewData = () => {
 
 // 清空数据
 const clearData = async () => {
+  const ok = await confirmAction('确定要清空所有数据吗？')
+  if (!ok) return
   try {
-    await ElMessageBox.confirm('确定要清空所有数据吗？', '提示', {
-      type: 'warning'
-    })
     Object.assign(resumeData, {
       personalInfo: {
         name: '',
@@ -604,7 +604,7 @@ const clearData = async () => {
     localStorage.removeItem('resumeData')
     ElMessage.success('数据已清空')
   } catch {
-    // 用户取消
+    // noop
   }
 }
 

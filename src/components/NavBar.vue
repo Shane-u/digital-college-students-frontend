@@ -90,7 +90,8 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmAction } from '../utils/confirm'
 import { getMyProfile } from '../api/user'
 import { normalizeProfile } from '../utils/profile'
 import PersonalProfileDialog from './PersonalProfileDialog.vue'
@@ -189,16 +190,11 @@ const handleProfileSaved = ({ avatar, nickname }) => {
 
 // 退出登录函数（保留原逻辑）
 const handleLogout = () => {
-  ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  }).then(() => {
+  confirmAction('确定要退出登录吗？').then((ok) => {
+    if (!ok) return
     localStorage.removeItem('userInfo')
     localStorage.removeItem('userProfile')
     window.location.href = '/login'
-  }).catch(() => {
-    // 取消操作
   })
 }
 

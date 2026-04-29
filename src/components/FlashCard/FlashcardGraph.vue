@@ -172,7 +172,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmAction } from '../../utils/confirm'
 import { sanitizeHtml } from '../../utils/sanitizeHtml'
 import { flashCardApi } from '../../api/flashCard'
 import { flashCardTestApi } from '../../api/flashCardTest'
@@ -1993,7 +1994,8 @@ const submitEdit = async () => {
 
 // 删除：走后端 /flash-card/delete（后端负责同步 Neo4j）
 const handleDelete = async () => {
-  if (!confirm('确定要删除这个闪卡吗？')) return
+  const ok = await confirmAction('确定要删除这个闪卡吗？')
+  if (!ok) return
   const idStr = nodeCardData.value.id != null ? String(nodeCardData.value.id) : ''
   if (!idStr.trim()) return
   try {
@@ -2064,15 +2066,8 @@ const openTestPointDrawer = (nodeId) => {
 const handleDeletePaper = async (paper) => {
   const tid = paper?.testId
   if (tid == null) return
-  try {
-    await ElMessageBox.confirm('确定删除该试卷？删除后不可恢复。', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-  } catch {
-    return
-  }
+  const ok = await confirmAction('确定删除该试卷？删除后不可恢复。')
+  if (!ok) return
   try {
     await flashCardTestApi.delete(tid)
     drawerRefreshTrigger.value++

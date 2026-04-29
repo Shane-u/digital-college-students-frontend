@@ -75,15 +75,6 @@
         </div>
       </div>
 
-      <div v-if="deleteConfirm" class="lp-delete-mask" @click.self="deleteConfirm = null">
-        <div class="lp-delete-modal">
-          <p>确定要删除「{{ deleteConfirm.topic || '该路径' }}」吗？</p>
-          <div class="lp-delete-actions">
-            <button type="button" class="lp-delete-btn lp-delete-cancel" @click="deleteConfirm = null">取消</button>
-            <button type="button" class="lp-delete-btn lp-delete-ok" @click="doDelete">删除</button>
-          </div>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
@@ -97,6 +88,7 @@ import LearningPathSelectorPanel from '../components/LearningPath/LearningPathSe
 import { getMyProfile } from '../api/user'
 import { ElMessage } from 'element-plus'
 import { normalizeProfile } from '../utils/profile'
+import { confirmAction } from '../utils/confirm'
 
 // 与孪孪伴学「最近对话」更多操作菜单保持同一套 SVG 图标（形状/线宽/尺寸一致）
 const PinMenuIcon = (props = {}) => h('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, ...props }, [
@@ -133,7 +125,6 @@ const pageLoading = ref(true)
 const listLoading = ref(false)
 const pathList = ref([])
 const graphsById = ref({})
-const deleteConfirm = ref(null)
 const selectedPathId = ref(null)
 const selectorCollapsed = ref(false)
 
@@ -342,24 +333,24 @@ const handleDeletePath = () => {
   const pid = currentMenuPathId.value
   if (!pid) return
   const p = (pathList.value || []).find(x => String(x.id) === String(pid))
-  deleteConfirm.value = p || { id: pid, topic: getPathDisplayName(p) }
+  doDelete(p || { id: pid, topic: getPathDisplayName(p) })
   closePathMenu()
 }
 
 const confirmDelete = (item) => {
-  deleteConfirm.value = item
+  doDelete(item)
 }
 
-const doDelete = async () => {
-  const item = deleteConfirm.value
-  if (!item?.id) {
-    deleteConfirm.value = null
-    return
-  }
+const doDelete = async (item) => {
+  if (!item?.id) return
+  const ok = await confirmAction(`确定要删除「${item.topic || '该路径'}」吗？`, {
+    title: '删除确认',
+    confirmButtonText: '删除'
+  })
+  if (!ok) return
   try {
     await remove(item.id, userId.value)
     ElMessage.success('已删除')
-    deleteConfirm.value = null
     // 同步清理本地偏好与图谱缓存
     pinnedIds.value = (pinnedIds.value || []).filter(x => String(x) !== String(item.id))
     if (renamedById.value && renamedById.value[item.id]) {
@@ -885,57 +876,4 @@ const goToCompareMode = () => {
   opacity: 0;
 }
 
-.lp-delete-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2100;
-}
-
-.lp-delete-modal {
-  background: #fff;
-  border-radius: 14px;
-  padding: 24px;
-  max-width: 360px;
-  width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
-
-.lp-delete-modal p {
-  margin: 0 0 20px 0;
-  font-size: 15px;
-  color: #374151;
-}
-
-.lp-delete-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.lp-delete-btn {
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.lp-delete-cancel {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.lp-delete-ok {
-  background: #dc2626;
-  color: #fff;
-}
-
-.lp-delete-ok:hover {
-  background: #b91c1c;
-}
 </style>

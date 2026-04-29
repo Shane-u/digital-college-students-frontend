@@ -197,6 +197,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { flashCardApi } from '../api/flashCard'
 import { sanitizeHtml } from '../utils/sanitizeHtml'
+import { confirmAction } from '../utils/confirm'
 
 const currentMode = ref('list')
 const flashCards = ref([])
@@ -420,7 +421,8 @@ const saveAiAssist = async () => {
 }
 
 const deleteCard = async (cardId) => {
-  if (!confirm('确定要删除这个闪卡吗？')) return
+  const ok = await confirmAction('确定要删除这个闪卡吗？')
+  if (!ok) return
 
   try {
     await flashCardApi.delete(cardId)

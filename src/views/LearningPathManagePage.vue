@@ -18,17 +18,6 @@
       @update:visible="detailVisible = $event"
       @updated="fetchList"
     />
-    <Teleport to="body">
-      <div v-if="deleteConfirm" class="path-delete-mask" @click.self="deleteConfirm = null">
-        <div class="path-delete-modal">
-          <p>确定要删除「{{ deleteConfirm.topic || '该路径' }}」吗？</p>
-          <div class="path-delete-actions">
-            <button type="button" class="path-delete-btn path-delete-cancel" @click="deleteConfirm = null">取消</button>
-            <button type="button" class="path-delete-btn path-delete-ok" @click="doDelete">删除</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
@@ -38,6 +27,7 @@ import { list as listApi, remove } from '../api/learningPath'
 import LearningPathList from '../components/LearningPath/LearningPathList.vue'
 import LearningPathDetailModal from '../components/LearningPath/LearningPathDetailModal.vue'
 import { ElMessage } from 'element-plus'
+import { confirmAction } from '../utils/confirm'
 
 function getUserId() {
   try {
@@ -55,7 +45,6 @@ const list = ref([])
 const loading = ref(false)
 const detailVisible = ref(false)
 const selectedPathId = ref(null)
-const deleteConfirm = ref(null)
 
 const fetchList = async () => {
   const uid = userId.value
@@ -81,19 +70,19 @@ const openDetail = (item) => {
 }
 
 const confirmDelete = (item) => {
-  deleteConfirm.value = item
+  doDelete(item)
 }
 
-const doDelete = async () => {
-  const item = deleteConfirm.value
-  if (!item?.id) {
-    deleteConfirm.value = null
-    return
-  }
+const doDelete = async (item) => {
+  if (!item?.id) return
+  const ok = await confirmAction(`确定要删除「${item.topic || '该路径'}」吗？`, {
+    title: '删除确认',
+    confirmButtonText: '删除'
+  })
+  if (!ok) return
   try {
     await remove(item.id, userId.value)
     ElMessage.success('已删除')
-    deleteConfirm.value = null
     await fetchList()
     if (selectedPathId.value === item.id) {
       detailVisible.value = false
@@ -148,57 +137,4 @@ onMounted(() => {
   color: #6b7280;
 }
 
-.path-delete-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2100;
-}
-
-.path-delete-modal {
-  background: #fff;
-  border-radius: 14px;
-  padding: 24px;
-  max-width: 360px;
-  width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
-
-.path-delete-modal p {
-  margin: 0 0 20px 0;
-  font-size: 15px;
-  color: #374151;
-}
-
-.path-delete-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.path-delete-btn {
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.path-delete-cancel {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.path-delete-ok {
-  background: #dc2626;
-  color: #fff;
-}
-
-.path-delete-ok:hover {
-  background: #b91c1c;
-}
 </style>

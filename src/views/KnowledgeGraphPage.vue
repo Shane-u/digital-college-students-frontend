@@ -2,7 +2,7 @@
   <div class="knowledge-graph-page">
     <GraphTopHeader title="技能图谱" />
     <button class="back-button" type="button" @click="goBackHome">
-      返回主页
+      返回
     </button>
     <div class="graph-fullscreen">
       <iframe 
@@ -143,25 +143,26 @@ const goBackHome = () => {
 }
 
 .back-button {
-  position: absolute;
-  top: 90px;
+  position: fixed;
+  top: 18px;
   left: 24px;
-  z-index: 1300;
-  padding: 8px 18px;
+  z-index: 1100;
+  padding: 8px 24px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f9fafb;
   font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.35);
+  transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .back-button:hover {
-  background: rgba(0, 0, 0, 0.75);
-  border-color: rgba(255, 255, 255, 0.7);
+  background: #374151;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.4);
 }
 
 .info-area {

@@ -30,7 +30,7 @@
             :disabled="assessmentLoading || !!assessmentError || !totalQuestions"
             @click="$emit('random-all')"
           >
-            一键随机
+            历史测评
           </button>
           <span v-if="totalQuestions" class="cp-assess__count">
             {{ currentQuestionIndex + 1 }}<span class="cp-assess__count-sep">/</span>{{ totalQuestions }}

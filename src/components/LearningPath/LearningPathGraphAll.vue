@@ -52,15 +52,6 @@
           </div>
         </div>
       </div>
-      <div v-if="deleteNodeConfirm" class="lp-delete-mask" @click.self="deleteNodeConfirm = null">
-        <div class="lp-delete-modal" @click.stop>
-          <p>确定要删除该节点吗？</p>
-          <div class="lp-delete-actions">
-            <button type="button" @click="deleteNodeConfirm = null">取消</button>
-            <button type="button" class="lp-delete-ok" @click="doDeleteNode">删除</button>
-          </div>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
@@ -72,6 +63,7 @@ import { ElMessage } from 'element-plus'
 import { updateJson, matchFlashcards } from '../../api/learningPath'
 import GraphTopHeader from '../common/GraphTopHeader.vue'
 import LearningPathNodeKnowledgePanel from './LearningPathNodeKnowledgePanel.vue'
+import { confirmAction } from '../../utils/confirm'
 
 const props = defineProps({
   userId: { type: [String, Number], default: null },
@@ -101,7 +93,6 @@ const nodeCardData = ref({})
 const showEditModal = ref(false)
 const editForm = ref({ pathId: '', nodeId: '', name: '' })
 const savingEdit = ref(false)
-const deleteNodeConfirm = ref(null)
 let simulation = null
 let zoomBehavior = null
 let gRoot = null
@@ -734,11 +725,14 @@ const saveNodeEdit = async () => {
   }
 }
 
-const confirmDeleteNode = () => { deleteNodeConfirm.value = nodeCardData.value }
-const doDeleteNode = async () => {
-  const node = deleteNodeConfirm.value
-  deleteNodeConfirm.value = null
+const confirmDeleteNode = () => { doDeleteNode(nodeCardData.value) }
+const doDeleteNode = async (node) => {
   if (!node?.__pathId || !node?.__nodeId) return
+  const ok = await confirmAction('确定要删除该节点吗？', {
+    title: '删除确认',
+    confirmButtonText: '删除'
+  })
+  if (!ok) return
   const pid = node.__pathId
   const nodes = (props.graphsById?.[pid]?.nodes || []).filter(n => String(n.nodeId || n.id) !== String(node.__nodeId))
   try {
@@ -873,10 +867,8 @@ onUnmounted(() => {
 .lp-node-btn { padding: 10px 18px; border-radius: 10px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
 .lp-node-edit { background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%); color: #fff; }
 .lp-node-delete { background: #fef2f2; color: #dc2626; }
-.lp-edit-mask,
-.lp-delete-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 2100; }
-.lp-edit-modal,
-.lp-delete-modal { background: #fff; border-radius: 14px; padding: 24px; max-width: 400px; width: 90%; }
+.lp-edit-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 2100; }
+.lp-edit-modal { background: #fff; border-radius: 14px; padding: 24px; max-width: 400px; width: 90%; }
 .lp-edit-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
 .lp-edit-body { margin-bottom: 20px; }
 .lp-edit-field { margin-bottom: 12px; }
@@ -886,6 +878,5 @@ onUnmounted(() => {
 .lp-edit-cancel { padding: 8px 16px; border-radius: 8px; border: none; background: #f3f4f6; color: #374151; cursor: pointer; }
 .lp-edit-save { padding: 8px 16px; border-radius: 8px; border: none; background: #9333ea; color: #fff; cursor: pointer; }
 .lp-edit-save:disabled { opacity: 0.6; cursor: not-allowed; }
-.lp-delete-ok { padding: 8px 16px; border-radius: 8px; border: none; background: #dc2626; color: #fff; cursor: pointer; }
 </style>
 

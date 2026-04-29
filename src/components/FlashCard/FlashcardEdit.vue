@@ -97,7 +97,8 @@
 import { ref, onMounted } from 'vue'
 import { flashCardApi } from '../../api/flashCard'
 import CategoryTree from './CategoryTree.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmAction } from '../../utils/confirm'
 
 const props = defineProps({
   card: {
@@ -189,21 +190,15 @@ const handleSave = async () => {
 
 // 删除
 const handleDelete = async () => {
+  const ok = await confirmAction('确定要删除这张闪卡吗？')
+  if (!ok) return
   try {
-    await ElMessageBox.confirm('确定要删除这张闪卡吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    
     await flashCardApi.delete(props.card.id)
     ElMessage.success('删除成功')
     emit('deleted')
   } catch (error) {
-    if (error !== 'cancel') {
-      console.error('删除失败:', error)
-      ElMessage.error('删除失败，请重试')
-    }
+    console.error('删除失败:', error)
+    ElMessage.error('删除失败，请重试')
   }
 }
 

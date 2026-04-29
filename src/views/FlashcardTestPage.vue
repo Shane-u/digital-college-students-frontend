@@ -48,13 +48,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import FlashcardTestTopBar from '../components/FlashCard/Test/FlashcardTestTopBar.vue'
 import QuestionCardShell from '../components/FlashCard/Test/QuestionCardShell.vue'
 import ChoiceQuestion from '../components/FlashCard/Test/ChoiceQuestion.vue'
 import BlankQuestion from '../components/FlashCard/Test/BlankQuestion.vue'
 import CodingQuestion from '../components/FlashCard/Test/CodingQuestion.vue'
 import { flashCardTestApi } from '../api/flashCardTest'
+import { confirmAction } from '../utils/confirm'
 import {
   loadFlashcardTestContext,
   loadTestDraft,
@@ -221,15 +222,11 @@ const handleSubmit = async () => {
     return
   }
 
-  const ok = await ElMessageBox.confirm(
-    `你已作答 ${answered}/${total} 题，确定要提交吗？`,
-    '提交确认',
-    {
-      confirmButtonText: '提交',
-      cancelButtonText: '再检查一下',
-      type: 'warning'
-    }
-  ).catch(() => false)
+  const ok = await confirmAction(`你已作答 ${answered}/${total} 题，确定要提交吗？`, {
+    title: '提交确认',
+    confirmButtonText: '提交',
+    cancelButtonText: '再检查一下'
+  })
   if (!ok) return
 
   try {

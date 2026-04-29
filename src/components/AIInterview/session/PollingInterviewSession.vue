@@ -68,9 +68,9 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
-import { ElMessageBox } from 'element-plus'
 import InterviewSessionHeader from './InterviewSessionHeader.vue'
 import PollingFooterControls from './PollingFooterControls.vue'
+import { confirmAction } from '../../../utils/confirm'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -296,21 +296,7 @@ const stopRecord = async () => {
 
 const finish = async () => {
   if (finishing.value) return
-  let ok = false
-  try {
-    await ElMessageBox.confirm(
-      '是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。',
-      '提示',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    ok = true
-  } catch (_) {
-    ok = false
-  }
+  const ok = await confirmAction('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
   if (!ok) {
     isRunning.value = false
     emit('end', {

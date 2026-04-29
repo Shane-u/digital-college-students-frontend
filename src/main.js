@@ -26,8 +26,30 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { initAgent } from './realtime/agentClient'
+import faviconPng from './assets/favicon.png'
 
 const app = createApp(App)
+
+// Replace favicon with local asset (ensures dev/prod build uses the right icon)
+try {
+  const faviconLinks = document.querySelectorAll("link[rel~='icon'], link[rel='icon']")
+  const target = faviconLinks[0] || document.createElement('link')
+  target.rel = 'icon'
+  target.type = 'image/png'
+  target.href = faviconPng
+  if (!faviconLinks.length) document.head.appendChild(target)
+
+  // Some platforms read apple touch icon as the site icon
+  let apple = document.querySelector("link[rel='apple-touch-icon']")
+  if (!apple) {
+    apple = document.createElement('link')
+    apple.rel = 'apple-touch-icon'
+    document.head.appendChild(apple)
+  }
+  apple.href = faviconPng
+} catch (_) {
+  // no-op
+}
 
 // 注册所有 Element Plus 图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

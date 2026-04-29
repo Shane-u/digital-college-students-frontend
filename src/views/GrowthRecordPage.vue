@@ -163,7 +163,8 @@ import NavBar from '../components/NavBar.vue'
 import SidebarMenu from '../components/SidebarMenu.vue'
 import CalendarComponent from '../components/CalendarComponent.vue'
 import SearchBar from '../components/SearchBar.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { confirmAction } from '../utils/confirm'
 import {
   uploadImage,
   uploadFile,
@@ -363,19 +364,11 @@ const handlePreviewRecord = (dateStr) => {
 
 // 删除记录（使用居中弹窗）
 const handleDeleteRecord = async (dateStr) => {
+  const ok = await confirmAction('确定要删除这条记录吗？删除后不可恢复。', {
+    title: '删除确认'
+  })
+  if (!ok) return
   try {
-    await ElMessageBox.confirm(
-      '确定要删除这条记录吗？删除后不可恢复。',
-      '删除确认',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-        center: true,
-        autofocus: false,
-        closeOnClickModal: false,
-      }
-    )
     const record = records.value.find(r => {
       const recordDate = r.recordTime ? r.recordTime.split('T')[0] : r.recordTime
       return recordDate === dateStr
@@ -389,7 +382,7 @@ const handleDeleteRecord = async (dateStr) => {
       ElMessage.warning('未找到要删除的记录')
     }
   } catch {
-    // 用户取消
+    // noop
   }
 }
 

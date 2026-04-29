@@ -51,9 +51,9 @@
 import axios from 'axios'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { aiInterviewApi } from '../../../api/aiInterview'
-import { ElMessageBox } from 'element-plus'
 import InterviewSessionHeader from './InterviewSessionHeader.vue'
 import RealtimeVoicePanel from './RealtimeVoicePanel.vue'
+import { confirmAction } from '../../../utils/confirm'
 
 const props = defineProps({
   sessionId: { type: [String, Number], required: true },
@@ -483,21 +483,7 @@ const toggleMute = async () => {
 
 const hangup = async () => {
   if (finishing.value) return
-  let ok = false
-  try {
-    await ElMessageBox.confirm(
-      '是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。',
-      '提示',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-    ok = true
-  } catch (_) {
-    ok = false
-  }
+  const ok = await confirmAction('是否生成面试报告？\n选择“取消”将直接结束面试，不生成报告。')
   finishing.value = true
   error.value = ''
   try {

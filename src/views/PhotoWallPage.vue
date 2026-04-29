@@ -250,6 +250,7 @@ import {
   batchDeleteImages
 } from '../api/growthRecord'
 import trashIcon from '../assets/chengzhang_icon/trash.png'
+import { confirmAction } from '../utils/confirm'
 
 const viewDialogVisible = ref(false)
 const uploadDialogVisible = ref(false)
@@ -498,68 +499,25 @@ const viewPhoto = (photo) => {
 }
 
 // 删除照片
-const deletePhoto = (photo) => {
-  ElMessage({
-    type: 'warning',
-    message: '确定要删除这张照片吗？',
-    showClose: true,
-    duration: 0,
-    dangerouslyUseHTMLString: true,
-    message: `
-      <div style="margin-bottom: 12px;">确定要删除这张照片吗？</div>
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="cancel-delete-photo" style="padding: 5px 15px; border: 1px solid #dcdfe6; border-radius: 4px; background: white; cursor: pointer;">取消</button>
-        <button id="confirm-delete-photo" style="padding: 5px 15px; border: none; border-radius: 4px; background: #f56c6c; color: white; cursor: pointer;">确定</button>
-      </div>
-    `,
-    onClose: () => {
-      document.removeEventListener('click', handleDeletePhotoClick)
-    }
+const deletePhoto = async (photo) => {
+  const ok = await confirmAction('确定要删除这张照片吗？', {
+    title: '删除确认',
+    confirmButtonText: '删除'
   })
-  
-  const handleDeletePhotoClick = async (e) => {
-    if (e.target.id === 'confirm-delete-photo') {
-      // 使用后端API删除图片
-      if (photo.imageId) {
-        try {
-          await deleteImage(photo.imageId)
-          ElMessage.success('照片已删除')
-          
-          // 重新加载照片和统计信息
-          await loadPhotosFromRecords()
-          await loadPhotoWallStatistics()
-          
-          // 关闭消息框
-          const messageBoxes = document.querySelectorAll('.el-message')
-          messageBoxes.forEach(box => {
-            if (box.querySelector('#confirm-delete-photo')) {
-              box.remove()
-            }
-          })
-        } catch (error) {
-          console.error('删除照片失败:', error)
-          ElMessage.error('删除照片失败，请重试')
-        }
-      } else {
-        ElMessage.error('无法删除：缺少图片ID')
-      }
-      document.removeEventListener('click', handleDeletePhotoClick)
-    } else if (e.target.id === 'cancel-delete-photo') {
-      // 取消删除，关闭消息框
-      const messageBoxes = document.querySelectorAll('.el-message')
-      messageBoxes.forEach(box => {
-        if (box.querySelector('#cancel-delete-photo')) {
-          box.remove()
-        }
-      })
-      document.removeEventListener('click', handleDeletePhotoClick)
-    }
+  if (!ok) return
+  if (!photo.imageId) {
+    ElMessage.error('无法删除：缺少图片ID')
+    return
   }
-  
-  // 添加事件监听器
-  setTimeout(() => {
-    document.addEventListener('click', handleDeletePhotoClick)
-  }, 100)
+  try {
+    await deleteImage(photo.imageId)
+    ElMessage.success('照片已删除')
+    await loadPhotosFromRecords()
+    await loadPhotoWallStatistics()
+  } catch (error) {
+    console.error('删除照片失败:', error)
+    ElMessage.error('删除照片失败，请重试')
+  }
 }
 
 // 开始批量删除
@@ -588,81 +546,34 @@ const togglePhotoSelection = (photo) => {
 }
 
 // 确认批量删除
-const confirmBatchDelete = () => {
+const confirmBatchDelete = async () => {
   if (selectedPhotos.value.length === 0) {
     ElMessage.warning('请至少选择一张照片')
     return
   }
-  
-  ElMessage({
-    type: 'warning',
-    message: `确定要删除选中的 ${selectedPhotos.value.length} 张照片吗？`,
-    showClose: true,
-    duration: 0,
-    dangerouslyUseHTMLString: true,
-    message: `
-      <div style="margin-bottom: 12px;">确定要删除选中的 ${selectedPhotos.value.length} 张照片吗？</div>
-      <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button id="cancel-batch-delete" style="padding: 5px 15px; border: 1px solid #dcdfe6; border-radius: 4px; background: white; cursor: pointer;">取消</button>
-        <button id="confirm-batch-delete" style="padding: 5px 15px; border: none; border-radius: 4px; background: #f56c6c; color: white; cursor: pointer;">确定</button>
-      </div>
-    `,
-    onClose: () => {
-      document.removeEventListener('click', handleBatchDeleteClick)
-    }
+  const ok = await confirmAction(`确定要删除选中的 ${selectedPhotos.value.length} 张照片吗？`, {
+    title: '批量删除确认',
+    confirmButtonText: '删除'
   })
-  
-  const handleBatchDeleteClick = async (e) => {
-    if (e.target.id === 'confirm-batch-delete') {
-      // 执行批量删除
-      try {
-        const ids = selectedPhotos.value
-          .filter(photo => photo.imageId || photo.id)
-          .map(photo => photo.imageId || photo.id)
-        if (ids.length === 0) {
-          ElMessage.error('未找到可删除的图片ID')
-          return
-        }
-        await batchDeleteImages(ids)
-        
-        // 退出批量删除模式
-        cancelBatchDelete()
-        
-        ElMessage.success(`已成功删除 ${ids.length} 张照片`)
-        
-        // 重新加载照片和统计信息
-        await loadPhotosFromRecords()
-        await loadPhotoWallStatistics()
-        
-        // 关闭消息框
-        const messageBoxes = document.querySelectorAll('.el-message')
-        messageBoxes.forEach(box => {
-          if (box.querySelector('#confirm-batch-delete')) {
-            box.remove()
-          }
-        })
-      } catch (error) {
-        console.error('批量删除失败:', error)
-        ElMessage.error('批量删除失败，请重试')
-      }
-      
-      document.removeEventListener('click', handleBatchDeleteClick)
-    } else if (e.target.id === 'cancel-batch-delete') {
-      // 取消删除，关闭消息框
-      const messageBoxes = document.querySelectorAll('.el-message')
-      messageBoxes.forEach(box => {
-        if (box.querySelector('#cancel-batch-delete')) {
-          box.remove()
-        }
-      })
-      document.removeEventListener('click', handleBatchDeleteClick)
+  if (!ok) return
+
+  try {
+    const ids = selectedPhotos.value
+      .filter(photo => photo.imageId || photo.id)
+      .map(photo => photo.imageId || photo.id)
+    if (ids.length === 0) {
+      ElMessage.error('未找到可删除的图片ID')
+      return
     }
+    await batchDeleteImages(ids)
+    cancelBatchDelete()
+    ElMessage.success(`已成功删除 ${ids.length} 张照片`)
+    await loadPhotosFromRecords()
+    await loadPhotoWallStatistics()
+  } catch (error) {
+    console.error('批量删除失败:', error)
+    ElMessage.error('批量删除失败，请重试')
   }
-  
-  // 添加事件监听器
-  setTimeout(() => {
-    document.addEventListener('click', handleBatchDeleteClick)
-  }, 100)
 }
 
 // 格式化日期时间

@@ -53,15 +53,6 @@
           </div>
         </div>
       </div>
-      <div v-if="deleteNodeConfirm" class="lp-delete-mask" @click.self="deleteNodeConfirm = null">
-        <div class="lp-delete-modal" @click.stop>
-          <p>确定要删除该节点吗？</p>
-          <div class="lp-delete-actions">
-            <button type="button" @click="deleteNodeConfirm = null">取消</button>
-            <button type="button" class="lp-delete-ok" @click="doDeleteNode">删除</button>
-          </div>
-        </div>
-      </div>
     </Teleport>
   </div>
 </template>
@@ -72,6 +63,7 @@ import * as d3 from 'd3'
 import { ElMessage } from 'element-plus'
 import { updateJson } from '../../api/learningPath'
 import LearningPathNodeKnowledgePanel from './LearningPathNodeKnowledgePanel.vue'
+import { confirmAction } from '../../utils/confirm'
 
 const props = defineProps({
   pathId: { type: String, required: true },
@@ -98,7 +90,6 @@ const nodeCardData = ref({})
 const showEditModal = ref(false)
 const editForm = ref({ nodeId: '', name: '' })
 const savingEdit = ref(false)
-const deleteNodeConfirm = ref(null)
 let simulation = null
 let zoomBehavior = null
 let gRoot = null
@@ -423,13 +414,16 @@ const saveNodeEdit = async () => {
 }
 
 const confirmDeleteNode = () => {
-  deleteNodeConfirm.value = nodeCardData.value
+  doDeleteNode(nodeCardData.value)
 }
 
-const doDeleteNode = async () => {
-  const node = deleteNodeConfirm.value
-  deleteNodeConfirm.value = null
+const doDeleteNode = async (node) => {
   if (!node?.id) return
+  const ok = await confirmAction('确定要删除该节点吗？', {
+    title: '删除确认',
+    confirmButtonText: '删除'
+  })
+  if (!ok) return
   const nodes = (props.graphData?.nodes || []).filter(n => (n.nodeId || n.id) !== node.id)
   try {
     await updateJson(props.pathId, { nodes }, props.userId)
@@ -624,8 +618,7 @@ onUnmounted(() => {
   color: #dc2626;
 }
 
-.lp-edit-mask,
-.lp-delete-mask {
+.lp-edit-mask {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
@@ -635,8 +628,7 @@ onUnmounted(() => {
   z-index: 2100;
 }
 
-.lp-edit-modal,
-.lp-delete-modal {
+.lp-edit-modal {
   background: #fff;
   border-radius: 14px;
   padding: 24px;
@@ -703,12 +695,4 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.lp-delete-ok {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: none;
-  background: #dc2626;
-  color: #fff;
-  cursor: pointer;
-}
 </style>
